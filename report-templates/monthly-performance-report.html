@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Growzzy Monthly Growth Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f6fb; color: #0f172a; font-family: Inter, Arial, sans-serif; }
+    .page { width: 1200px; min-height: 860px; margin: 0 auto; padding: 42px; background: #ffffff; }
+    .top { display: flex; justify-content: space-between; gap: 32px; border-bottom: 1px solid #dbe5f1; padding-bottom: 30px; }
+    .brand { display: flex; align-items: center; gap: 12px; color: #475569; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: #2457f5; color: white; font-size: 20px; font-weight: 900; }
+    h1 { margin: 18px 0 0; font-size: 56px; line-height: .95; letter-spacing: -.04em; }
+    .meta { min-width: 260px; text-align: right; color: #64748b; font-size: 12px; line-height: 1.8; }
+    .meta strong { display: block; color: #0f172a; font-size: 18px; }
+    .empty { margin-top: 26px; min-height: 430px; display: grid; place-items: center; text-align: center; border: 1px dashed #b9c8dc; border-radius: 18px; background: #f8fbff; padding: 56px; }
+    .empty h2 { margin: 0 0 10px; font-size: 26px; }
+    .empty p { max-width: 640px; margin: 0 auto; color: #64748b; line-height: 1.7; }
+    .summary { margin-top: 26px; padding: 24px; border-radius: 18px; background: #0f172a; color: white; }
+    .summary .label, .summary p { color: #dbeafe; }
+    .label { color: #64748b; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .summary p { margin: 12px 0 0; font-size: 15px; line-height: 1.75; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+    .kpi { min-height: 132px; padding: 18px; border: 1px solid #dbe5f1; border-radius: 18px; background: #f8fbff; }
+    .value { margin-top: 16px; font-size: 34px; font-weight: 900; letter-spacing: -.03em; }
+    .sub { margin-top: 8px; color: #64748b; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1.45fr .9fr; gap: 18px; margin-top: 18px; }
+    .panel { padding: 22px; border: 1px solid #dbe5f1; border-radius: 18px; background: #ffffff; }
+    h2 { margin: 0 0 14px; color: #0f172a; font-size: 16px; letter-spacing: -.01em; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 10px 8px; text-align: left; color: #64748b; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 2px solid #0f172a; }
+    td { padding: 13px 8px; border-bottom: 1px solid #e6edf6; vertical-align: top; }
+    .right { text-align: right; }
+    .pill { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: #e8f0ff; color: #2457f5; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .rec { padding: 14px 0; border-top: 1px solid #e6edf6; }
+    .rec:first-of-type { border-top: 0; padding-top: 0; }
+    .rec strong { display: block; font-size: 14px; }
+    .rec span { display: block; margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.55; }
+    .footer { margin-top: 30px; display: flex; justify-content: space-between; color: #94a3b8; font-size: 11px; border-top: 1px solid #dbe5f1; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div>
+        <div class="brand"><span class="logo">G</span> Growzzy OS verified report</div>
+        <h1>Monthly Growth<br />Report</h1>
+      </div>
+      <aside class="meta">
+        <strong>{{clientName}}</strong>
+        {{reportMonth}}<br />
+        Report {{reportId}}<br />
+        Generated {{generatedDate}}
+      </aside>
+    </header>
+
+    {{^hasCampaignData}}
+      <section class="empty">
+        <div>
+          <h2>No verified campaign data yet</h2>
+          <p>{{executiveSummary}}</p>
+        </div>
+      </section>
+    {{/hasCampaignData}}
+
+    {{#hasCampaignData}}
+      <section class="summary">
+        <div class="label">Executive summary</div>
+        <p>{{executiveSummary}}</p>
+      </section>
+
+      <section class="kpis">
+        <div class="kpi"><div class="label">Total spend</div><div class="value">{{totalSpend}}</div><div class="sub">{{spendDelta}} vs {{prevMonth}}</div></div>
+        <div class="kpi"><div class="label">Revenue</div><div class="value">{{totalRevenue}}</div><div class="sub">{{revenueDelta}} vs {{prevMonth}}</div></div>
+        <div class="kpi"><div class="label">Blended ROAS</div><div class="value">{{blendedRoas}}</div><div class="sub">Target {{targetRoas}}</div></div>
+        <div class="kpi"><div class="label">Conversions</div><div class="value">{{totalConversions}}</div><div class="sub">{{conversionRate}} conversion rate</div></div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Campaign performance</h2>
+          <table>
+            <thead><tr><th>Campaign</th><th>Platform</th><th class="right">Spend</th><th class="right">Revenue</th><th class="right">ROAS</th><th class="right">CPA</th></tr></thead>
+            <tbody>
+              {{#campaigns}}
+                <tr>
+                  <td><strong>{{name}}</strong><br /><span class="sub">{{status}}</span></td>
+                  <td><span class="pill">{{platform}}</span></td>
+                  <td class="right">{{spend}}</td>
+                  <td class="right">{{revenue}}</td>
+                  <td class="right"><strong>{{roas}}</strong></td>
+                  <td class="right">{{cpa}}</td>
+                </tr>
+              {{/campaigns}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>Next actions</h2>
+          {{#recommendations}}
+            <div class="rec"><strong>{{title}}</strong><span>{{reason}}</span></div>
+          {{/recommendations}}
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top: 18px;">
+        <h2>Connected platform breakdown</h2>
+        <table>
+          <thead><tr><th>Platform</th><th class="right">Campaigns</th><th class="right">Spend</th><th class="right">Revenue</th><th class="right">ROAS</th><th class="right">Conversions</th></tr></thead>
+          <tbody>
+            {{#platformRows}}
+              <tr><td><span class="pill">{{platform}}</span></td><td class="right">{{campaignCount}}</td><td class="right">{{spend}}</td><td class="right">{{revenue}}</td><td class="right"><strong>{{roas}}</strong></td><td class="right">{{conversions}}</td></tr>
+            {{/platformRows}}
+          </tbody>
+        </table>
+      </section>
+    {{/hasCampaignData}}
+
+    <footer class="footer"><span>Growzzy OS</span><span>Verified connected-platform data only</span></footer>
+  </main>
+</body>
+</html>

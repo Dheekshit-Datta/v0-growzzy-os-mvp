@@ -1,0 +1,313 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-brand-soft: var(--brand-soft);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-meta: var(--meta);
+  --color-google: var(--google);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-muted-100: var(--muted-100);
+  --color-muted-200: var(--muted-200);
+  --color-muted-600: var(--muted-600);
+
+  --font-satoshi: "Satoshi", "satoshi Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, Arial, sans-serif;
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 30px 80px -30px rgba(12, 24, 66, 0.35);
+  --shadow-float: 0 20px 50px -20px rgba(12, 24, 66, 0.28);
+}
+
+:root {
+  /* Brand Colors - Blue */
+  --primary: #1F57F5;
+  --primary-hover: #1640D6;
+  --secondary: #2BAFF2;
+  --accent: #7CCBFF;
+  --primary-light: #EFF6FF;
+
+  /* Functional Status Colors */
+  --success: #10B981;
+  --success-bg: #ECFDF5;
+  --warning: #F59E0B;
+  --warning-bg: #FFFBEB;
+  --danger: #EF4444;
+  --danger-bg: #FEF2F2;
+
+  /* Neutrals & Surfaces */
+  --background: #f4f6fb;
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-soft: #f5f9ff;
+  --surface-hover: #f7f9fd;
+  --foreground: #0f172a;
+  --ink: #0f172a;
+  --ink-soft: #4b5d78;
+  --brand-soft: #5b85ff;
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent-foreground: #1f57f5;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --meta: #4364f6;
+  --google: #f59e0b;
+  --muted-100: #f1f5f9;
+  --muted-200: #e8eef6;
+  --muted-600: #94a3b8;
+
+  /* Text Colors */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text: #0f172a;
+
+  /* Borders */
+  --border: #dbe5f1;
+  --border-hover: #c7d6e8;
+
+  /* Controls */
+  --input-bg: #FFFFFF;
+
+  /* Dimensions & Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased;
+    font-family: var(--font-satoshi);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold tracking-tight text-text-primary;
+  }
+
+  h1 {
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 700;
+  }
+
+  h2 {
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+  }
+
+  h3 {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+}
+
+@layer components {
+
+  /* Enterprise Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 h-10 rounded-full text-[14px] font-medium transition-all duration-200 outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    @apply text-white shadow-md border border-transparent;
+    box-shadow: 0 8px 22px rgba(17, 24, 39, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(17, 24, 39, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 18px rgba(5, 9, 14, 0.06);
+  }
+
+  .btn-secondary {
+    @apply bg-white text-text-secondary border border-border hover:bg-muted-100 hover:text-text-primary hover:border-border-hover shadow-sm;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-text-secondary hover:bg-muted-100 hover:text-text-primary;
+  }
+
+  /* Enterprise Cards */
+  .card {
+    @apply bg-white border border-border rounded-[14px] p-6 shadow-sm;
+    box-shadow: 0 10px 26px rgba(17, 24, 39, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(15, 23, 42, 0.02);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  /* Enterprise Inputs */
+  .input {
+    @apply h-10 px-4 bg-muted-100 border border-transparent rounded-[10px] text-[14px] text-text-primary placeholder:text-text-tertiary transition-colors focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none w-full;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+
+  /* Data Tables */
+  .table-container {
+    @apply w-full overflow-hidden border border-border rounded-[8px] bg-white shadow-xs;
+  }
+
+  .data-table {
+    @apply w-full text-left text-[13px];
+  }
+
+  .data-table th {
+    @apply h-10 px-4 bg-muted-100 border-b border-border font-medium text-text-secondary select-none;
+  }
+
+  .data-table td {
+    @apply h-11 px-4 border-b border-border text-text-primary;
+  }
+
+  .data-table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-surface-hover;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium;
+  }
+
+  .badge-success {
+    @apply bg-success-bg text-success;
+  }
+
+  .badge-warning {
+    @apply bg-warning-bg text-warning;
+  }
+
+  .badge-danger {
+    @apply bg-danger-bg text-danger;
+  }
+
+  .badge-neutral {
+    @apply bg-muted-100 text-text-secondary;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .marketing-theme {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  }
+
+  .marketing-theme .font-display {
+    font-family: var(--font-instrument-serif), ui-serif, Georgia, Cambria, "Times New Roman", serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Scrollbar refinement */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    margin: 0.5cm;
+    size: auto;
+  }
+}

@@ -1,0 +1,48 @@
+import { NextRequest, NextResponse } from "next/server"
+import OpenAI from "openai"
+import { auth } from "@/lib/auth"
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const body = await req.json()
+  const { goal, type, theme, keywords, finalUrl } = body
+
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ ok: false, error: "AI ad copy generation is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
+  }
+
+  const prompt = `You are a world-class Google Ads copywriter. Generate ad copy for a Responsive Search Ad.
+
+Campaign goal: ${goal}
+Campaign type: ${type}
+Ad group theme: ${theme}
+Keywords: ${JSON.stringify(keywords || [])}
+Landing page URL: ${finalUrl}
+
+Generate:
+- 15 unique headlines (MAX 30 characters each)
+- 4 descriptions (MAX 90 characters each)
+
+Return ONLY JSON:
+{
+  "headlines": [{ "text": "...", "angle": "benefit|urgency|cta|feature|question|social_proof" }],
+  "descriptions": [{ "text": "..." }]
+}`
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    temperature: 0.45,
+    response_format: { type: "json_object" },
+    messages: [{ role: "user", content: prompt }],
+  })
+  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}")
+  if (!Array.isArray(parsed.headlines) || !Array.isArray(parsed.descriptions)) {
+    return NextResponse.json({ ok: false, error: "AI did not return usable ad copy. Please try again." }, { status: 502 })
+  }
+  const headlines = parsed.headlines.slice(0, 15).map((h: any) => ({ ...h, text: String(h.text || "").slice(0, 30) }))
+  const descriptions = parsed.descriptions.slice(0, 4).map((d: any) => ({ ...d, text: String(d.text || "").slice(0, 90) }))
+  return NextResponse.json({ ok: true, headlines, descriptions })
+}

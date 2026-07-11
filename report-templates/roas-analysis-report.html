@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Growzzy ROAS Recovery Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f6fb; color: #0f172a; font-family: Inter, Arial, sans-serif; }
+    .page { width: 1200px; min-height: 860px; margin: 0 auto; padding: 42px; background: #ffffff; }
+    .top { display: flex; justify-content: space-between; gap: 30px; border-bottom: 1px solid #dbe5f1; padding-bottom: 30px; }
+    .mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: #2457f5; color: white; font-weight: 900; }
+    .eyebrow { margin-top: 14px; color: #64748b; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 18px 0 0; font-size: 58px; line-height: .92; letter-spacing: -.05em; }
+    .meta { min-width: 260px; text-align: right; color: #64748b; font-size: 12px; line-height: 1.8; }
+    .meta strong { color: #0f172a; font-size: 18px; }
+    .empty { margin-top: 26px; min-height: 430px; display: grid; place-items: center; text-align: center; border: 1px dashed #b9c8dc; border-radius: 18px; background: #f8fbff; padding: 56px; }
+    .empty h2 { margin: 0 0 10px; font-size: 26px; }
+    .empty p { max-width: 640px; margin: 0 auto; color: #64748b; line-height: 1.7; }
+    .hero { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
+    .card { padding: 18px; border: 1px solid #dbe5f1; border-radius: 18px; background: #f8fbff; min-height: 128px; }
+    .card.dark { background: #0f172a; color: white; }
+    .label { color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .dark .label { color: #bfdbfe; }
+    .value { margin-top: 16px; font-size: 34px; font-weight: 900; letter-spacing: -.03em; }
+    .sub { margin-top: 8px; color: #64748b; font-size: 12px; }
+    .dark .sub { color: #cbd5e1; }
+    .summary { margin-top: 18px; padding: 22px; border-radius: 18px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; margin-top: 18px; }
+    .panel { padding: 22px; border: 1px solid #dbe5f1; border-radius: 18px; background: white; }
+    h2 { margin: 0 0 14px; font-size: 16px; color: #0f172a; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 10px 8px; text-align: left; color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; border-bottom: 2px solid #0f172a; }
+    td { padding: 13px 8px; border-bottom: 1px solid #e6edf6; vertical-align: top; }
+    .right { text-align: right; }
+    .pill { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #e8f0ff; color: #2457f5; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .trend { display: grid; gap: 10px; }
+    .trend-row { display: grid; grid-template-columns: 70px 1fr 70px; gap: 12px; align-items: center; color: #475569; font-size: 12px; }
+    .track { height: 10px; border-radius: 999px; background: #edf2f7; overflow: hidden; }
+    .fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2457f5, #22c55e); width: calc(var(--pct) * 1%); }
+    .rec { padding: 14px 0; border-top: 1px solid #e6edf6; }
+    .rec:first-of-type { border-top: 0; padding-top: 0; }
+    .rec strong { display: block; }
+    .rec span { display: block; margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.55; }
+    .footer { margin-top: 30px; display: flex; justify-content: space-between; color: #94a3b8; font-size: 11px; border-top: 1px solid #dbe5f1; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div>
+        <div class="mark">G</div>
+        <div class="eyebrow">Growzzy OS ROAS intelligence</div>
+        <h1>ROAS Recovery<br />Report</h1>
+      </div>
+      <aside class="meta">
+        <strong>{{clientName}}</strong>
+        {{reportMonth}}<br />
+        Report {{reportId}}<br />
+        Generated {{generatedDate}}
+      </aside>
+    </header>
+
+    {{^hasCampaignData}}
+      <section class="empty">
+        <div>
+          <h2>No verified campaign data yet</h2>
+          <p>{{executiveSummary}}</p>
+        </div>
+      </section>
+    {{/hasCampaignData}}
+
+    {{#hasCampaignData}}
+      <section class="hero">
+        <div class="card dark"><div class="label">Blended ROAS</div><div class="value">{{blendedRoas}}</div><div class="sub">Target {{targetRoas}}</div></div>
+        <div class="card"><div class="label">Revenue</div><div class="value">{{totalRevenue}}</div><div class="sub">From {{totalSpend}} spend</div></div>
+        <div class="card"><div class="label">Target gap</div><div class="value">{{targetGap}}</div><div class="sub">Against target ROAS</div></div>
+        <div class="card"><div class="label">Best channel</div><div class="value">{{bestChannelRoas}}</div><div class="sub">{{bestChannelName}}</div></div>
+      </section>
+
+      <section class="summary">{{executiveSummary}}</section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Platform ROAS</h2>
+          <table>
+            <thead><tr><th>Platform</th><th class="right">Campaigns</th><th class="right">Spend</th><th class="right">Revenue</th><th class="right">ROAS</th><th class="right">CPA</th></tr></thead>
+            <tbody>
+              {{#platformRows}}
+                <tr><td><span class="pill">{{platform}}</span></td><td class="right">{{campaignCount}}</td><td class="right">{{spend}}</td><td class="right">{{revenue}}</td><td class="right"><strong>{{roas}}</strong></td><td class="right">{{cpa}}</td></tr>
+              {{/platformRows}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>ROAS trend</h2>
+          <div class="trend">
+            {{#roasTrend}}
+              <div class="trend-row"><span>{{month}}</span><div class="track"><span class="fill" style="--pct: {{targetLinePct}}"></span></div><strong>{{roas}}</strong></div>
+            {{/roasTrend}}
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Campaign recovery list</h2>
+          <table>
+            <thead><tr><th>Campaign</th><th>Platform</th><th class="right">Spend</th><th class="right">Revenue</th><th class="right">ROAS</th><th class="right">Conversions</th></tr></thead>
+            <tbody>
+              {{#campaigns}}
+                <tr><td><strong>{{name}}</strong></td><td><span class="pill">{{platform}}</span></td><td class="right">{{spend}}</td><td class="right">{{revenue}}</td><td class="right"><strong>{{roas}}</strong></td><td class="right">{{conversions}}</td></tr>
+              {{/campaigns}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>AI action plan</h2>
+          {{#recommendations}}
+            <div class="rec"><strong>{{title}}</strong><span>{{reason}}</span></div>
+          {{/recommendations}}
+        </div>
+      </section>
+    {{/hasCampaignData}}
+
+    <footer class="footer"><span>Growzzy OS</span><span>ROAS report uses verified synced campaign data only</span></footer>
+  </main>
+</body>
+</html>

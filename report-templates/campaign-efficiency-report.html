@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Growzzy Campaign Efficiency Review</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f6fb; color: #0f172a; font-family: Inter, Arial, sans-serif; }
+    .page { width: 1200px; min-height: 860px; margin: 0 auto; padding: 42px; background: #ffffff; }
+    .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #dbe5f1; padding-bottom: 30px; }
+    .badge { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 18px 0 0; font-size: 58px; line-height: .92; letter-spacing: -.05em; }
+    .meta { text-align: right; color: #64748b; font-size: 12px; line-height: 1.8; }
+    .meta strong { color: #0f172a; font-size: 18px; }
+    .empty { margin-top: 26px; min-height: 430px; display: grid; place-items: center; text-align: center; border: 1px dashed #b9c8dc; border-radius: 18px; background: #f8fbff; padding: 56px; }
+    .empty h2 { margin: 0 0 10px; font-size: 26px; }
+    .empty p { max-width: 640px; margin: 0 auto; color: #64748b; line-height: 1.7; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 26px; }
+    .metric { padding: 18px; border: 1px solid #dbe5f1; border-radius: 18px; background: #f8fbff; min-height: 116px; }
+    .metric.dark { background: #0f172a; color: white; }
+    .label { color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .dark .label { color: #bfdbfe; }
+    .value { margin-top: 14px; font-size: 30px; font-weight: 900; letter-spacing: -.03em; }
+    .grid { display: grid; grid-template-columns: 1.5fr .9fr; gap: 18px; margin-top: 18px; }
+    .panel { padding: 22px; border: 1px solid #dbe5f1; border-radius: 18px; background: white; }
+    h2 { margin: 0 0 14px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 10px 8px; text-align: left; color: #64748b; font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; border-bottom: 2px solid #0f172a; }
+    td { padding: 13px 8px; border-bottom: 1px solid #e6edf6; vertical-align: middle; }
+    .right { text-align: right; }
+    .pill { display: inline-flex; margin-top: 5px; padding: 4px 8px; border-radius: 999px; background: #e8f0ff; color: #2457f5; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .bar { width: 100%; height: 9px; border-radius: 999px; overflow: hidden; background: #edf2f7; }
+    .fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2457f5, #38bdf8); width: calc(var(--pct) * 1%); }
+    .grade { display: inline-grid; place-items: center; min-width: 34px; height: 30px; border-radius: 8px; background: #eef6ff; color: #2457f5; font-weight: 900; }
+    .bench { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid #e6edf6; font-size: 13px; }
+    .bench strong { font-size: 16px; }
+    .rec { margin-top: 12px; padding: 14px; border-radius: 14px; background: #f8fbff; border: 1px solid #dbe5f1; }
+    .rec strong { display: block; }
+    .rec span { display: block; margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.55; }
+    .footer { margin-top: 30px; display: flex; justify-content: space-between; color: #94a3b8; font-size: 11px; border-top: 1px solid #dbe5f1; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div>
+        <span class="badge">Efficiency audit</span>
+        <h1>Campaign Efficiency<br />Review</h1>
+      </div>
+      <aside class="meta">
+        <strong>{{clientName}}</strong><br />
+        {{reportMonth}}<br />
+        Report {{reportId}}<br />
+        Generated {{generatedDate}}
+      </aside>
+    </header>
+
+    {{^hasCampaignData}}
+      <section class="empty">
+        <div>
+          <h2>No verified campaign data yet</h2>
+          <p>{{executiveSummary}}</p>
+        </div>
+      </section>
+    {{/hasCampaignData}}
+
+    {{#hasCampaignData}}
+      <section class="metrics">
+        <div class="metric"><div class="label">Avg CTR</div><div class="value">{{avgCtr}}</div></div>
+        <div class="metric"><div class="label">Avg CPC</div><div class="value">{{avgCpc}}</div></div>
+        <div class="metric dark"><div class="label">Efficiency score</div><div class="value">{{efficiencyScore}}</div></div>
+        <div class="metric"><div class="label">Avg CPM</div><div class="value">{{avgCpm}}</div></div>
+        <div class="metric"><div class="label">Conv. rate</div><div class="value">{{conversionRate}}</div></div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Efficiency by campaign</h2>
+          <table>
+            <thead><tr><th>Campaign</th><th>Efficiency index</th><th class="right">Grade</th><th class="right">CPA</th><th class="right">ROAS</th></tr></thead>
+            <tbody>
+              {{#campaigns}}
+                <tr>
+                  <td><strong>{{name}}</strong><br /><span class="pill">{{platform}}</span></td>
+                  <td><div class="bar"><span class="fill" style="--pct: {{efficiencyPct}}"></span></div></td>
+                  <td class="right"><span class="grade">{{efficiencyGrade}}</span></td>
+                  <td class="right">{{cpa}}</td>
+                  <td class="right"><strong>{{roas}}</strong></td>
+                </tr>
+              {{/campaigns}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>Benchmarks</h2>
+          <div class="bench"><span>CTR</span><strong>{{avgCtr}}</strong><span>{{benchmarkCtr}}</span></div>
+          <div class="bench"><span>CPC</span><strong>{{avgCpc}}</strong><span>{{benchmarkCpc}}</span></div>
+          <div class="bench"><span>CPM</span><strong>{{avgCpm}}</strong><span>{{benchmarkCpm}}</span></div>
+          <div class="bench"><span>Conversion rate</span><strong>{{conversionRate}}</strong><span>{{benchmarkConversionRate}}</span></div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Quality score model</h2>
+          <div class="bench"><span>Ad relevance</span><strong>{{adRelevanceScore}}</strong></div>
+          <div class="bench"><span>Landing page</span><strong>{{landingPageScore}}</strong></div>
+          <div class="bench"><span>Expected CTR</span><strong>{{expectedCtrScore}}</strong></div>
+          <div class="bench"><span>Overall quality</span><strong>{{overallQualityScore}}</strong></div>
+        </div>
+        <div class="panel">
+          <h2>Recommended fixes</h2>
+          {{#recommendations}}
+            <div class="rec"><strong>{{title}}</strong><span>{{reason}}</span></div>
+          {{/recommendations}}
+        </div>
+      </section>
+    {{/hasCampaignData}}
+
+    <footer class="footer"><span>Growzzy OS</span><span>Efficiency report uses verified synced campaign data only</span></footer>
+  </main>
+</body>
+</html>
