@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireUserId } from "@/lib/auth"
 import { persistEncryptedGoogleTokenBinding } from "@/lib/google-token-store"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getIntegrationRefreshToken } from "@/lib/integration-tokens"
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     await persistEncryptedGoogleTokenBinding({
       integrationId: integration.id,
-      refreshToken: integration.refreshToken,
+      refreshToken: getIntegrationRefreshToken(integration),
       customerId: selected.externalId,
     })
 

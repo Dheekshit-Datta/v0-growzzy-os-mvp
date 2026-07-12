@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireUserId } from "@/lib/auth"
 import { detectGoogleAdsAccounts, persistIntegration } from "@/lib/ads-detection"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,18 +16,20 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    if (!integration?.accessToken) {
+    if (!integration) {
       return NextResponse.json({ error: "Google integration not authorized" }, { status: 400 })
     }
+    const accessToken = getIntegrationAccessToken(integration)
+    if (!accessToken) return NextResponse.json({ error: "Google integration not authorized" }, { status: 400 })
 
-    const detection = await detectGoogleAdsAccounts(integration.accessToken)
+    const detection = await detectGoogleAdsAccounts(accessToken)
 
     await persistIntegration({
       userId,
       workspaceId,
       platform: "GOOGLE",
-      accessToken: integration.accessToken,
-      refreshToken: integration.refreshToken,
+      accessToken,
+      refreshToken: getIntegrationRefreshToken(integration),
       expiresAt: integration.expiresAt,
       hasAdsAccess: detection.hasAdsAccess,
       accounts: detection.accounts,

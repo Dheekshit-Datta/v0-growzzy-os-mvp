@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth"
 import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
 import { GoogleAdsApiError } from "@/services/integrations/google"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 const GOOGLE_SYNC_ACCESS_DENIED_MESSAGE =
   "Access Denied: Ensure you are using a Production Developer Token for real accounts, or use a Test Account for development."
@@ -17,7 +18,8 @@ export async function POST(req: NextRequest) {
       where: { userId, workspaceId, platform: "GOOGLE" },
     })
 
-    if (!integration?.accessToken || !integration.selectedAdAccountId) {
+    const accessToken = integration ? getIntegrationAccessToken(integration) : null
+    if (!accessToken || !integration?.selectedAdAccountId) {
       return NextResponse.json({ error: "Google account not selected" }, { status: 400 })
     }
 
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
         integration.id,
         selectedAccount.id,
         selectedAccount.externalId,
-        integration.accessToken,
+        accessToken,
         selectedAccount.managerCustomerId
       )
 

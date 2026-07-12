@@ -7,7 +7,7 @@ import { detectGoogleAdsAccounts, persistIntegration } from "@/lib/ads-detection
 import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
 import { prisma } from "@/lib/prisma"
 import { GoogleAdsService } from "@/services/integrations/google"
-import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getPrimaryWorkspaceId, getRequestWorkspaceId } from "@/lib/workspace"
 import { getStateCookieName, verifyState } from "@/lib/oauth-state"
 import { log } from "@/lib/logger"
 
@@ -44,15 +44,24 @@ export async function GET(request: Request) {
     return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=google_missing_code`)
   }
 
-  const session = await auth()
-  if (!session?.user?.id) {
-    return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=unauthorized`)
-  }
-
-  const userId = await resolveUserId(session.user.id)
-  const workspaceId = await getRequestWorkspaceId(userId, request as any)
-
   try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=unauthorized`)
+    }
+
+    const userId = await resolveUserId(session.user.id)
+    let workspaceId: string
+
+    try {
+      workspaceId = await getRequestWorkspaceId(userId, request as any)
+    } catch (workspaceError: any) {
+      log("warn", "google/oauth/callback", "Workspace resolution failed; falling back to primary workspace", {
+        message: workspaceError?.message,
+      })
+      workspaceId = await getPrimaryWorkspaceId(userId)
+    }
+
     const redirectUri = `${new URL(request.url).origin}/api/auth/google/callback`
     log("info", "google/oauth/callback", "Exchanging OAuth code", {
       clientId: GoogleAdsService.getOAuthClientId(),

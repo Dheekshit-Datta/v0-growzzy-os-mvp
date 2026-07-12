@@ -119,6 +119,11 @@ model Workspace {
   slug               String              @unique
   logo               String?
   ownerId            String
+  dailyBudgetCeiling Float?
+  defaultAutomationMode String @default("ALERT")
+  targetCpa          Float?
+  maxDailyBudgetShiftPct Float @default(0.2)
+  stopLossEnabled    Boolean @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   owner              User                @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -139,6 +144,8 @@ model Workspace {
   scheduledReports    ScheduledReport[]
   creatives           Creative[]
   optimizationLogs    OptimizationLog[]
+  signals             Signal[]
+  optimizationActions OptimizationAction[]
 
   @@index([ownerId])
 }
@@ -172,6 +179,8 @@ model Integration {
 
   accessToken    String?
   refreshToken   String?
+  accessTokenEncrypted String?
+  refreshTokenEncrypted String?
   expiresAt      DateTime?
   tokenExpiresAt DateTime?
 
@@ -223,6 +232,8 @@ model AdAccount {
 
   integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  campaigns   Campaign[]
+  campaignPlans CampaignPlan[]
 
   @@unique([platform, externalId])
   @@unique([integrationId, externalId])
@@ -275,7 +286,8 @@ model Campaign {
   userId           String?
   platform         IntegrationPlatform
   externalId       String
-  adAccountId      String?
+  adAccountId      String?             @map("adAccountDbId")
+  adAccountExternalId String?          @map("adAccountId")
   name             String
   status           String
   objective        String?
@@ -326,17 +338,21 @@ model Campaign {
 
   integration      Integration           @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   workspace        Workspace?            @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  adAccount        AdAccount?            @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
   metricsDaily     CampaignMetricDaily[]
   creatives        Creative[]
   adGroups         AdGroup[]
   adSets           AdSet[]
   alerts           Alert[]
   optimizationLogs OptimizationLog[]
+  signals          Signal[]
+  optimizationActions OptimizationAction[]
 
   @@unique([integrationId, externalId])
   @@index([workspaceId])
   @@index([integrationId])
   @@index([adAccountId])
+  @@index([adAccountExternalId])
   @@index([userId])
 }
 
@@ -705,21 +721,77 @@ model DailyBrief {
 model CampaignPlan {
   id                 String   @id @default(cuid())
   workspaceId        String?
-  adAccountId        String?
+  adAccountId        String?  @map("adAccountDbId")
+  adAccountExternalId String? @map("adAccountId")
   userId             String
   platform           String   @default("GOOGLE")
   plan               Json
   status             String   @default("DRAFT")
   launchedCampaignId String?
+  publishFingerprint String?  @unique
+  publishedAt        DateTime?
+  externalCampaignId String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  adAccount AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, status])
   @@index([adAccountId, status])
+  @@index([adAccountExternalId, status])
   @@index([userId, createdAt])
+}
+
+model Signal {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  campaignId      String
+  scopeType       String
+  scopeExternalId String
+  kind            String
+  severity        String
+  evidence        Json
+  explanation     String?
+  detectedAt      DateTime @default(now())
+  status          String   @default("OPEN")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  actions   OptimizationAction[]
+
+  @@index([workspaceId, status, detectedAt])
+  @@index([campaignId, status])
+}
+
+model OptimizationAction {
+  id              String   @id @default(cuid())
+  signalId        String?
+  workspaceId     String
+  campaignId      String
+  type            String
+  params          Json
+  mode            String
+  status          String   @default("PROPOSED")
+  previousState   Json?
+  newState        Json?
+  outcomeSnapshot Json?
+  executedAt      DateTime?
+  undoneAt        DateTime?
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  signal    Signal?    @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([signalId])
 }
 
 model ActivityLog {

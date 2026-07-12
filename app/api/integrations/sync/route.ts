@@ -8,6 +8,7 @@ import { log } from "@/lib/logger"
 import { rateLimit } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { logSlowApi } from "@/lib/api-timing"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export const dynamic = "force-dynamic"
 
@@ -131,7 +132,8 @@ export async function POST(req: Request) {
       }
     }
 
-    if (primaryAccount && integration.accessToken) {
+    const accessToken = getIntegrationAccessToken(integration)
+    if (primaryAccount && accessToken) {
       try {
         let count = 0
         if (integration.platform === "GOOGLE") {
@@ -141,7 +143,7 @@ export async function POST(req: Request) {
               integration.id,
               primaryAccount.id,
               primaryAccount.externalId,
-              integration.accessToken!,
+              accessToken,
               primaryAccount.managerCustomerId
             )
           } catch (syncErr: any) {

@@ -245,7 +245,23 @@ function AuthPageContent() {
                   }
                   setIsGoogleLoading(true)
                   try {
-                    await signIn("google", { callbackUrl })
+                    const csrfRes = await fetch("/api/auth/csrf")
+                    const csrfData = await csrfRes.json()
+                    const body = new URLSearchParams({
+                      csrfToken: csrfData.csrfToken,
+                      callbackUrl,
+                    })
+                    const res = await fetch("/api/auth/signin/google", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Auth-Return-Redirect": "1",
+                      },
+                      body,
+                    })
+                    const data = await res.json()
+                    if (!data?.url) throw new Error("Missing Google OAuth URL")
+                    window.location.href = data.url
                   } catch {
                     setIsGoogleLoading(false)
                     setError("Google sign-in failed to start. Check the Google OAuth redirect URI.")

@@ -59,14 +59,16 @@ export default function NewCampaignPage() {
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [buildingPlan, setBuildingPlan] = useState(false)
+  const [launchingPlan, setLaunchingPlan] = useState(false)
   const [loadingCreative, setLoadingCreative] = useState(false)
   const [selectedCreative, setSelectedCreative] = useState<GeneratedCreative | null>(null)
   const [aiPlan, setAiPlan] = useState<any>(null)
+  const [campaignPlanId, setCampaignPlanId] = useState("")
   const [aiBrief, setAiBrief] = useState({
     offer: "",
     landingPageUrl: "",
     targetCustomer: "",
-    budget: "50",
+    budget: "1",
     location: "United States",
     goal: "Leads",
   })
@@ -224,6 +226,7 @@ export default function NewCampaignPage() {
       const data = await response.json()
       if (!response.ok || !data.ok) throw new Error(data.error || "AI Campaign Builder failed")
       setAiPlan(data.plan)
+      setCampaignPlanId(data.campaignPlanId)
       setForm((previous) => ({
         ...previous,
         platform: "GOOGLE",
@@ -237,6 +240,31 @@ export default function NewCampaignPage() {
       toast.error(error.message || "Could not build campaign plan")
     } finally {
       setBuildingPlan(false)
+    }
+  }
+
+  const launchAiPlan = async () => {
+    if (!campaignPlanId) return
+    setLaunchingPlan(true)
+    try {
+      const policyResponse = await fetch("/api/ai/policy-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignPlanId }),
+      })
+      const policy = await policyResponse.json().catch(() => ({}))
+      if (!policyResponse.ok) throw new Error(policy.error || "Policy check failed")
+      if (policy.data?.status === "FAIL") throw new Error("Policy check blocked this campaign")
+
+      const response = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.ok) throw new Error(data.error || "Google Ads launch failed")
+      toast.success(`Campaign ${data.data.externalCampaignId} created paused in Google Ads`)
+      router.push("/dashboard/campaigns")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not launch campaign")
+    } finally {
+      setLaunchingPlan(false)
     }
   }
 
@@ -298,6 +326,14 @@ export default function NewCampaignPage() {
                       ))}
                     </div>
                     {!!aiPlan.risks?.length && <p className="mt-3 text-xs text-amber-700">Review before launch: {aiPlan.risks[0]}</p>}
+                    <button
+                      onClick={launchAiPlan}
+                      disabled={launchingPlan || !aiBrief.landingPageUrl}
+                      className="btn btn-primary mt-3 h-10 px-4 text-sm disabled:opacity-50"
+                    >
+                      {launchingPlan ? "Publishing paused..." : "Launch paused in Google Ads"}
+                    </button>
+                    {!aiBrief.landingPageUrl && <p className="mt-2 text-xs text-amber-700">Add a landing page URL before launch.</p>}
                   </div>
                 )}
               </div>

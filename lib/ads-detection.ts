@@ -3,6 +3,7 @@ import { persistEncryptedGoogleTokenBinding } from "@/lib/google-token-store"
 import { persistEncryptedMetaTokenBinding } from "@/lib/meta-token-store"
 import { GoogleAdsApiError, GoogleAdsService } from "@/services/integrations/google"
 import { MetaAdsService, MetaApiError } from "@/services/integrations/meta"
+import { encryptedIntegrationTokens } from "@/lib/integration-tokens"
 
 export type AdAccountInfo = {
   externalId: string
@@ -167,6 +168,7 @@ export async function persistIntegration({
   if (!scopedWorkspaceId) {
     throw new Error("A workspace is required before connecting an ad platform.")
   }
+  const tokenData = encryptedIntegrationTokens(accessToken, refreshToken)
 
   const existingIntegration = await prisma.integration.findFirst({
     where: { userId, workspaceId: scopedWorkspaceId, platform },
@@ -178,8 +180,7 @@ export async function persistIntegration({
         where: { id: existingIntegration.id },
         data: {
           workspaceId: scopedWorkspaceId,
-          accessToken,
-          ...(refreshToken ? { refreshToken } : {}),
+          ...tokenData,
           expiresAt,
           status: "RECONNECT_REQUIRED",
           validationError: discoveryError || "Google Ads account discovery failed",
@@ -204,8 +205,7 @@ export async function persistIntegration({
         userId,
         workspaceId: scopedWorkspaceId,
         platform,
-        accessToken,
-        refreshToken,
+        ...tokenData,
         expiresAt,
         hasAdsAccount: false,
         status: "RECONNECT_REQUIRED",
@@ -228,8 +228,7 @@ export async function persistIntegration({
       const updatedIntegration = await prisma.integration.update({
         where: { id: existingIntegration.id },
         data: {
-          accessToken,
-          ...(refreshToken ? { refreshToken } : {}),
+          ...tokenData,
           expiresAt,
           status: "RECONNECT_REQUIRED",
           validationError: discoveryError || "Meta Ads account discovery failed",
@@ -275,8 +274,7 @@ export async function persistIntegration({
       where: { id: existingIntegration.id },
       data: {
         workspaceId: scopedWorkspaceId,
-        accessToken,
-        ...(refreshToken ? { refreshToken } : {}),
+        ...tokenData,
         expiresAt,
         hasAdsAccount: hasAdsAccess,
         hasAdsAccess,
@@ -290,8 +288,7 @@ export async function persistIntegration({
       userId,
       workspaceId: scopedWorkspaceId,
       platform,
-      accessToken,
-      refreshToken,
+      ...tokenData,
       expiresAt,
       hasAdsAccount: hasAdsAccess,
       hasAdsAccess,

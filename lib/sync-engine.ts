@@ -3,6 +3,7 @@ import { deriveMetrics } from "@/lib/metrics"
 import { GoogleAdsService } from "@/services/integrations/google"
 import { refreshGoogleAccessToken } from "@/lib/ads-detection"
 import { log } from "@/lib/logger"
+import { encryptedIntegrationTokens, getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -62,20 +63,21 @@ async function acquireSyncLock(userId: string, adAccountDbId: string) {
 async function ensureFreshGoogleToken(integrationId: string, currentAccessToken: string) {
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
-    select: { refreshToken: true, tokenExpiresAt: true, expiresAt: true },
+    select: { refreshToken: true, refreshTokenEncrypted: true, tokenExpiresAt: true, expiresAt: true },
   })
 
-  if (!integration?.refreshToken) return currentAccessToken
-  const expiresAt = integration.tokenExpiresAt || integration.expiresAt
+  const refreshToken = integration ? getIntegrationRefreshToken(integration) : null
+  if (!refreshToken) return currentAccessToken
+  const expiresAt = integration?.tokenExpiresAt || integration?.expiresAt
   if (!expiresAt) return currentAccessToken
 
   if (expiresAt.getTime() > Date.now() + 10 * 60 * 1000) return currentAccessToken
 
-  const refreshed = await refreshGoogleAccessToken(integration.refreshToken)
+  const refreshed = await refreshGoogleAccessToken(refreshToken)
   await prisma.integration.update({
     where: { id: integrationId },
     data: {
-      accessToken: refreshed.accessToken,
+      ...encryptedIntegrationTokens(refreshed.accessToken),
       expiresAt: refreshed.expiresAt,
       tokenExpiresAt: refreshed.expiresAt,
     },
@@ -167,7 +169,8 @@ export async function syncGoogleAdsCampaigns(
             userId,
             platform: "GOOGLE",
             externalId: String(campaign.id),
-            adAccountId: externalAccountId,
+            adAccountId: adAccountDbId,
+            adAccountExternalId: externalAccountId,
             name: campaign.name || `Google Campaign ${campaign.id}`,
             status: campaign.status || "UNKNOWN",
             objective: campaign.advertisingChannelType,
@@ -191,7 +194,8 @@ export async function syncGoogleAdsCampaigns(
             integrationId,
             workspaceId,
             userId,
-            adAccountId: externalAccountId,
+            adAccountId: adAccountDbId,
+            adAccountExternalId: externalAccountId,
             name: campaign.name || `Google Campaign ${campaign.id}`,
             status: campaign.status || "UNKNOWN",
             objective: campaign.advertisingChannelType,
@@ -257,7 +261,8 @@ export async function syncGoogleAdsCampaigns(
 
 export async function syncGoogleIntegration(integration: any) {
   if (integration.platform !== "GOOGLE") return 0
-  if (!integration.accessToken || !integration.selectedAdAccountId) {
+  const accessToken = getIntegrationAccessToken(integration)
+  if (!accessToken || !integration.selectedAdAccountId) {
     throw new Error("Missing Google access token or selected ad account")
   }
 
@@ -282,7 +287,7 @@ export async function syncGoogleIntegration(integration: any) {
     integration.id,
     selectedAccount.id,
     selectedAccount.externalId,
-    integration.accessToken,
+    accessToken,
     selectedAccount.managerCustomerId
   )
 }
@@ -308,6 +313,6 @@ export async function syncMetaAdsCampaigns(
   })
 
   return prisma.campaign.count({
-    where: { userId, platform: "META", adAccountId: externalAccountId },
+    where: { userId, platform: "META", adAccountExternalId: externalAccountId },
   })
 }

@@ -1,4 +1,5 @@
 type GoogleObjective = "SEARCH" | "DISPLAY" | "VIDEO"
+type GoogleBiddingStrategy = "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA"
 
 export type CreateCampaignParams = {
   accessToken: string
@@ -6,6 +7,8 @@ export type CreateCampaignParams = {
   name: string
   dailyBudgetMicros: number
   objective: GoogleObjective
+  biddingStrategy?: GoogleBiddingStrategy
+  targetCpaMicros?: number | null
   status?: "PAUSED" | "ENABLED"
   loginCustomerId?: string | null
 }
@@ -66,6 +69,15 @@ function mapObjectiveToChannelType(objective: string): GoogleObjective {
   return "SEARCH"
 }
 
+function googleBiddingConfig(strategy: GoogleBiddingStrategy, targetCpaMicros?: number | null) {
+  if (strategy === "MAXIMIZE_CLICKS") return { maximizeClicks: {} }
+  if (strategy === "TARGET_CPA") {
+    if (!targetCpaMicros || targetCpaMicros <= 0) throw new Error("TARGET_CPA requires a positive target CPA")
+    return { targetCpa: { targetCpaMicros } }
+  }
+  return { maximizeConversions: {} }
+}
+
 async function createGoogleCampaignBudget({
   accessToken,
   customerId,
@@ -108,6 +120,8 @@ export async function createGoogleAdsCampaign({
   name,
   dailyBudgetMicros,
   objective,
+  biddingStrategy = "MAXIMIZE_CONVERSIONS",
+  targetCpaMicros,
   status = "PAUSED",
   loginCustomerId,
 }: CreateCampaignParams) {
@@ -126,7 +140,7 @@ export async function createGoogleAdsCampaign({
           status,
           campaignBudget: budgetResource,
           advertisingChannelType: mapObjectiveToChannelType(objective),
-          manualCpc: {},
+          ...googleBiddingConfig(biddingStrategy, targetCpaMicros),
         },
       },
     ],

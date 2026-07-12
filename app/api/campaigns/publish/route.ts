@@ -14,6 +14,7 @@ import { isUnverifiedExternalId } from "@/lib/data-trust"
 import { log } from "@/lib/logger"
 import { classifyActionError, createCorrelationId } from "@/lib/action-response"
 import { recordActivity } from "@/lib/activity-log"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export const dynamic = "force-dynamic"
 
@@ -61,19 +62,34 @@ export async function POST(req: NextRequest) {
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: body.campaignId, userId, ...workspaceWhere(workspaceId, false) },
-      include: { integration: true },
+      include: { integration: true, adAccount: true },
     })
     if (!campaign) return NextResponse.json({ ok: false, error: "Campaign draft not found", correlationId, code: "NOT_FOUND" }, { status: 404 })
     if (campaign.platform !== "GOOGLE") return NextResponse.json({ ok: false, error: "Only Google Ads live publishing is enabled for beta", correlationId, code: "PREFLIGHT_BLOCK" }, { status: 403 })
     if (campaign.isLive && !isUnverifiedExternalId(campaign.externalId)) {
       return NextResponse.json({ ok: false, error: "This campaign is already live. Use Ads Manager for live changes.", correlationId, code: "ALREADY_LIVE" }, { status: 409 })
     }
-    if (!campaign.integration.hasAdsAccess || !campaign.integration.accessToken) return NextResponse.json({ ok: false, error: "Reconnect Google Ads before publishing", correlationId, code: "AUTH_REQUIRED" }, { status: 401 })
+    const dailyBudget = Number(campaign.budgetAmount || campaign.dailyBudget || 1)
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { dailyBudgetCeiling: true },
+    })
+    if (workspace?.dailyBudgetCeiling != null) {
+      const activeBudget = await prisma.campaign.aggregate({
+        where: { workspaceId, isLive: true, id: { not: campaign.id } },
+        _sum: { budgetAmount: true },
+      })
+      if (Number(activeBudget._sum.budgetAmount || 0) + dailyBudget > workspace.dailyBudgetCeiling) {
+        return NextResponse.json({ ok: false, error: "This launch exceeds the workspace daily budget ceiling.", correlationId, code: "BUDGET_CEILING" }, { status: 409 })
+      }
+    }
+    const accessToken = getIntegrationAccessToken(campaign.integration)
+    if (!campaign.integration.hasAdsAccess || !accessToken) return NextResponse.json({ ok: false, error: "Reconnect Google Ads before publishing", correlationId, code: "AUTH_REQUIRED" }, { status: 401 })
 
-    const customerId = campaign.adAccountId || campaign.integration.selectedAdAccountId || campaign.integration.accountId || ""
+    const customerId = campaign.adAccountExternalId || campaign.adAccount?.externalId || campaign.integration.selectedAdAccountId || campaign.integration.accountId || ""
     if (!customerId) return NextResponse.json({ ok: false, error: "No selected Google Ads account found", correlationId, code: "PREFLIGHT_BLOCK" }, { status: 400 })
-    publishContext = { userId, workspaceId, adAccountId: campaign.adAccountId || customerId, campaignId: campaign.id, name: campaign.name }
-    rollbackAccess = { accessToken: campaign.integration.accessToken, customerId, loginCustomerId: customerId }
+    publishContext = { userId, workspaceId, adAccountId: campaign.adAccountId || campaign.adAccount?.id || customerId, campaignId: campaign.id, name: campaign.name }
+    rollbackAccess = { accessToken, customerId, loginCustomerId: customerId }
 
     await prisma.campaign.update({
       where: { id: campaign.id },
@@ -85,11 +101,13 @@ export async function POST(req: NextRequest) {
 
     if (!campaign.isLive || isUnverifiedExternalId(campaign.externalId)) {
       const campaignResult = await createGoogleAdsCampaign({
-        accessToken: campaign.integration.accessToken,
+        accessToken,
         customerId,
         name: campaign.name,
-        dailyBudgetMicros: Math.round(Number(campaign.budgetAmount || campaign.dailyBudget || 1) * 1_000_000),
-        objective: "SEARCH",
+        dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
+        objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
+        biddingStrategy: campaign.biddingStrategy === "MAXIMIZE_CLICKS" || campaign.biddingStrategy === "TARGET_CPA" ? campaign.biddingStrategy : "MAXIMIZE_CONVERSIONS",
+        targetCpaMicros: campaign.targetCpa ? Math.round(campaign.targetCpa * 1_000_000) : null,
         status: "PAUSED",
         loginCustomerId: customerId,
       })
@@ -107,7 +125,7 @@ export async function POST(req: NextRequest) {
     }
 
     const adGroupResult = await createGoogleAdGroup({
-      accessToken: campaign.integration.accessToken,
+      accessToken,
       customerId,
       campaignId: googleCampaignId,
       name: body.adGroup.name,
@@ -116,7 +134,7 @@ export async function POST(req: NextRequest) {
     })
 
     await createGoogleKeywords({
-      accessToken: campaign.integration.accessToken,
+      accessToken,
       customerId,
       adGroupId: adGroupResult.resourceName || adGroupResult.adGroupId,
       keywords: body.keywords,
@@ -124,7 +142,7 @@ export async function POST(req: NextRequest) {
     })
 
     const adResult = await createGoogleResponsiveSearchAd({
-      accessToken: campaign.integration.accessToken,
+      accessToken,
       customerId,
       adGroupId: adGroupResult.resourceName || adGroupResult.adGroupId,
       headlines: body.ad.headlines,
@@ -192,7 +210,7 @@ export async function POST(req: NextRequest) {
     await recordActivity({
       userId,
       workspaceId,
-      adAccountId: campaign.adAccountId || customerId,
+      adAccountId: campaign.adAccountId || campaign.adAccount?.id || customerId,
       type: "CAMPAIGN_PUBLISHED_PAUSED",
       title: `${campaign.name} published paused`,
       entityType: "Campaign",

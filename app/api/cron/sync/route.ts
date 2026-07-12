@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/email"
 import { log } from "@/lib/logger"
 import { validateEnv } from "@/lib/env"
 import { normalizeReportType, renderReportHtml } from "@/lib/report-template-renderer"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -81,13 +82,14 @@ export async function GET(req: Request) {
 
     try {
       if (integration.platform !== "GOOGLE") continue
-      if (!integration.accessToken) throw new Error("Missing Google access token")
+      const accessToken = getIntegrationAccessToken(integration)
+      if (!accessToken) throw new Error("Missing Google access token")
       await syncGoogleAdsCampaigns(
         integration.userId,
         integration.id,
         primary.id,
         primary.externalId,
-        integration.accessToken,
+        accessToken,
         primary.managerCustomerId
       )
 

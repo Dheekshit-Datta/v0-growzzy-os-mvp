@@ -24,16 +24,25 @@ function validatePlan(plan: any) {
   const adGroups = Array.isArray(plan?.adGroups) ? plan.adGroups : []
   return {
     platform: "GOOGLE",
-    campaignType: String(plan?.campaignType || "SEARCH"),
+    campaignType: "SEARCH",
     objective: String(plan?.objective || "CONVERSIONS"),
     campaignName: String(plan?.campaignName || "AI Google Search Campaign").slice(0, 120),
-    biddingStrategy: String(plan?.biddingStrategy || "MAXIMIZE_CONVERSIONS"),
+    biddingStrategy: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA"].includes(String(plan?.biddingStrategy))
+      ? String(plan.biddingStrategy)
+      : "MAXIMIZE_CONVERSIONS",
     dailyBudget: Number(plan?.dailyBudget || 0),
     locations: Array.isArray(plan?.locations) ? plan.locations : [],
     languages: Array.isArray(plan?.languages) ? plan.languages : ["English"],
     landingPageSuggestions: Array.isArray(plan?.landingPageSuggestions) ? plan.landingPageSuggestions.slice(0, 5) : [],
     launchReadinessScore: Math.max(0, Math.min(100, Number(plan?.launchReadinessScore || 70))),
     risks: Array.isArray(plan?.risks) ? plan.risks.slice(0, 5) : [],
+    finalUrl: typeof plan?.finalUrl === "string" && /^https?:\/\//.test(plan.finalUrl) ? plan.finalUrl : undefined,
+    rationale: {
+      whyThisStructure: String(plan?.rationale?.whyThisStructure || "").slice(0, 600),
+      whyTheseKeywords: String(plan?.rationale?.whyTheseKeywords || "").slice(0, 600),
+      whyThisBidding: String(plan?.rationale?.whyThisBidding || "").slice(0, 600),
+      expectedResultsRange: String(plan?.rationale?.expectedResultsRange || "").slice(0, 300),
+    },
     adGroups: adGroups.slice(0, 6).map((group: any) => ({
       name: String(group?.name || "Core Ad Group").slice(0, 80),
       theme: String(group?.theme || ""),
@@ -42,6 +51,10 @@ function validatePlan(plan: any) {
         matchType: ["BROAD", "PHRASE", "EXACT"].includes(String(keyword?.matchType)) ? String(keyword.matchType) : "PHRASE",
         intent: String(keyword?.intent || "high"),
       })),
+      negativeKeywords: (Array.isArray(group?.negativeKeywords) ? group.negativeKeywords : [])
+        .slice(0, 30)
+        .map((keyword: any) => String(keyword?.text || keyword || "").slice(0, 80))
+        .filter(Boolean),
       headlines: (Array.isArray(group?.headlines) ? group.headlines : []).slice(0, 15).map((headline: any) => String(headline?.text || headline || "").slice(0, 30)),
       descriptions: (Array.isArray(group?.descriptions) ? group.descriptions : []).slice(0, 4).map((description: any) => String(description?.text || description || "").slice(0, 90)),
     })),
@@ -56,16 +69,21 @@ export async function POST(req: NextRequest) {
   const workspaceId = await getRequestWorkspaceId(userId, req)
   const integration = await prisma.integration.findFirst({
     where: { userId, workspaceId, platform: "GOOGLE", status: "ACTIVE", hasAdsAccess: true },
-    select: { selectedAdAccountId: true, accountId: true },
+    select: { id: true, selectedAdAccountId: true, accountId: true },
   })
   const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null
   if (input.adAccountId && input.adAccountId !== selectedAdAccountId) {
     return NextResponse.json({ ok: false, code: "ACCOUNT_SCOPE_MISMATCH", error: "The selected Google Ads account is not active in this workspace." }, { status: 403 })
   }
-  const adAccountId = selectedAdAccountId
-  if (!adAccountId) {
+  if (!selectedAdAccountId || !integration) {
     return NextResponse.json({ ok: false, code: "NO_SELECTED_AD_ACCOUNT", error: "Connect Google Ads and select an ad account before building a launchable campaign plan." }, { status: 409 })
   }
+  const adAccount = await prisma.adAccount.findFirst({
+    where: { integrationId: integration.id, externalId: selectedAdAccountId },
+    select: { id: true, externalId: true },
+  })
+  if (!adAccount) return NextResponse.json({ ok: false, code: "NO_SELECTED_AD_ACCOUNT", error: "Selected Google Ads account metadata is missing." }, { status: 409 })
+  const adAccountId = adAccount.id
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: "AI Campaign Builder is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
@@ -80,24 +98,34 @@ Budget: $${input.budget}/day
 Location: ${input.location}
 Goal: ${input.goal}
 
+Create 2-3 tightly themed ad groups. Each needs 10-20 keywords, at least 5 negative keywords, 8-15 headlines, and 3-4 descriptions.
+
 Return ONLY JSON:
 {
   "campaignName": "clear Google campaign name",
-  "campaignType": "SEARCH|DISPLAY|PERFORMANCE_MAX",
+  "campaignType": "SEARCH",
   "objective": "LEADS|SALES|TRAFFIC|AWARENESS",
-  "biddingStrategy": "MAXIMIZE_CONVERSIONS|MAXIMIZE_CLICKS|TARGET_CPA|TARGET_ROAS",
+  "biddingStrategy": "MAXIMIZE_CONVERSIONS|MAXIMIZE_CLICKS|TARGET_CPA",
   "dailyBudget": number,
+  "finalUrl": "${input.landingPageUrl || "https://example.com"}",
   "locations": ["..."],
   "languages": ["English"],
   "adGroups": [
     {
       "name": "theme",
       "theme": "what this ad group targets",
-      "keywords": [{"text":"keyword","matchType":"BROAD|PHRASE|EXACT","intent":"high|medium"}],
-      "headlines": ["15 max, each <=30 chars"],
-      "descriptions": ["4 max, each <=90 chars"]
+      "keywords": [{"text":"10-20 keywords","matchType":"BROAD|PHRASE|EXACT","intent":"high|medium"}],
+      "negativeKeywords": ["free", "jobs", "diy", "course", "definition"],
+      "headlines": ["8-15 headlines, each <=30 chars"],
+      "descriptions": ["3-4 descriptions, each <=90 chars"]
     }
   ],
+  "rationale": {
+    "whyThisStructure": "plain-English explanation",
+    "whyTheseKeywords": "plain-English explanation",
+    "whyThisBidding": "plain-English explanation",
+    "expectedResultsRange": "honest estimate"
+  },
   "landingPageSuggestions": ["specific improvements"],
   "launchReadinessScore": 0-100,
   "risks": ["specific launch risks"]
@@ -111,13 +139,19 @@ Return ONLY JSON:
   })
 
   const raw = JSON.parse(completion.choices[0]?.message?.content || "{}")
-  const plan = validatePlan({ ...raw, dailyBudget: raw.dailyBudget || input.budget, locations: raw.locations || [input.location] })
+  const plan = validatePlan({
+    ...raw,
+    dailyBudget: input.budget,
+    finalUrl: raw.finalUrl || input.landingPageUrl || undefined,
+    locations: raw.locations || [input.location],
+  })
 
   const campaignPlan = await prisma.campaignPlan.create({
     data: {
       userId,
       workspaceId,
       adAccountId,
+      adAccountExternalId: adAccount.externalId,
       platform: "GOOGLE",
       plan,
       status: "DRAFT",

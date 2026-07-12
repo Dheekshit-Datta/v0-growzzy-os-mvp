@@ -160,7 +160,12 @@ export async function POST(request: NextRequest) {
 
         // Save to database strictly using the native DB model schema
         const primaryAccount = integration.adAccounts[0]
-        const accountExternalId = primaryAccount?.externalId || integration.selectedAdAccountId || integration.accountId || null
+        const selectedAccount = primaryAccount || (integration.selectedAdAccountId
+            ? await prisma.adAccount.findFirst({ where: { integrationId: integration.id, externalId: integration.selectedAdAccountId } })
+            : null)
+        if (!selectedAccount) {
+            return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: "Select a Google Ads account before creating a campaign draft." } }, { status: 409 })
+        }
 
         const campaign = await prisma.campaign.create({
             data: {
@@ -169,7 +174,8 @@ export async function POST(request: NextRequest) {
                 userId,
                 platform: normalizedPlatform,
                 externalId: `local-${Date.now()}`, // Temporary local ID until real platform sync
-                adAccountId: accountExternalId,
+                adAccountId: selectedAccount.id,
+                adAccountExternalId: selectedAccount.externalId,
                 name,
                 objective: objective || goal || 'conversions',
                 goal: goal || null,

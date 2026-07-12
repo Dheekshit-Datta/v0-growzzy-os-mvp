@@ -3,7 +3,7 @@ import { authConfig } from './auth.config'
 import { NextResponse } from "next/server"
 
 const { auth } = NextAuth(authConfig)
-const publicRoutes = ["/", "/privacy", "/terms", "/compliance", "/api/auth"]
+const publicRoutes = ["/", "/privacy", "/terms", "/compliance"]
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth
@@ -12,9 +12,7 @@ export default auth((req) => {
     process.env.ENABLE_DEMO_MODE === "true" &&
     req.cookies.get("growzzy_demo_mode")?.value === "true"
   const { pathname } = req.nextUrl
-  const isPublicRoute = publicRoutes.some((route) =>
-    route === "/api/auth" ? pathname.startsWith("/api/auth") : pathname === route
-  )
+  const isPublicRoute = publicRoutes.some((route) => pathname === route)
   const isDashboardPage = pathname.startsWith("/dashboard")
 
   if (isPublicRoute) {
@@ -36,5 +34,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
