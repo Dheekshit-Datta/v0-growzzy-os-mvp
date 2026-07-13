@@ -39,6 +39,20 @@ function googleAdsApiVersion() {
   return process.env.GOOGLE_ADS_API_VERSION || "v18"
 }
 
+function googleErrorMessage(payload: any, fallback: string) {
+  const base = payload?.error?.message || fallback
+  const details = payload?.error?.details
+    ?.flatMap((detail: any) => detail?.errors || [])
+    ?.map((error: any) => {
+      const path = error?.location?.fieldPathElements?.map((field: any) => field?.fieldName).filter(Boolean).join(".")
+      const code = Object.values(error?.errorCode || {})[0]
+      return [path, code, error?.message].filter(Boolean).join(": ")
+    })
+    ?.filter(Boolean)
+    ?.join(" | ")
+  return details ? `${base} — ${details}` : base
+}
+
 async function mutateGoogle<T>({
   accessToken,
   customerId,
@@ -58,7 +72,7 @@ async function mutateGoogle<T>({
     body: JSON.stringify(body),
   })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload?.error?.message || `Google Ads ${resource} mutate failed`)
+  if (!response.ok) throw new Error(googleErrorMessage(payload, `Google Ads ${resource} mutate failed`))
   return payload as T
 }
 
@@ -107,7 +121,7 @@ async function createGoogleCampaignBudget({
   )
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || "Failed to create Google campaign budget")
+    throw new Error(googleErrorMessage(payload, "Failed to create Google campaign budget"))
   }
   const resourceName = payload?.results?.[0]?.resourceName
   if (!resourceName) throw new Error("Google campaign budget resource name missing")
@@ -152,7 +166,7 @@ export async function createGoogleAdsCampaign({
   )
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || "Failed to create Google Ads campaign")
+    throw new Error(googleErrorMessage(payload, "Failed to create Google Ads campaign"))
   }
 
   const resourceName = payload?.results?.[0]?.resourceName
