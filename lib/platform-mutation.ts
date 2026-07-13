@@ -2,6 +2,7 @@ import type { AdAccount, Campaign, Integration } from "@prisma/client"
 import { isUnverifiedExternalId } from "@/lib/data-trust"
 import { updateGoogleCampaignStatus } from "@/lib/platform-actions"
 import { GoogleAdsService } from "@/services/integrations/google"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 type CampaignWithIntegration = Campaign & {
   integration: (Integration & { adAccounts?: AdAccount[] | null }) | null
@@ -32,7 +33,7 @@ export function assertCampaignMutationSafe(campaign: CampaignWithIntegration, ki
       "Sync campaigns and only run actions on verified live campaigns."
     )
   }
-  if (!campaign.integration?.accessToken) {
+  if (!campaign.integration?.accessTokenEncrypted && !campaign.integration?.accessToken) {
     throw preflightError(
       "Platform token missing. Reconnect the ad account first.",
       "Reconnect integration in Ad Accounts and rerun sync."
@@ -69,6 +70,8 @@ export async function mutateCampaignStatusOnPlatform(
   if (!integration) {
     throw new Error("Campaign integration missing. Reconnect and sync first.")
   }
+  const accessToken = getIntegrationAccessToken(integration)
+  if (!accessToken) throw new Error("Google access token missing. Reconnect the ad account first.")
 
   if (campaign.platform === "GOOGLE") {
     const customerId = campaign.adAccountId || integration.selectedAdAccountId || integration.accountId
@@ -77,7 +80,7 @@ export async function mutateCampaignStatusOnPlatform(
     const primary = adAccounts.find((account) => account.isPrimary)
     const loginCustomerId = primary?.managerCustomerId || integration.selectedAdAccountId || integration.accountId
     return updateGoogleCampaignStatus({
-      accessToken: integration.accessToken || "",
+      accessToken,
       customerId,
       campaignId: campaign.externalId,
       status: normalizeGoogleStatus(status),
@@ -97,6 +100,8 @@ export async function mutateGoogleCampaignBudgetOnPlatform(
   if (!integration) {
     throw new Error("Campaign integration missing. Reconnect and sync first.")
   }
+  const accessToken = getIntegrationAccessToken(integration)
+  if (!accessToken) throw new Error("Google access token missing. Reconnect the ad account first.")
   if (campaign.platform !== "GOOGLE") {
     throw new Error("Budget mutation is only supported for Google right now.")
   }
@@ -118,7 +123,7 @@ export async function mutateGoogleCampaignBudgetOnPlatform(
   if (!budgetResourceName) throw new Error("Google campaign budget resource is missing.")
 
   return GoogleAdsService.updateCampaignBudget({
-    accessToken: integration.accessToken || "",
+    accessToken,
     customerId,
     campaignBudgetResourceName: String(budgetResourceName),
     amountMicros: Math.round(nextBudgetAmount * 1_000_000),

@@ -6,6 +6,7 @@ import { createGoogleAdGroup } from "@/lib/platform-actions"
 import { log } from "@/lib/logger"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export const dynamic = "force-dynamic"
 
@@ -58,9 +59,10 @@ export async function POST(req: NextRequest) {
     try {
       const primary = campaign.integration.adAccounts[0]
       const customerId = primary?.externalId || campaign.adAccountId || campaign.integration.selectedAdAccountId
-      if (campaign.platform === "GOOGLE" && campaign.integration.accessToken && customerId && campaign.isLive) {
+      const accessToken = getIntegrationAccessToken(campaign.integration)
+      if (campaign.platform === "GOOGLE" && accessToken && customerId && campaign.isLive) {
         const result = await createGoogleAdGroup({
-          accessToken: campaign.integration.accessToken,
+          accessToken,
           customerId,
           campaignId: campaign.externalId,
           name,

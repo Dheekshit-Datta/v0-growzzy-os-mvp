@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { createGoogleResponsiveSearchAd } from "@/lib/platform-actions"
 import { log } from "@/lib/logger"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,9 +34,10 @@ export async function POST(req: NextRequest) {
       const integration = adGroup.campaign.integration
       const primary = integration.adAccounts[0]
       const customerId = primary?.externalId || adGroup.campaign.adAccountId || integration.selectedAdAccountId
-      if (adGroup.campaign.platform === "GOOGLE" && integration.accessToken && customerId && adGroup.externalId) {
+      const accessToken = getIntegrationAccessToken(integration)
+      if (adGroup.campaign.platform === "GOOGLE" && accessToken && customerId && adGroup.externalId) {
         const result = await createGoogleResponsiveSearchAd({
-          accessToken: integration.accessToken,
+          accessToken,
           customerId,
           adGroupId: adGroup.externalId,
           headlines,
