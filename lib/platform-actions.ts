@@ -70,7 +70,7 @@ function mapObjectiveToChannelType(objective: string): GoogleObjective {
 }
 
 function googleBiddingConfig(strategy: GoogleBiddingStrategy, targetCpaMicros?: number | null) {
-  if (strategy === "MAXIMIZE_CLICKS") return { maximizeClicks: {} }
+  if (strategy === "MAXIMIZE_CLICKS") return { targetSpend: {} }
   if (strategy === "TARGET_CPA") {
     if (!targetCpaMicros || targetCpaMicros <= 0) throw new Error("TARGET_CPA requires a positive target CPA")
     return { targetCpa: { targetCpaMicros } }
