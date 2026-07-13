@@ -106,14 +106,17 @@ export async function GET(request: NextRequest) {
 
     for (const integration of allIntegrations) {
       const platform = integration.platform as PlatformKey
-      const primaryMappedAccount = integration.adAccounts.find((account) => account.isPrimary) || integration.adAccounts[0]
-      const selectedAdAccountId = (integration.selectedAdAccountId || integration.accountId || primaryMappedAccount?.externalId || null) as string | null
+      const selectedMappedAccount =
+        integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+        integration.adAccounts.find((account) => account.isPrimary) ||
+        null
+      const selectedAdAccountId = (integration.hasAdsAccess ? selectedMappedAccount?.externalId : null) as string | null
       const lastSynced = (integration.lastSyncedAt || integration.lastSyncAt || null) as Date | null
       connectionStates[platform] = {
         platform,
         integrationId: integration.id,
         hasAdsAccess: Boolean(integration.hasAdsAccess),
-        hasAdsAccount: Boolean(integration.hasAdsAccount || selectedAdAccountId || integration.adAccounts.length > 0),
+        hasAdsAccount: Boolean(selectedAdAccountId),
         selectedAdAccountId,
         hasSelectedAdAccount: Boolean(selectedAdAccountId),
         lastSyncedAt: lastSynced ? lastSynced.toISOString() : null,
@@ -121,10 +124,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const metricIntegrations = allIntegrations.filter((integration) => integration.hasAdsAccess)
-    const accountConnectedIntegrations = allIntegrations.filter(
-      (integration) => integration.hasAdsAccount || integration.selectedAdAccountId || integration.accountId || integration.adAccounts.length > 0
-    )
+    const metricIntegrations = allIntegrations.filter((integration) => {
+      const selectedMappedAccount =
+        integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+        integration.adAccounts.find((account) => account.isPrimary)
+      return Boolean(integration.hasAdsAccess && selectedMappedAccount)
+    })
+    const accountConnectedIntegrations = metricIntegrations
     const connectedPlatforms = [...new Set(metricIntegrations.map((integration) => integration.platform as PlatformKey))]
     const requestedAdAccountId = request.nextUrl.searchParams.get("adAccountId")
     const activeScope = await getActiveAdAccountScope(userId, workspaceId, requestedAdAccountId)
@@ -134,7 +140,10 @@ export async function GET(request: NextRequest) {
     const selectedAdAccountIdsRaw = activeScope
       ? [activeScope.adAccountId]
       : metricIntegrations
-          .map((integration) => integration.selectedAdAccountId || integration.accountId)
+          .map((integration) =>
+            integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId)?.externalId ||
+            integration.adAccounts.find((account) => account.isPrimary)?.externalId
+          )
           .filter(Boolean) as string[]
     const selectedAdAccountIds = Array.from(new Set(selectedAdAccountIdsRaw.flatMap((id) => accountIdVariants(id))))
 

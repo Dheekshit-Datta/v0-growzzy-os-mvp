@@ -54,33 +54,38 @@ export async function GET(req: NextRequest) {
 
     const lastSyncedAt = integration.lastSyncAt || integration.lastSyncedAt
     const stale = lastSyncedAt ? Date.now() - new Date(lastSyncedAt).getTime() > 24 * 60 * 60 * 1000 : true
+    const selectedAccount =
+      integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+      integration.adAccounts.find((account) => account.isPrimary) ||
+      null
+    const hasSelectedAccount = Boolean(integration.hasAdsAccess && selectedAccount)
     result[key] = {
       connected: true,
-      hasAdsAccount: integration.hasAdsAccount || Boolean(integration.selectedAdAccountId || integration.accountId || integration.adAccounts.length),
+      hasAdsAccount: hasSelectedAccount,
       hasAdsAccess: integration.hasAdsAccess,
       status: integration.status,
       accountId: integration.accountId,
       accountName: integration.accountName,
-      selectedAdAccountId: integration.selectedAdAccountId,
-      selectedAdAccountName: integration.selectedAdAccountName,
+      selectedAdAccountId: selectedAccount?.externalId || null,
+      selectedAdAccountName: selectedAccount?.name || null,
       adAccounts: integration.adAccounts,
-      primaryAccount: integration.adAccounts.find((a) => a.isPrimary) ?? null,
+      primaryAccount: selectedAccount,
       connectedAt: integration.createdAt,
       lastSyncAt: integration.lastSyncAt,
       lastSyncStatus: integration.lastSyncStatus,
       lastSyncError: integration.lastSyncError,
       verifiedCampaignCount: campaignCountsByIntegrationId.get(integration.id) || 0,
       syncDiagnostics: {
-        accountMatch: Boolean(integration.selectedAdAccountId || integration.accountId || integration.adAccounts.length),
+        accountMatch: hasSelectedAccount,
         importedCampaigns: campaignCountsByIntegrationId.get(integration.id) || 0,
         providerStatus: integration.lastSyncStatus || integration.status,
         providerMessage: integration.lastSyncError || null,
         staleData: stale,
-        selectedAccountId: integration.selectedAdAccountId || integration.accountId || integration.adAccounts.find((a) => a.isPrimary)?.externalId || null,
+        selectedAccountId: selectedAccount?.externalId || null,
       },
     }
 
-    if (integration.hasAdsAccess || integration.selectedAdAccountId || integration.accountId) {
+    if (hasSelectedAccount) {
       result.hasAnyAdsAccess = true
     }
   }

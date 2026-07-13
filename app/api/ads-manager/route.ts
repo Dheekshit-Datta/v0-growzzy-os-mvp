@@ -58,10 +58,7 @@ export async function GET(req: NextRequest) {
 
   const requestedAdAccountId = req.nextUrl.searchParams.get("adAccountId")
   const validAccountIds = new Set(
-    integrations.flatMap((integration) => [
-      integration.selectedAdAccountId,
-      ...integration.adAccounts.map((account) => account.externalId),
-    ]).filter(Boolean) as string[]
+    integrations.flatMap((integration) => integration.adAccounts.map((account) => account.externalId)).filter(Boolean) as string[]
   )
   const requestedNormalized = normalizeAccountId(requestedAdAccountId)
   const matchedRequestedAccountId =
@@ -69,7 +66,6 @@ export async function GET(req: NextRequest) {
     ([...validAccountIds].find((id) => normalizeAccountId(id) === requestedNormalized) || null)
   const selectedAdAccountId =
     matchedRequestedAccountId ||
-    integrations.find((integration) => integration.selectedAdAccountId)?.selectedAdAccountId ||
     integrations.flatMap((integration) => integration.adAccounts).find((account) => account.isPrimary)?.externalId ||
     null
   const platform = req.nextUrl.searchParams.get("platform")

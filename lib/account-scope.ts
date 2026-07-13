@@ -56,18 +56,20 @@ export async function getActiveAdAccountScope(
 
   const candidates = integrations
     .map((integration) => {
-      const primaryMappedAccount = integration.adAccounts.find((account) => account.isPrimary) || integration.adAccounts[0]
-      const adAccountId = integration.selectedAdAccountId || integration.accountId || primaryMappedAccount?.externalId
-      if (!adAccountId) return null
+      const mappedAccount =
+        integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+        integration.adAccounts.find((account) => account.isPrimary) ||
+        null
+      if (!mappedAccount || !integration.hasAdsAccess) return null
       if (integration.platform !== "GOOGLE" && integration.platform !== "META") return null
       return {
         integrationId: integration.id,
         platform: integration.platform as ActiveAdAccountScope["platform"],
-        adAccountId,
-        adAccountName: integration.selectedAdAccountName || integration.accountName || primaryMappedAccount?.name || null,
+        adAccountId: mappedAccount.externalId,
+        adAccountName: mappedAccount.name || null,
         hasAdsAccess: Boolean(integration.hasAdsAccess),
         status: String(integration.status),
-        lastSyncedAt: integration.lastSyncedAt || integration.lastSyncAt || primaryMappedAccount?.lastSyncedAt || null,
+        lastSyncedAt: integration.lastSyncedAt || integration.lastSyncAt || mappedAccount.lastSyncedAt || null,
       }
     })
     .filter(Boolean) as ActiveAdAccountScope[]

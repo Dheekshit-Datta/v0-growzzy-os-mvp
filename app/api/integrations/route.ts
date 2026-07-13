@@ -60,11 +60,15 @@ export async function GET(req: Request) {
       for (const integration of integrations) {
           const providerId = integration.platform.toLowerCase()
           const primaryMappedAccount = integration.adAccounts.find((account) => account.isPrimary) || integration.adAccounts[0]
-          const resolvedAccountId = integration.selectedAdAccountId || integration.accountId || primaryMappedAccount?.externalId || null
-          const resolvedAccountName = integration.selectedAdAccountName || integration.accountName || primaryMappedAccount?.name || null
+          const selectedMappedAccount =
+            integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+            primaryMappedAccount ||
+            null
+          const resolvedAccountId = selectedMappedAccount?.externalId || null
+          const resolvedAccountName = selectedMappedAccount?.name || null
           const resolvedLastSynced = integration.lastSyncAt || integration.lastSyncedAt || primaryMappedAccount?.lastSyncedAt || null
-          const hasAdsAccount = Boolean(integration.hasAdsAccount || resolvedAccountId || integration.adAccounts.length > 0)
-          if (integration.hasAdsAccess || hasAdsAccount) hasAnyAdsAccess = true
+          const hasAdsAccount = Boolean(integration.hasAdsAccess && resolvedAccountId)
+          if (hasAdsAccount) hasAnyAdsAccess = true
           result[providerId] = {
               id: integration.id,
               status: integration.status,
