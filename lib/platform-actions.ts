@@ -154,6 +154,7 @@ export async function createGoogleAdsCampaign({
           status,
           campaignBudget: budgetResource,
           advertisingChannelType: mapObjectiveToChannelType(objective),
+          containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
           ...googleBiddingConfig(biddingStrategy, targetCpaMicros),
         },
       },
