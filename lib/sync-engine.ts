@@ -60,7 +60,7 @@ async function acquireSyncLock(userId: string, adAccountDbId: string) {
   return true
 }
 
-async function ensureFreshGoogleToken(integrationId: string, currentAccessToken: string) {
+export async function ensureFreshGoogleToken(integrationId: string, currentAccessToken: string) {
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
     select: { refreshToken: true, refreshTokenEncrypted: true, tokenExpiresAt: true, expiresAt: true },

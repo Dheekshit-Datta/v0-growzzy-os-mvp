@@ -78,7 +78,7 @@ export async function mutateCampaignStatusOnPlatform(
     if (!customerId) throw new Error("Google customer ID missing for this campaign.")
     const adAccounts = integration.adAccounts || []
     const primary = adAccounts.find((account) => account.isPrimary)
-    const loginCustomerId = primary?.managerCustomerId || integration.selectedAdAccountId || integration.accountId
+    const loginCustomerId = primary?.managerCustomerId || null
     return updateGoogleCampaignStatus({
       accessToken,
       customerId,
@@ -113,7 +113,7 @@ export async function mutateGoogleCampaignBudgetOnPlatform(
   if (!customerId) throw new Error("Google customer ID missing for this campaign.")
   const adAccounts = integration.adAccounts || []
   const primary = adAccounts.find((account) => account.isPrimary)
-  const loginCustomerId = primary?.managerCustomerId || integration.selectedAdAccountId || integration.accountId
+  const loginCustomerId = primary?.managerCustomerId || null
 
   const raw = (campaign.rawData || {}) as Record<string, unknown>
   const budgetResourceName =

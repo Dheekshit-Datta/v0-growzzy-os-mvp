@@ -10,6 +10,7 @@ import {
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 import { recordActivity } from "@/lib/activity-log"
 import { log } from "@/lib/logger"
+import { ensureFreshGoogleToken } from "@/lib/sync-engine"
 
 export type LaunchResult = {
   ok: boolean
@@ -147,15 +148,22 @@ export async function launchPlanToGoogle(params: {
   }
 
   const integration = await prisma.integration.findFirst({
-    where: { userId, workspaceId, platform: "GOOGLE", status: "ACTIVE", hasAdsAccess: true },
+    where: {
+      userId,
+      workspaceId,
+      platform: "GOOGLE",
+      status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
+      hasAdsAccess: true,
+    },
   })
-  const accessToken = integration ? getIntegrationAccessToken(integration) : null
-  if (!integration || !accessToken) {
+  const storedAccessToken = integration ? getIntegrationAccessToken(integration) : null
+  if (!integration || !storedAccessToken) {
     return { ok: false, error: "Reconnect Google Ads before launching", code: "AUTH_REQUIRED" }
   }
+  const accessToken = await ensureFreshGoogleToken(integration.id, storedAccessToken)
   const customerId = planRow.adAccountExternalId || integration.selectedAdAccountId || integration.accountId || ""
   if (!customerId) return { ok: false, error: "No Google Ads account selected", code: "PREFLIGHT_BLOCK" }
-  const loginCustomerId = planRow.adAccount?.managerCustomerId || customerId
+  const loginCustomerId = planRow.adAccount?.managerCustomerId || null
 
   await prisma.campaignPlan.update({ where: { id: planRow.id }, data: { status: "PUBLISHING" } })
 
