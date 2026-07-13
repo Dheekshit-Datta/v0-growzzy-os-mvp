@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import crypto from "crypto"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { launchPlanToGoogle } from "@/lib/services/google-publish"
@@ -12,28 +10,9 @@ export const maxDuration = 60
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
-  let userId: string
-  let workspaceId: string
-
-  if (session?.user?.id) {
-    userId = await resolveUserId(session.user.id)
-    workspaceId = await getRequestWorkspaceId(userId, req)
-  } else {
-    const token = req.headers.get("x-checkpoint-launch-token") || ""
-    const planRow = await prisma.campaignPlan.findUnique({
-      where: { id: params.id },
-      select: { userId: true, workspaceId: true, plan: true },
-    })
-    const expected = String((planRow?.plan as any)?.checkpointLaunchToken || "")
-    const valid =
-      !!planRow?.workspaceId &&
-      expected.length >= 32 &&
-      token.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected))
-    if (!valid) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
-    userId = planRow.userId
-    workspaceId = planRow.workspaceId!
-  }
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  const userId = await resolveUserId(session.user.id)
+  const workspaceId = await getRequestWorkspaceId(userId, req)
 
   const limit = await rateLimit(`plan-launch:${userId}`, 10, 60_000)
   if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many launch attempts — wait a moment" }, { status: 429 })
