@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { CheckCircle2, ChevronDown, Copy, Download, ImageOff, RefreshCw, Sparkles, Wand2 } from "lucide-react"
+import { ChevronDown, Copy, Download, ImageOff, RefreshCw, Sparkles, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 
 type CreativeVariation = {
@@ -95,16 +95,11 @@ function downloadText(filename: string, text: string, type = "text/plain") {
   URL.revokeObjectURL(url)
 }
 
-function selectedVariation(saved: SavedCreative) {
-  const variants = saved.variations || []
-  return saved.selectedVariation || variants[saved.selectedIndex || 0] || variants[0] || null
-}
-
 export default function CreativeGeneratorPage() {
   const LIB_CACHE_KEY = "growzzy_creative_library_cache_v1"
   const LIB_CACHE_TTL_MS = 60_000
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<"generator" | "generations" | "selected" | "campaign">("generator")
+  const [activeTab, setActiveTab] = useState<"generator" | "library">("generator")
   const [age, setAge] = useState([25, 45])
   const [variationsCount, setVariationsCount] = useState("5")
   const [generating, setGenerating] = useState(false)
@@ -112,7 +107,6 @@ export default function CreativeGeneratorPage() {
   const [savedCreatives, setSavedCreatives] = useState<SavedCreative[]>([])
   const [libraryLoading, setLibraryLoading] = useState(true)
   const [imageError, setImageError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<{ creativeId: string; index: number } | null>(null)
   const [form, setForm] = useState<CreativeForm>(defaultForm)
   const libraryLoadRef = useRef({ inFlight: false, lastRunAt: 0 })
 
@@ -170,11 +164,6 @@ export default function CreativeGeneratorPage() {
     }
   }, [loadLibrary])
 
-  const selectedSaved = useMemo(() => {
-    if (!selected) return savedCreatives.find((creative) => creative.selectedIndex !== null && creative.selectedIndex !== undefined) || savedCreatives[0] || null
-    return savedCreatives.find((creative) => creative.id === selected.creativeId) || null
-  }, [savedCreatives, selected])
-
   const generate = async () => {
     setGenerating(true)
     setImageError(null)
@@ -196,8 +185,7 @@ export default function CreativeGeneratorPage() {
       const warning = data.imageError || data.data?.imageError || data.creative?.assets?.imageError || null
       setImageError(warning)
       await loadLibrary()
-      if (id) setSelected({ creativeId: id, index: 0 })
-      setActiveTab("generations")
+      setActiveTab("library")
       toast.success(warning ? "Copy generated. Image generation needs attention." : "Creatives generated and saved")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Creative generation failed")
@@ -241,7 +229,6 @@ export default function CreativeGeneratorPage() {
       toast.error(data.error || "Failed to select creative")
       return
     }
-    setSelected({ creativeId: saved.id, index })
     toast.success("Creative selected for campaign builder")
     router.push(`/dashboard/campaigns/new?creativeId=${saved.id}&variant=${index}`)
   }
@@ -271,15 +258,13 @@ export default function CreativeGeneratorPage() {
       <div className="space-y-5">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Creative Studio</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Generate, save, reload, select, and route creative into campaign launch.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Generate new ad ideas and reuse your saved creative library.</p>
         </div>
 
         <div className="flex flex-wrap gap-2 rounded-xl border bg-card p-1">
           {[
-            ["generator", "Generator"],
-            ["generations", "AI Generations"],
-            ["selected", "Selected Creative"],
-            ["campaign", "Use in Campaign"],
+            ["generator", "Generate"],
+            ["library", "Library"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -316,7 +301,7 @@ export default function CreativeGeneratorPage() {
           </div>
         )}
 
-        {activeTab === "generations" && (
+        {activeTab === "library" && (
           <SavedLibrary
             libraryLoading={libraryLoading}
             savedCreatives={savedCreatives}
@@ -326,33 +311,6 @@ export default function CreativeGeneratorPage() {
             onUse={useCreative}
             regeneratingId={regeneratingId}
           />
-        )}
-
-        {activeTab === "selected" && (
-          <SelectedCreativePanel
-            saved={selectedSaved}
-            selectedIndex={selected && selected.creativeId === selectedSaved?.id ? selected.index : selectedSaved?.selectedIndex || 0}
-            onCopy={copyCreative}
-            onExport={exportCreative}
-            onUse={useCreative}
-          />
-        )}
-
-        {activeTab === "campaign" && (
-          <div className="rounded-xl border bg-card p-6">
-            <h2 className="text-lg font-semibold">Use this creative in a campaign</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Choose a saved creative, then we will preload Campaign Builder with its copy, image, CTA, and visual direction.</p>
-            <div className="mt-4">
-              {selectedSaved ? (
-                <Button onClick={() => useCreative(selectedSaved, selected?.index || selectedSaved.selectedIndex || 0)} className="gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Open Campaign Builder with selected creative
-                </Button>
-              ) : (
-                <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Generate or select a creative first.</div>
-              )}
-            </div>
-          </div>
         )}
       </div>
     </DashboardLayout>
@@ -382,7 +340,7 @@ function CreativeBriefForm({
     <aside className="rounded-lg border bg-card lg:sticky lg:top-20">
       <div className="border-b p-4">
         <h2 className="text-sm font-semibold">Generator</h2>
-        <p className="text-xs text-muted-foreground">Every successful generation is saved to your AI Generations library.</p>
+        <p className="text-xs text-muted-foreground">Every successful generation is saved to your Library.</p>
       </div>
       <Accordion type="multiple" defaultValue={["brand", "goal", "offer"]} className="px-3">
         <AccordionItem value="brand">
@@ -500,7 +458,7 @@ function GenerationPreview(props: {
     <section className="space-y-3">
       <div className="flex items-center justify-between text-sm">
         <div className="font-semibold">Latest saved generation</div>
-        <div className="text-xs text-muted-foreground">Reload-safe, workspace scoped</div>
+        <div className="text-xs text-muted-foreground">Saved to your library</div>
       </div>
       {props.imageError && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{props.imageError}. Copy and scoring are still available.</div>}
       {props.libraryLoading ? (
@@ -512,7 +470,7 @@ function GenerationPreview(props: {
           <div>
             <Sparkles className="mx-auto h-10 w-10 text-muted-foreground" />
             <h3 className="mt-3 text-lg font-semibold">Your saved creative angles will appear here</h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">Generate once, then refresh this page. The same saved creative will still be available.</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">Describe the ad you want, then generate copy and visual directions you can use in Campaign Builder.</p>
           </div>
         </div>
       )}
@@ -533,7 +491,7 @@ function SavedLibrary(props: {
     return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-80 animate-pulse rounded-lg bg-muted" />)}</div>
   }
   if (!props.savedCreatives.length) {
-    return <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">No saved generations yet. Create one from the Generator tab.</div>
+    return <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">No saved creatives yet. Create one from the Generate tab.</div>
   }
   return (
     <div className="space-y-8">
@@ -551,56 +509,6 @@ function SavedLibrary(props: {
           <CreativeGrid saved={saved} {...props} />
         </div>
       ))}
-    </div>
-  )
-}
-
-function SelectedCreativePanel({
-  saved,
-  selectedIndex,
-  onCopy,
-  onExport,
-  onUse,
-}: {
-  saved: SavedCreative | null
-  selectedIndex: number
-  onCopy: (creative: CreativeVariation) => void
-  onExport: (saved: SavedCreative, creative: CreativeVariation, index: number) => void
-  onUse: (saved: SavedCreative, index: number) => void
-}) {
-  const creative = saved ? selectedVariation(saved) : null
-  if (!saved || !creative) {
-    return <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">No selected creative yet. Pick one from AI Generations.</div>
-  }
-  return (
-    <div className="grid gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
-      <CreativeCard
-        saved={saved}
-        creative={creative}
-        imageUrl={saved.imageUrls?.[selectedIndex]}
-        selectedIndex={selectedIndex}
-        onCopy={onCopy}
-        onExport={onExport}
-        onRegenerate={() => undefined}
-        onUse={onUse}
-        showRegenerate={false}
-      />
-      <div className="rounded-xl border bg-card p-6">
-        <div className="flex items-center gap-2 text-emerald-700">
-          <CheckCircle2 className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">Ready for campaign builder</h2>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">This selected variation will preload the campaign creative step with headline, body copy, CTA, and image direction.</p>
-        <div className="mt-5 grid gap-3 text-sm">
-          <div className="rounded-lg bg-muted/40 p-3"><span className="font-semibold">Headline:</span> {creative.headline}</div>
-          <div className="rounded-lg bg-muted/40 p-3"><span className="font-semibold">Body:</span> {creative.body}</div>
-          <div className="rounded-lg bg-muted/40 p-3"><span className="font-semibold">CTA:</span> {creative.cta}</div>
-        </div>
-        <Button onClick={() => onUse(saved, selectedIndex)} className="mt-5 gap-2">
-          <Sparkles className="h-4 w-4" />
-          Use in Campaign Builder
-        </Button>
-      </div>
     </div>
   )
 }
