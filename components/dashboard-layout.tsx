@@ -5,11 +5,8 @@ import Image from "next/image"
 import { useRouter, usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Users,
   Megaphone,
-  Plug,
   Sparkles,
-  Zap,
   FileBarChart,
   Settings,
   LogOut,
@@ -69,10 +66,7 @@ type WorkspaceItem = {
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
-  { title: "Ad Accounts", href: "/dashboard/accounts", icon: Plug },
   { title: "Creative Studio", href: "/dashboard/creatives/generate", icon: Sparkles },
-  { title: "Leads", href: "/dashboard/leads", icon: Users },
-  { title: "Automations", href: "/dashboard/automations", icon: Zap },
   { title: "AI Advisor", href: "/dashboard/ai-advisor", icon: Sparkles },
   { title: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { title: "Settings", href: "/dashboard/settings", icon: Settings },
