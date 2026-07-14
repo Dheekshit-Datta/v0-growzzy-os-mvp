@@ -81,9 +81,6 @@ const navItems: NavItem[] = [
 const ACTIVE_WORKSPACE_COOKIE = "growzzy_active_workspace_id"
 const WORKSPACES_CACHE_KEY = "growzzy_workspaces_cache_v1"
 const WORKSPACES_CACHE_TTL_MS = 5 * 60 * 1000
-const ONBOARDING_CHECK_CACHE_KEY = "growzzy_onboarding_checked_at"
-const ONBOARDING_CHECK_TTL_MS = 3 * 60 * 1000
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>(["Analytics"])
@@ -201,34 +198,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.dispatchEvent(new Event("growzzy:workspace-changed"))
     router.refresh()
   }
-
-  useEffect(() => {
-    if (!session?.user?.id || pathname === "/dashboard/onboarding") return
-    try {
-      const lastCheckedAt = Number(window.sessionStorage.getItem(ONBOARDING_CHECK_CACHE_KEY) || 0)
-      if (Date.now() - lastCheckedAt < ONBOARDING_CHECK_TTL_MS) return
-      window.sessionStorage.setItem(ONBOARDING_CHECK_CACHE_KEY, String(Date.now()))
-    } catch {}
-    let cancelled = false
-
-    const checkOnboarding = async () => {
-      try {
-        const response = await fetch("/api/onboarding")
-        if (!response.ok) return
-        const data = await response.json()
-        if (!cancelled && data.shouldShowOnboarding) {
-          router.replace("/dashboard/onboarding")
-        }
-      } catch {
-        // Onboarding checks should never block the app shell.
-      }
-    }
-
-    checkOnboarding()
-    return () => {
-      cancelled = true
-    }
-  }, [pathname, router, session?.user?.id])
 
   const markNotificationRead = async (id: string) => {
     setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)))
