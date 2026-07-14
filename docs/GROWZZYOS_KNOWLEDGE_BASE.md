@@ -15,8 +15,7 @@ The product goal is simple: help agencies move from scattered ad accounts and ma
 GROWZZY OS connects supported ad platforms and normalizes campaign metrics into one schema. Current platform surfaces are:
 
 - Google Ads: active production integration.
-- LinkedIn Ads: integration-ready when the app and account have approved permissions.
-- Meta Ads: OAuth and account discovery support, subject to Meta app permissions and review status.
+- Meta Ads: planned after the Google flow is proven end to end.
 
 ### AI Growth Assistant
 
@@ -98,17 +97,9 @@ Common Google Ads issues:
 - `404 Unknown Google Ads API error`: usually caused by wrong customer ID, wrong login-customer-id, inaccessible account, or unsupported API/version/account relationship.
 - Connected but pending sync: OAuth succeeded but campaign sync failed or has not run.
 
-### LinkedIn Ads
-
-LinkedIn Ads uses OAuth and the LinkedIn Ads APIs. Requests must include:
-
-- `X-Restli-Protocol-Version: 2.0.0`
-
-LinkedIn account IDs are URNs and must not be mangled. If no LinkedIn ad accounts are returned, the UI should show a clear no-account/connect guidance state.
-
 ### Meta Ads
 
-Meta Ads uses Meta OAuth and the Graph API. Typical permissions include:
+Meta Ads is planned after the Google launch, sync, metrics, and optimization flows are proven. When enabled, it will use Meta OAuth and the Graph API. Typical permissions include:
 
 - `ads_read`
 - `ads_management`

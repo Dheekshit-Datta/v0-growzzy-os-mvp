@@ -21,7 +21,7 @@ GROWZZY OS is an AI-powered advertising workspace for agencies and marketing tea
 - Reports.
 - Automation rules.
 
-GROWZZY OS is an independent software platform and is not endorsed by or affiliated with Google, Meta, LinkedIn, or any other advertising platform.
+GROWZZY OS is an independent software platform and is not endorsed by or affiliated with Google, Meta, or any other advertising platform.
 
 ## 3. User Accounts
 
@@ -54,7 +54,6 @@ You are responsible for complying with all applicable third-party terms, includi
 
 - Google Ads API Terms and Google API Services User Data Policy.
 - Meta Platform Terms and Meta Advertising policies.
-- LinkedIn API Terms and LinkedIn Marketing Developer Platform requirements.
 
 GROWZZY OS may lose access to platform APIs if permissions are revoked, tokens expire, a platform changes its API, or the connected account lacks required access.
 
@@ -66,9 +65,9 @@ GROWZZY OS uses this data only to provide the service, including dashboard analy
 
 GROWZZY OS does not modify campaigns without explicit user action.
 
-## 8. Meta And LinkedIn API Usage
+## 8. Meta API Usage
 
-When you connect Meta or LinkedIn, GROWZZY OS may fetch ad account and campaign data available under the permissions you approve. GROWZZY OS uses this data only to provide platform analytics, reports, recommendations, and user-requested actions.
+When Meta support is enabled and you connect Meta, GROWZZY OS may fetch ad account and campaign data available under the permissions you approve. GROWZZY OS uses this data only to provide platform analytics, reports, recommendations, and user-requested actions.
 
 You may revoke access from the third-party platform at any time.
 
