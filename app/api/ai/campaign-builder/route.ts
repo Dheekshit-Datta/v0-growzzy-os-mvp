@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { recordActivity } from "@/lib/activity-log"
+import { accountIdVariants, normalizeAccountId } from "@/lib/account-id"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -68,18 +69,23 @@ export async function POST(req: NextRequest) {
   const input = CampaignBuilderSchema.parse(await req.json())
   const workspaceId = await getRequestWorkspaceId(userId, req)
   const integration = await prisma.integration.findFirst({
-    where: { userId, workspaceId, platform: "GOOGLE", status: "ACTIVE", hasAdsAccess: true },
-    select: { id: true, selectedAdAccountId: true, accountId: true },
+    where: {
+      userId,
+      workspaceId,
+      platform: "GOOGLE",
+      status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
+    },
+    select: { id: true, selectedAdAccountId: true, accountId: true, hasAdsAccess: true },
   })
   const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null
-  if (input.adAccountId && input.adAccountId !== selectedAdAccountId) {
+  if (input.adAccountId && normalizeAccountId(input.adAccountId) !== normalizeAccountId(selectedAdAccountId)) {
     return NextResponse.json({ ok: false, code: "ACCOUNT_SCOPE_MISMATCH", error: "The selected Google Ads account is not active in this workspace." }, { status: 403 })
   }
-  if (!selectedAdAccountId || !integration) {
+  if (!selectedAdAccountId || !integration?.hasAdsAccess) {
     return NextResponse.json({ ok: false, code: "NO_SELECTED_AD_ACCOUNT", error: "Connect Google Ads and select an ad account before building a launchable campaign plan." }, { status: 409 })
   }
   const adAccount = await prisma.adAccount.findFirst({
-    where: { integrationId: integration.id, externalId: selectedAdAccountId },
+    where: { integrationId: integration.id, externalId: { in: accountIdVariants(selectedAdAccountId) } },
     select: { id: true, externalId: true },
   })
   if (!adAccount) return NextResponse.json({ ok: false, code: "NO_SELECTED_AD_ACCOUNT", error: "Selected Google Ads account metadata is missing." }, { status: 409 })
