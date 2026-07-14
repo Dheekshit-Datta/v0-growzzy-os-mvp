@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
   const minRoas = Number(req.nextUrl.searchParams.get("minRoas") || 0)
   const maxRoas = Number(req.nextUrl.searchParams.get("maxRoas") || 0)
   const staleOnly = req.nextUrl.searchParams.get("staleOnly") === "1"
-  const verifiedOnly = req.nextUrl.searchParams.get("verifiedOnly") !== "0"
+  const verifiedOnly = req.nextUrl.searchParams.get("verifiedOnly") === "1"
   const parsedPlatform = platform && platform !== "ALL" ? (platform as IntegrationPlatform) : null
   const parsedStatus = status && status !== "ALL" ? status : null
   const parsedLiveStatus = liveStatus && liveStatus !== "ALL" ? liveStatus : null
@@ -265,12 +265,12 @@ export async function GET(req: NextRequest) {
       },
     })),
       trust: {
-      source: "Verified live platform sync only",
-      excludesDrafts: true,
+      source: verifiedOnly ? "Verified live platform sync only" : "Workspace campaigns",
+      excludesDrafts: verifiedOnly,
       excludesSeedData: true,
       hasStaleData,
       staleIntegrations: staleIntegrations.map((integration) => integration.id),
-      emptyMessage: "No verified live campaigns synced for this ad account yet.",
+      emptyMessage: verifiedOnly ? "No verified live campaigns synced for this ad account yet." : "No campaigns found for this ad account yet.",
       selectedFilters: {
         platform: platform || "ALL",
         status: status || "ALL",
