@@ -1,70 +1,76 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, ImageIcon, Sparkles, Target } from "lucide-react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  Play,
+  Search,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react"
 import { toast } from "sonner"
 import DashboardLayout from "@/components/dashboard-layout"
-import { PlatformIcon } from "@/components/platform-icon"
 import { cn } from "@/lib/utils"
 
-type WizardData = {
-  platform: "GOOGLE" | "META"
+type Keyword = {
+  text: string
+  matchType: "BROAD" | "PHRASE" | "EXACT"
+  intent?: string
+}
+
+type AdGroup = {
   name: string
+  theme?: string
+  keywords: Keyword[]
+  negativeKeywords: string[]
+  headlines: string[]
+  descriptions: string[]
+}
+
+type CampaignPlan = {
+  campaignName: string
+  campaignType: string
   objective: string
-  budgetType: "DAILY" | "LIFETIME"
-  budgetAmount: string
-  startDate: string
-  endDate: string
-  biddingStrategy: string
-  creativeMode: "AI" | "MANUAL"
-  creativeId: string
-  creativeVariant: string
-  headline: string
-  body: string
-  cta: string
-  imageUrl: string
-  visualDirection: string
+  biddingStrategy: "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA"
+  dailyBudget: number
+  finalUrl?: string
+  locations: string[]
+  languages?: string[]
+  adGroups: AdGroup[]
+  rationale?: {
+    whyThisStructure?: string
+    whyTheseKeywords?: string
+    whyThisBidding?: string
+    expectedResultsRange?: string
+  }
+  risks?: string[]
+  launchReadinessScore?: number
+  policyCheck?: {
+    status: "PASS" | "WARN" | "FAIL"
+    flags?: Array<{ text: string; reason: string; suggestion?: string }>
+  }
 }
 
-type CreativeVariation = {
-  headline?: string
-  body?: string
-  description?: string
-  cta?: string
-  visualDirection?: string
-}
-
-type GeneratedCreative = {
-  id: string
-  selectedIndex?: number | null
-  imageUrls?: string[] | null
-  variations?: CreativeVariation[] | null
-}
-
-const steps = ["Setup", "Objective", "Budget", "Creative", "Review"]
-const objectives = [
-  { id: "AWARENESS", title: "Awareness", icon: "🎯", description: "Reach the right people and build recognition." },
-  { id: "TRAFFIC", title: "Traffic", icon: "🚦", description: "Send qualified visitors to your website." },
-  { id: "LEADS", title: "Leads", icon: "📋", description: "Capture form fills, calls, and signups." },
-  { id: "CONVERSIONS", title: "Conversions", icon: "💰", description: "Optimize toward purchases and bookings." },
-  { id: "RETARGETING", title: "Retargeting", icon: "🔄", description: "Bring warm audiences back to convert." },
-]
-
-const today = new Date().toISOString().slice(0, 10)
+const flowSteps = ["Brief", "Goal", "Targeting", "Keywords", "Ads", "Budget", "Publish"]
+const goals = ["Leads", "Sales", "Website Traffic", "Brand Awareness"]
 
 export default function NewCampaignPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [step, setStep] = useState(0)
-  const [submitting, setSubmitting] = useState(false)
-  const [buildingPlan, setBuildingPlan] = useState(false)
-  const [launchingPlan, setLaunchingPlan] = useState(false)
-  const [loadingCreative, setLoadingCreative] = useState(false)
-  const [selectedCreative, setSelectedCreative] = useState<GeneratedCreative | null>(null)
-  const [aiPlan, setAiPlan] = useState<any>(null)
+  const [activeStep, setActiveStep] = useState("Brief")
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState(0)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isCheckingPolicy, setIsCheckingPolicy] = useState(false)
+  const [isLaunching, setIsLaunching] = useState(false)
   const [campaignPlanId, setCampaignPlanId] = useState("")
-  const [aiBrief, setAiBrief] = useState({
+  const [plan, setPlan] = useState<CampaignPlan | null>(null)
+  const [brief, setBrief] = useState({
     offer: "",
     landingPageUrl: "",
     targetCustomer: "",
@@ -72,190 +78,126 @@ export default function NewCampaignPage() {
     location: "United States",
     goal: "Leads",
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [form, setForm] = useState<WizardData>({
-    platform: "GOOGLE",
-    name: `PROS_${today.replaceAll("-", "")}`,
-    objective: "CONVERSIONS",
-    budgetType: "DAILY",
-    budgetAmount: "50",
-    startDate: today,
-    endDate: "",
-    biddingStrategy: "MAXIMIZE_CONVERSIONS",
-    creativeMode: "AI",
-    creativeId: "",
-    creativeVariant: "0",
-    headline: "",
-    body: "",
-    cta: "Get Started",
-    imageUrl: "",
-    visualDirection: "",
-  })
+
+  const checklist = useMemo(
+    () => [
+      { label: "Ad objective", done: Boolean(brief.goal) },
+      { label: "Product or offer", done: brief.offer.trim().length > 10 },
+      { label: "Target audience", done: brief.targetCustomer.trim().length > 4 },
+      { label: "Location", done: brief.location.trim().length > 2 },
+      { label: "Budget", done: Number(brief.budget) > 0 },
+      { label: "Landing page", done: /^https?:\/\//.test(brief.landingPageUrl) },
+    ],
+    [brief]
+  )
+  const readyToGenerate = checklist.slice(0, 5).every((item) => item.done)
+  const selectedGroup = plan?.adGroups?.[selectedGroupIndex] || plan?.adGroups?.[0]
 
   useEffect(() => {
-    const creativeId = searchParams.get("creativeId")
-    const variant = Number(searchParams.get("variant") || 0)
-    if (!creativeId) return
-
-    const loadCreative = async () => {
-      setLoadingCreative(true)
+    if (!campaignPlanId || !plan) return
+    const timeout = window.setTimeout(async () => {
+      setIsSaving(true)
       try {
-        const response = await fetch(`/api/generated-creatives/${creativeId}`, { cache: "no-store" })
+        const response = await fetch(`/api/ai/campaign-plan/${campaignPlanId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaignName: plan.campaignName,
+            dailyBudget: plan.dailyBudget,
+            biddingStrategy: plan.biddingStrategy,
+            finalUrl: plan.finalUrl,
+            locations: plan.locations,
+            adGroups: plan.adGroups,
+          }),
+        })
         const data = await response.json().catch(() => ({}))
-        if (!response.ok || !data.creative) throw new Error(data.error || "Selected creative could not be loaded")
-        const creative = data.creative as GeneratedCreative
-        const selectedVariant = creative.variations?.[variant] || creative.variations?.[creative.selectedIndex || 0] || {}
-        setSelectedCreative(creative)
-        setForm((previous) => ({
-          ...previous,
-          creativeMode: "AI",
-          creativeId: creative.id,
-          creativeVariant: String(variant),
-          headline: selectedVariant.headline || previous.headline,
-          body: selectedVariant.body || selectedVariant.description || previous.body,
-          cta: selectedVariant.cta || previous.cta,
-          imageUrl: creative.imageUrls?.[variant] || previous.imageUrl,
-          visualDirection: selectedVariant.visualDirection || previous.visualDirection,
-        }))
-        setStep(3)
-        toast.success("Creative loaded into campaign builder")
+        if (!response.ok || data.ok === false) throw new Error(data.error || "Could not save plan")
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not load selected creative")
+        toast.error(error instanceof Error ? error.message : "Could not save plan")
       } finally {
-        setLoadingCreative(false)
+        setIsSaving(false)
       }
-    }
+    }, 800)
+    return () => window.clearTimeout(timeout)
+  }, [campaignPlanId, plan])
 
-    loadCreative()
-  }, [searchParams])
-
-  const score = useMemo(() => {
-    let value = 55
-    if (form.name.length > 6) value += 10
-    if (Number(form.budgetAmount) >= 20) value += 10
-    if (form.objective) value += 10
-    if (form.creativeMode === "AI" || form.headline.length > 10) value += 10
-    if (form.startDate) value += 5
-    return Math.min(100, value)
-  }, [form])
-
-  const update = (key: keyof WizardData, value: string) => {
-    setForm((previous) => ({ ...previous, [key]: value }))
-    setErrors((previous) => ({ ...previous, [key]: "" }))
+  const updateBrief = (key: keyof typeof brief, value: string) => {
+    setBrief((previous) => ({ ...previous, [key]: value }))
   }
 
-  const validateStep = () => {
-    const nextErrors: Record<string, string> = {}
-    if (step === 0 && form.name.trim().length < 3) nextErrors.name = "Campaign name must be at least 3 characters."
-    if (step === 2) {
-      if (!form.budgetAmount || Number(form.budgetAmount) <= 0) nextErrors.budgetAmount = "Enter a valid budget."
-      if (!form.startDate) nextErrors.startDate = "Start date is required."
-    }
-    if (step === 3 && form.creativeMode === "MANUAL") {
-      if (form.headline.trim().length < 3) nextErrors.headline = "Add a headline or switch to AI creative."
-      if (form.body.trim().length < 3) nextErrors.body = "Add body copy or switch to AI creative."
-    }
-    setErrors(nextErrors)
-    return Object.keys(nextErrors).length === 0
+  const updatePlan = (updates: Partial<CampaignPlan>) => {
+    setPlan((previous) => (previous ? { ...previous, ...updates, policyCheck: undefined } : previous))
   }
 
-  const next = () => {
-    if (!validateStep()) return
-    setStep((current) => Math.min(steps.length - 1, current + 1))
+  const updateAdGroup = (index: number, updates: Partial<AdGroup>) => {
+    setPlan((previous) => {
+      if (!previous) return previous
+      const adGroups = previous.adGroups.map((group, groupIndex) =>
+        groupIndex === index ? { ...group, ...updates } : group
+      )
+      return { ...previous, adGroups, policyCheck: undefined }
+    })
   }
 
-  const back = () => setStep((current) => Math.max(0, current - 1))
-
-  const close = () => {
-    if (window.confirm("Leave campaign creation? Your unsaved progress will be lost.")) {
-      router.push("/dashboard/campaigns")
+  const generatePlan = async () => {
+    if (!readyToGenerate) {
+      toast.error("Add the offer, audience, location, budget, and goal first")
+      return
     }
-  }
-
-  const submit = async (draft = false) => {
-    if (!validateStep()) return
-    setSubmitting(true)
-    try {
-      const response = await fetch("/api/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          platform: form.platform,
-          objective: form.objective,
-          goal: form.objective,
-          campaignType: form.objective === "AWARENESS" ? "DISPLAY" : "SEARCH",
-          budgetType: form.budgetType,
-          budgetAmount: Number(form.budgetAmount),
-          dailyBudget: Number(form.budgetAmount),
-          startDate: form.startDate,
-          endDate: form.endDate || null,
-          biddingStrategy: form.biddingStrategy,
-          status: draft ? "DRAFT" : "PAUSED",
-          creative: {
-            mode: form.creativeMode,
-            creativeId: form.creativeId || null,
-            creativeVariant: form.creativeVariant ? Number(form.creativeVariant) : null,
-            headline: form.headline,
-            body: form.body,
-            cta: form.cta,
-            imageUrl: form.imageUrl || null,
-            visualDirection: form.visualDirection || null,
-          },
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || data.ok === false) throw new Error(data.error || "Campaign creation failed")
-      toast.success(draft ? "Campaign draft saved" : "Campaign draft created. Publish will require live platform hierarchy success.")
-      router.push("/dashboard/campaigns")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create campaign")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const buildWithAi = async () => {
-    setBuildingPlan(true)
+    setIsGenerating(true)
     try {
       const response = await fetch("/api/ai/campaign-builder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...aiBrief, budget: Number(aiBrief.budget) }),
+        body: JSON.stringify({ ...brief, budget: Number(brief.budget) }),
       })
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.ok) throw new Error(data.error || "AI Campaign Builder failed")
-      setAiPlan(data.plan)
+      setPlan(data.plan)
       setCampaignPlanId(data.campaignPlanId)
-      setForm((previous) => ({
-        ...previous,
-        platform: "GOOGLE",
-        name: data.plan.campaignName || previous.name,
-        objective: data.plan.objective || previous.objective,
-        budgetAmount: String(data.plan.dailyBudget || previous.budgetAmount),
-        biddingStrategy: data.plan.biddingStrategy || previous.biddingStrategy,
-      }))
-      toast.success("AI campaign plan created. Review it before launch.")
-    } catch (error: any) {
-      toast.error(error.message || "Could not build campaign plan")
+      setSelectedGroupIndex(0)
+      setActiveStep("Goal")
+      toast.success("Campaign plan generated and saved")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate campaign plan")
     } finally {
-      setBuildingPlan(false)
+      setIsGenerating(false)
     }
   }
 
-  const launchAiPlan = async () => {
+  const checkPolicy = async () => {
     if (!campaignPlanId) return
-    setLaunchingPlan(true)
+    setIsCheckingPolicy(true)
     try {
-      const policyResponse = await fetch("/api/ai/policy-check", {
+      const response = await fetch("/api/ai/policy-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaignPlanId }),
       })
-      const policy = await policyResponse.json().catch(() => ({}))
-      if (!policyResponse.ok) throw new Error(policy.error || "Policy check failed")
-      if (policy.data?.status === "FAIL") throw new Error("Policy check blocked this campaign")
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data.ok === false) throw new Error(data.error || "Policy check failed")
+      setPlan((previous) => (previous ? { ...previous, policyCheck: data.data } : previous))
+      toast.success(`Policy check: ${data.data.status}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Policy check failed")
+    } finally {
+      setIsCheckingPolicy(false)
+    }
+  }
 
+  const launchPlan = async () => {
+    if (!campaignPlanId || !plan) return
+    if (!plan.finalUrl) {
+      toast.error("Add a final URL before launch")
+      return
+    }
+    if (plan.policyCheck?.status === "FAIL") {
+      toast.error("Policy check failed. Fix blocked copy before launch.")
+      return
+    }
+    setIsLaunching(true)
+    try {
+      if (!plan.policyCheck) await checkPolicy()
       const response = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.ok) throw new Error(data.error || "Google Ads launch failed")
@@ -264,332 +206,573 @@ export default function NewCampaignPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not launch campaign")
     } finally {
-      setLaunchingPlan(false)
+      setIsLaunching(false)
     }
   }
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="mx-auto max-w-5xl">
-          <button onClick={close} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-950">
-            <ArrowLeft className="h-4 w-4" />
-            Back to campaigns
-          </button>
+      <div className="min-h-screen bg-[var(--color-bg)] px-5 py-6">
+        <button
+          onClick={() => router.push("/dashboard/campaigns")}
+          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Campaigns
+        </button>
 
-          <div className="rounded-2xl border border-border bg-white shadow-sm">
-            <div className="border-b border-border p-6">
-              <h1 className="text-2xl font-bold text-slate-950">Create Campaign</h1>
-              <p className="mt-1 text-sm text-slate-500">Launch a campaign with workspace-safe setup, creative, and AI pre-check.</p>
-              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
-                      <Sparkles className="h-4 w-4 text-[#1F57F5]" />
-                      Build with AI
-                    </div>
-                    <p className="mt-1 text-xs text-slate-600">Tell GROWZZY what you sell. It will propose a Google campaign, ad groups, keywords, RSA copy, risks, and a launch score.</p>
+        {!plan ? (
+          <PromptIntake
+            brief={brief}
+            checklist={checklist}
+            readyToGenerate={readyToGenerate}
+            isGenerating={isGenerating}
+            onChange={updateBrief}
+            onGenerate={generatePlan}
+          />
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)_420px]">
+            <aside className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-soft)]">
+              <div className="mb-3 px-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+                Campaign flow
+              </div>
+              <div className="space-y-2">
+                {flowSteps.map((step) => (
+                  <button
+                    key={step}
+                    onClick={() => setActiveStep(step)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold",
+                      activeStep === step
+                        ? "bg-[var(--color-text)] text-white"
+                        : "text-[var(--color-text)] hover:bg-[var(--color-soft)]"
+                    )}
+                  >
+                    {step}
+                    {step !== "Publish" && <Check className="h-4 w-4 opacity-70" />}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-3 text-xs leading-5 text-[var(--color-muted)]">
+                AI proposes. You edit. Every change saves back to the persisted launch plan.
+              </div>
+            </aside>
+
+            <main className="min-w-0 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] p-5">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">
+                    Google Search
+                    <span className="rounded-full bg-[var(--color-soft)] px-2 py-1">starts paused</span>
                   </div>
-                  <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-blue-700">Google-first beta</span>
+                  <input
+                    value={plan.campaignName}
+                    onChange={(event) => updatePlan({ campaignName: event.target.value })}
+                    className="mt-2 w-full min-w-[280px] bg-transparent text-2xl font-black text-[var(--color-text)] outline-none"
+                  />
+                  <p className="mt-1 text-sm text-[var(--color-muted)]">
+                    {isSaving ? "Saving..." : "Saved plan"} {campaignPlanId ? `- ${campaignPlanId}` : ""}
+                  </p>
                 </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <input value={aiBrief.offer} onChange={(event) => setAiBrief({ ...aiBrief, offer: event.target.value })} placeholder="What do you sell?" className="h-10 rounded-lg border border-border bg-white px-3 text-sm" />
-                  <input value={aiBrief.targetCustomer} onChange={(event) => setAiBrief({ ...aiBrief, targetCustomer: event.target.value })} placeholder="Target customer" className="h-10 rounded-lg border border-border bg-white px-3 text-sm" />
-                  <input value={aiBrief.landingPageUrl} onChange={(event) => setAiBrief({ ...aiBrief, landingPageUrl: event.target.value })} placeholder="Landing page URL optional" className="h-10 rounded-lg border border-border bg-white px-3 text-sm" />
-                  <input value={aiBrief.budget} onChange={(event) => setAiBrief({ ...aiBrief, budget: event.target.value })} placeholder="Daily budget" type="number" className="h-10 rounded-lg border border-border bg-white px-3 text-sm" />
-                  <input value={aiBrief.location} onChange={(event) => setAiBrief({ ...aiBrief, location: event.target.value })} placeholder="Location" className="h-10 rounded-lg border border-border bg-white px-3 text-sm" />
-                  <select value={aiBrief.goal} onChange={(event) => setAiBrief({ ...aiBrief, goal: event.target.value })} className="h-10 rounded-lg border border-border bg-white px-3 text-sm">
-                    <option>Leads</option>
-                    <option>Sales</option>
-                    <option>Website Traffic</option>
-                    <option>Brand Awareness</option>
-                  </select>
+                <div className="rounded-full border border-[var(--color-border)] px-3 py-2 text-sm font-bold">
+                  Score {plan.launchReadinessScore || 70}/100
                 </div>
-                <button onClick={buildWithAi} disabled={buildingPlan || !aiBrief.offer || !aiBrief.targetCustomer} className="btn btn-primary mt-3 h-10 px-4 text-sm disabled:opacity-50">
-                  {buildingPlan ? "Building plan..." : "Generate AI Campaign Plan"}
-                </button>
-                {aiPlan && (
-                  <div className="mt-4 rounded-lg border bg-white p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h3 className="font-bold text-slate-950">{aiPlan.campaignName}</h3>
-                        <p className="text-xs text-slate-500">{aiPlan.campaignType} · {aiPlan.biddingStrategy} · ${aiPlan.dailyBudget}/day</p>
-                      </div>
-                      <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Launch score {aiPlan.launchReadinessScore}/100</div>
+              </div>
+
+              <div className="p-5">
+                {activeStep === "Brief" && (
+                  <Section title="AI brief" subtitle="This is the source context for the plan.">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <ReadOnly label="Offer" value={brief.offer} />
+                      <ReadOnly label="Audience" value={brief.targetCustomer} />
+                      <ReadOnly label="Goal" value={brief.goal} />
+                      <ReadOnly label="Original budget" value={`$${brief.budget}/day`} />
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
-                      {(aiPlan.adGroups || []).slice(0, 3).map((group: any) => (
-                        <div key={group.name} className="rounded-lg border p-3">
-                          <div className="font-semibold">{group.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">{group.keywords?.length || 0} keywords · {group.headlines?.length || 0} headlines</div>
-                        </div>
-                      ))}
-                    </div>
-                    {!!aiPlan.risks?.length && <p className="mt-3 text-xs text-amber-700">Review before launch: {aiPlan.risks[0]}</p>}
-                    <button
-                      onClick={launchAiPlan}
-                      disabled={launchingPlan || !aiBrief.landingPageUrl}
-                      className="btn btn-primary mt-3 h-10 px-4 text-sm disabled:opacity-50"
-                    >
-                      {launchingPlan ? "Publishing paused..." : "Launch paused in Google Ads"}
-                    </button>
-                    {!aiBrief.landingPageUrl && <p className="mt-2 text-xs text-amber-700">Add a landing page URL before launch.</p>}
-                  </div>
+                    <Rationale title="What AI understood" value={plan.rationale?.whyThisStructure} />
+                  </Section>
                 )}
-              </div>
-              <div className="mt-5">
-                <div className="mb-2 flex justify-between text-xs font-medium text-slate-500">
-                  <span>Step {step + 1} of {steps.length}</span>
-                  <span>{steps[step]}</span>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100">
-                  <div className="h-2 rounded-full bg-[#1F57F5] transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
-                </div>
-              </div>
-            </div>
 
-            <div className="min-h-[430px] p-6">
-              {step === 0 && (
-                <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-                  <div className="space-y-5">
-                    <div>
-                      <label className="text-sm font-semibold">Platform</label>
-                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        {(["GOOGLE", "META"] as const).map((platform) => (
-                          <button
-                            key={platform}
-                            onClick={() => update("platform", platform)}
-                            className={cn("flex items-center gap-3 rounded-xl border p-4 text-left", form.platform === platform ? "border-[#1F57F5] bg-[#1F57F5]/5" : "border-border hover:bg-slate-50")}
-                          >
-                            <PlatformIcon platform={platform} className="h-7 w-7" />
-                            <div>
-                              <div className="font-semibold">{platform === "GOOGLE" ? "Google Ads" : "Meta Ads"}</div>
-                              <div className="text-xs text-slate-500">{platform === "GOOGLE" ? "Search, Display, Performance Max" : "Facebook and Instagram"}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                {activeStep === "Goal" && (
+                  <Section title="Goal and bidding" subtitle="Choose what Google should optimize toward.">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="Objective">
+                        <select
+                          value={plan.objective}
+                          onChange={(event) => updatePlan({ objective: event.target.value })}
+                          className="input"
+                        >
+                          <option value="LEADS">Leads</option>
+                          <option value="SALES">Sales</option>
+                          <option value="TRAFFIC">Website traffic</option>
+                          <option value="AWARENESS">Brand awareness</option>
+                        </select>
+                      </Field>
+                      <Field label="Bidding">
+                        <select
+                          value={plan.biddingStrategy}
+                          onChange={(event) => updatePlan({ biddingStrategy: event.target.value as CampaignPlan["biddingStrategy"] })}
+                          className="input"
+                        >
+                          <option value="MAXIMIZE_CONVERSIONS">Maximize conversions</option>
+                          <option value="MAXIMIZE_CLICKS">Maximize clicks</option>
+                          <option value="TARGET_CPA">Target CPA</option>
+                        </select>
+                      </Field>
                     </div>
-                    <div>
-                      <label className="text-sm font-semibold">Campaign name</label>
-                      <input value={form.name} onChange={(event) => update("name", event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-border bg-slate-50 px-3 outline-none focus:border-[#1F57F5] focus:bg-white" />
-                      {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {["PROS", "RETG", "CONV"].map((prefix) => (
-                          <button key={prefix} onClick={() => update("name", `${prefix}_${today.replaceAll("-", "")}`)} className="rounded-full border px-3 py-1 text-xs font-medium hover:bg-slate-50">
-                            {prefix}_{today.replaceAll("-", "")}
-                          </button>
-                        ))}
+                    <Rationale title="Why this bidding" value={plan.rationale?.whyThisBidding} />
+                  </Section>
+                )}
+
+                {activeStep === "Targeting" && (
+                  <Section title="Targeting" subtitle="Google first: location and language only for this pass.">
+                    <Field label="Locations">
+                      <ChipEditor
+                        values={plan.locations || []}
+                        placeholder="Add city, region, or country"
+                        onChange={(locations) => updatePlan({ locations })}
+                      />
+                    </Field>
+                    <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
+                      <div className="flex items-center gap-2 text-sm font-bold">
+                        <MapPin className="h-4 w-4" />
+                        Targeting rationale
                       </div>
+                      <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
+                        {plan.rationale?.whyTheseKeywords || "Targeting is based on your prompt and selected location."}
+                      </p>
                     </div>
-                  </div>
-                  <InfoCard title="Account" body="GROWZZY OS will use the primary connected ad account for the selected platform. You can change account selection later from Ad Accounts." />
-                </div>
-              )}
+                  </Section>
+                )}
 
-              {step === 1 && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {objectives.map((objective) => (
-                    <button
-                      key={objective.id}
-                      onClick={() => update("objective", objective.id)}
-                      className={cn("rounded-xl border p-5 text-left transition", form.objective === objective.id ? "border-[#1F57F5] bg-[#1F57F5]/5 shadow-sm" : "border-border hover:bg-slate-50")}
-                    >
-                      <div className="text-2xl">{objective.icon}</div>
-                      <div className="mt-3 font-semibold">{objective.title}</div>
-                      <p className="mt-1 text-sm text-slate-500">{objective.description}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
+                {activeStep === "Keywords" && selectedGroup && (
+                  <Section title="Keywords and negatives" subtitle="Select an ad group, then edit keyword chips.">
+                    <GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} />
+                    <Field label="Keywords">
+                      <KeywordEditor group={selectedGroup} onChange={(keywords) => updateAdGroup(selectedGroupIndex, { keywords })} />
+                    </Field>
+                    <Field label="Negative keywords">
+                      <ChipEditor
+                        values={selectedGroup.negativeKeywords || []}
+                        placeholder="Add waste keyword"
+                        onChange={(negativeKeywords) => updateAdGroup(selectedGroupIndex, { negativeKeywords })}
+                      />
+                    </Field>
+                  </Section>
+                )}
 
-              {step === 2 && (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-4">
-                    <Field label="Budget type">
-                      <div className="grid grid-cols-2 rounded-lg border bg-slate-50 p-1">
-                        {(["DAILY", "LIFETIME"] as const).map((type) => (
-                          <button key={type} onClick={() => update("budgetType", type)} className={cn("rounded-md py-2 text-sm font-semibold", form.budgetType === type ? "bg-white shadow-sm" : "text-slate-500")}>
-                            {type === "DAILY" ? "Daily Budget" : "Lifetime Budget"}
-                          </button>
-                        ))}
+                {activeStep === "Ads" && selectedGroup && (
+                  <Section title="Responsive search ad" subtitle="Google rotates these. Keep headlines under 30 characters.">
+                    <GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} />
+                    <TextList
+                      label="Headlines"
+                      maxLength={30}
+                      values={selectedGroup.headlines || []}
+                      onChange={(headlines) => updateAdGroup(selectedGroupIndex, { headlines })}
+                    />
+                    <TextList
+                      label="Descriptions"
+                      maxLength={90}
+                      values={selectedGroup.descriptions || []}
+                      onChange={(descriptions) => updateAdGroup(selectedGroupIndex, { descriptions })}
+                    />
+                    <Field label="Final URL">
+                      <input
+                        value={plan.finalUrl || ""}
+                        onChange={(event) => updatePlan({ finalUrl: event.target.value })}
+                        className="input"
+                        placeholder="https://example.com"
+                      />
+                    </Field>
+                  </Section>
+                )}
+
+                {activeStep === "Budget" && (
+                  <Section title="Budget safety" subtitle="New campaigns publish paused. Enable delivery only after review.">
+                    <Field label="Daily budget">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl font-black">$</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={plan.dailyBudget}
+                          onChange={(event) => updatePlan({ dailyBudget: Number(event.target.value) })}
+                          className="input max-w-[220px]"
+                        />
+                        <span className="text-sm font-semibold text-[var(--color-muted)]">per day</span>
                       </div>
                     </Field>
-                    <Field label="Budget amount" error={errors.budgetAmount}>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                        <input type="number" value={form.budgetAmount} onChange={(event) => update("budgetAmount", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 pl-8 pr-3 outline-none focus:border-[#1F57F5] focus:bg-white" />
-                      </div>
-                    </Field>
-                    <Field label="Bidding strategy">
-                      <select value={form.biddingStrategy} onChange={(event) => update("biddingStrategy", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3">
-                        <option value="MAXIMIZE_CONVERSIONS">Maximize conversions</option>
-                        <option value="MAXIMIZE_CLICKS">Maximize clicks</option>
-                        <option value="TARGET_CPA">Target CPA</option>
-                        <option value="TARGET_ROAS">Target ROAS</option>
-                      </select>
-                    </Field>
-                  </div>
-                  <div className="space-y-4">
-                    <Field label="Start date" error={errors.startDate}>
-                      <input type="date" value={form.startDate} onChange={(event) => update("startDate", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3" />
-                    </Field>
-                    <Field label="End date optional">
-                      <input type="date" value={form.endDate} onChange={(event) => update("endDate", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3" />
-                    </Field>
-                    <InfoCard title="Budget safety" body="Google may spend up to 2x your daily budget on high-traffic days, but averages it monthly. We launch paused first when live API setup needs review." />
-                  </div>
-                </div>
-              )}
+                    <Rationale title="Expected results" value={plan.rationale?.expectedResultsRange} />
+                  </Section>
+                )}
 
-              {step === 3 && (
-                <div className="grid gap-5 lg:grid-cols-2">
-                  <button onClick={() => update("creativeMode", "AI")} className={cn("rounded-xl border p-6 text-left", form.creativeMode === "AI" ? "border-[#1F57F5] bg-[#1F57F5]/5" : "border-border")}>
-                    <Sparkles className="h-8 w-8 text-[#1F57F5]" />
-                    <h3 className="mt-4 font-bold">Generate with AI</h3>
-                    <p className="mt-1 text-sm text-slate-500">Use Creative Studio to generate, save, and select copy, score, and image direction.</p>
-                    <span
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        router.push("/dashboard/creatives/generate")
-                      }}
-                      className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#1F57F5] shadow-sm"
-                    >
-                      Open Creative Studio
-                    </span>
-                  </button>
-                  <button onClick={() => update("creativeMode", "MANUAL")} className={cn("rounded-xl border p-6 text-left", form.creativeMode === "MANUAL" ? "border-[#1F57F5] bg-[#1F57F5]/5" : "border-border")}>
-                    <ImageIcon className="h-8 w-8 text-slate-500" />
-                    <h3 className="mt-4 font-bold">Manual Creative</h3>
-                    <p className="mt-1 text-sm text-slate-500">Bring your own headline, body copy, CTA, and final creative direction.</p>
-                  </button>
-                  {form.creativeMode === "AI" && (
-                    <div className="space-y-4 lg:col-span-2">
-                      <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-bold text-slate-950">{loadingCreative ? "Loading selected creative..." : form.creativeId ? "Selected Creative Loaded" : "No Creative Studio asset selected yet"}</h3>
-                            <p className="mt-1 text-sm text-slate-600">
-                              {form.creativeId
-                                ? "This campaign will use the saved creative variation below."
-                                : "Generate and select a creative in Creative Studio, then return here automatically."}
-                            </p>
-                          </div>
-                          <button onClick={() => router.push("/dashboard/creatives/generate")} className="btn btn-secondary h-9 px-3 text-xs">
-                            Generate / Select Creative
-                          </button>
-                        </div>
-                        {form.creativeId && (
-                          <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr]">
-                            <div className="grid min-h-[130px] place-items-center overflow-hidden rounded-lg border bg-white">
-                              {form.imageUrl ? <img src={form.imageUrl} alt={form.headline} className="h-full w-full object-cover" /> : <ImageIcon className="h-8 w-8 text-slate-400" />}
-                            </div>
-                            <div className="space-y-2 text-sm">
-                              <div className="rounded-lg bg-white p-3"><span className="font-semibold">Headline:</span> {form.headline || "Not set"}</div>
-                              <div className="rounded-lg bg-white p-3"><span className="font-semibold">Body:</span> {form.body || "Not set"}</div>
-                              <div className="rounded-lg bg-white p-3"><span className="font-semibold">CTA:</span> {form.cta || "Not set"}</div>
-                              {form.visualDirection && <div className="rounded-lg bg-white p-3"><span className="font-semibold">Visual:</span> {form.visualDirection}</div>}
-                            </div>
-                          </div>
+                {activeStep === "Publish" && (
+                  <Section title="Review and launch paused" subtitle="This creates the real Google campaign hierarchy in PAUSED state.">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Summary label="Ad groups" value={String(plan.adGroups.length)} />
+                      <Summary label="Keywords" value={String(plan.adGroups.reduce((sum, group) => sum + group.keywords.length, 0))} />
+                      <Summary label="Budget" value={`$${plan.dailyBudget}/day`} />
+                      <Summary label="Status" value="Paused on launch" />
+                    </div>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button onClick={checkPolicy} disabled={isCheckingPolicy} className="btn btn-secondary h-11 px-4">
+                        {isCheckingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        Run policy check
+                      </button>
+                      <button onClick={launchPlan} disabled={isLaunching || isSaving} className="btn btn-primary h-11 px-5">
+                        {isLaunching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        Launch paused
+                      </button>
+                    </div>
+                    {plan.policyCheck && (
+                      <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
+                        <div className="font-bold">Policy check: {plan.policyCheck.status}</div>
+                        {!!plan.policyCheck.flags?.length && (
+                          <ul className="mt-2 space-y-2 text-sm text-[var(--color-muted)]">
+                            {plan.policyCheck.flags.slice(0, 4).map((flag, index) => (
+                              <li key={`${flag.text}-${index}`}>{flag.text}: {flag.reason}</li>
+                            ))}
+                          </ul>
                         )}
                       </div>
-                    </div>
-                  )}
-                  {form.creativeMode === "MANUAL" && (
-                    <div className="space-y-4 lg:col-span-2">
-                      <Field label="Headline" error={errors.headline}>
-                        <input value={form.headline} onChange={(event) => update("headline", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3" />
-                      </Field>
-                      <Field label="Body copy" error={errors.body}>
-                        <textarea value={form.body} onChange={(event) => update("body", event.target.value)} rows={4} className="w-full rounded-lg border border-border bg-slate-50 px-3 py-2" />
-                      </Field>
-                      <Field label="CTA">
-                        <input value={form.cta} onChange={(event) => update("cta", event.target.value)} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3" />
-                      </Field>
-                      <Field label="Image URL or visual direction">
-                        <input value={form.imageUrl || form.visualDirection} onChange={(event) => {
-                          const value = event.target.value
-                          if (value.startsWith("http")) update("imageUrl", value)
-                          else update("visualDirection", value)
-                        }} className="h-11 w-full rounded-lg border border-border bg-slate-50 px-3" placeholder="https://... or describe the visual" />
-                      </Field>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {step === 4 && (
-                <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-                  <div className="space-y-3 rounded-xl border border-border p-5">
-                    <Summary label="Platform" value={form.platform} />
-                    <Summary label="Campaign name" value={form.name} />
-                    <Summary label="Objective" value={form.objective} />
-                    <Summary label="Budget" value={`$${form.budgetAmount} · ${form.budgetType.toLowerCase()}`} />
-                    <Summary label="Schedule" value={`${form.startDate}${form.endDate ? ` → ${form.endDate}` : " → no end date"}`} />
-                    <Summary label="Creative" value={form.creativeId ? `Selected AI creative #${Number(form.creativeVariant) + 1}` : form.creativeMode === "AI" ? "AI Creative Generator" : "Manual creative"} />
-                  </div>
-                  <div className="rounded-xl border border-border p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-16 w-16 place-items-center rounded-full border-8 border-[#1F57F5]/20 text-xl font-black text-[#1F57F5]">{score}</div>
-                      <div>
-                        <h3 className="font-bold">AI pre-launch score</h3>
-                        <p className="text-sm text-slate-500">Clarity, budget, creative, and objective readiness.</p>
-                      </div>
-                    </div>
-                    <div className="mt-5 space-y-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Clear objective selected</div>
-                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Budget is ready</div>
-                      <div className="flex items-center gap-2"><Target className="h-4 w-4 text-[#1F57F5]" /> Review creative before publishing</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between border-t border-border p-5">
-              <button onClick={back} disabled={step === 0 || submitting} className="btn btn-secondary h-10 px-4 text-sm disabled:opacity-40">Back</button>
-              <div className="flex gap-2">
-                {step === steps.length - 1 ? (
-                  <>
-                    <button onClick={() => submit(true)} disabled={submitting} className="btn btn-secondary h-10 px-4 text-sm">{submitting ? "Saving..." : "Save as Draft"}</button>
-                    <button onClick={() => submit(false)} disabled={submitting} className="btn btn-primary h-10 px-4 text-sm">{submitting ? "Creating..." : "Launch Campaign"}</button>
-                  </>
-                ) : (
-                  <button onClick={next} className="btn btn-primary h-10 px-5 text-sm">Continue</button>
+                    )}
+                  </Section>
                 )}
               </div>
-            </div>
+            </main>
+
+            <aside className="xl:sticky xl:top-5 xl:self-start">
+              <GooglePreview plan={plan} group={selectedGroup} />
+            </aside>
           </div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   )
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function PromptIntake({
+  brief,
+  checklist,
+  readyToGenerate,
+  isGenerating,
+  onChange,
+  onGenerate,
+}: {
+  brief: { offer: string; landingPageUrl: string; targetCustomer: string; budget: string; location: string; goal: string }
+  checklist: Array<{ label: string; done: boolean }>
+  readyToGenerate: boolean
+  isGenerating: boolean
+  onChange: (key: keyof typeof brief, value: string) => void
+  onGenerate: () => void
+}) {
+  return (
+    <div className="mx-auto max-w-4xl pt-8">
+      <div className="mb-6 flex justify-center">
+        <div className="inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-soft)]">
+          {["Campaign", "Boolean search", "Create image", "Launch ads"].map((tab, index) => (
+            <button
+              key={tab}
+              disabled={index !== 0}
+              className={cn(
+                "rounded-full px-4 py-2 text-sm font-bold",
+                index === 0 ? "bg-[var(--color-text)] text-white" : "text-[var(--color-muted)] opacity-50"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-soft)]">
+        <div className="text-center">
+          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--color-text)] text-white">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <h1 className="text-3xl font-black text-[var(--color-text)]">What do you want to launch?</h1>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--color-muted)]">
+            Describe your offer once. Growzzy turns it into an editable Google campaign plan with live ad preview.
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <textarea
+            value={brief.offer}
+            onChange={(event) => onChange("offer", event.target.value)}
+            rows={6}
+            className="w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-soft)] px-5 py-4 text-base outline-none focus:border-[var(--color-text)] focus:bg-white"
+            placeholder="Example: Online yoga classes for busy professionals. First class free, then $25/month. I want local leads."
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <input value={brief.targetCustomer} onChange={(event) => onChange("targetCustomer", event.target.value)} className="input" placeholder="Target audience" />
+          <input value={brief.location} onChange={(event) => onChange("location", event.target.value)} className="input" placeholder="Location" />
+          <input value={brief.budget} onChange={(event) => onChange("budget", event.target.value)} className="input" type="number" min="1" placeholder="Daily budget" />
+          <select value={brief.goal} onChange={(event) => onChange("goal", event.target.value)} className="input">
+            {goals.map((goal) => <option key={goal}>{goal}</option>)}
+          </select>
+        </div>
+        <input
+          value={brief.landingPageUrl}
+          onChange={(event) => onChange("landingPageUrl", event.target.value)}
+          className="input mt-3"
+          placeholder="Landing page URL, optional until launch"
+        />
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {checklist.map((item) => (
+            <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 text-sm font-bold">
+              <span className={cn("grid h-6 w-6 place-items-center rounded-full", item.done ? "bg-[var(--color-text)] text-white" : "bg-[var(--color-soft)] text-[var(--color-muted)]")}>
+                {item.done ? <Check className="h-4 w-4" /> : ""}
+              </span>
+              {item.label}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 flex justify-center">
+          <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} className="btn btn-primary h-12 px-6 disabled:opacity-50">
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            AI enhance and build plan
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-xl font-black text-[var(--color-text)]">{title}</h2>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">{subtitle}</p>
+      </div>
+      <div className="space-y-5">{children}</div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-semibold text-slate-800">{label}</span>
-      <div className="mt-2">{children}</div>
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      <span className="mb-2 block text-sm font-bold text-[var(--color-text)]">{label}</span>
+      {children}
     </label>
   )
 }
 
-function InfoCard({ title, body }: { title: string; body: string }) {
+function ReadOnly({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-5">
-      <h3 className="font-bold text-slate-950">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
+      <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">{label}</div>
+      <div className="mt-2 text-sm font-semibold text-[var(--color-text)]">{value || "Not provided"}</div>
+    </div>
+  )
+}
+
+function Rationale({ title, value }: { title: string; value?: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
+      <div className="flex items-center gap-2 text-sm font-black text-[var(--color-text)]">
+        <Sparkles className="h-4 w-4" />
+        {title}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{value || "Growzzy will explain the recommendation once the plan is generated."}</p>
     </div>
   )
 }
 
 function Summary({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-5 border-b border-border py-3 last:border-b-0">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className="text-right text-sm font-semibold text-slate-950">{value}</span>
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
+      <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">{label}</div>
+      <div className="mt-2 text-lg font-black text-[var(--color-text)]">{value}</div>
+    </div>
+  )
+}
+
+function GroupTabs({ groups, selected, onSelect }: { groups: AdGroup[]; selected: number; onSelect: (index: number) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map((group, index) => (
+        <button
+          key={`${group.name}-${index}`}
+          onClick={() => onSelect(index)}
+          className={cn(
+            "rounded-full border px-4 py-2 text-sm font-bold",
+            selected === index ? "border-[var(--color-text)] bg-[var(--color-text)] text-white" : "border-[var(--color-border)]"
+          )}
+        >
+          {group.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ChipEditor({
+  values,
+  placeholder,
+  onChange,
+}: {
+  values: string[]
+  placeholder: string
+  onChange: (values: string[]) => void
+}) {
+  const [draft, setDraft] = useState("")
+  const add = () => {
+    const value = draft.trim()
+    if (!value) return
+    onChange([...values, value])
+    setDraft("")
+  }
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] p-3">
+      <div className="flex flex-wrap gap-2">
+        {values.map((value, index) => (
+          <button
+            key={`${value}-${index}`}
+            onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+            className="rounded-full bg-[var(--color-soft)] px-3 py-2 text-sm font-semibold"
+            title="Click to remove"
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && add()} className="input" placeholder={placeholder} />
+        <button onClick={add} className="btn btn-secondary h-11 px-4">Add</button>
+      </div>
+    </div>
+  )
+}
+
+function KeywordEditor({ group, onChange }: { group: AdGroup; onChange: (keywords: Keyword[]) => void }) {
+  const [draft, setDraft] = useState("")
+  const [matchType, setMatchType] = useState<Keyword["matchType"]>("PHRASE")
+  const add = () => {
+    const value = draft.trim()
+    if (!value) return
+    onChange([...group.keywords, { text: value, matchType }])
+    setDraft("")
+  }
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] p-3">
+      <div className="flex flex-wrap gap-2">
+        {group.keywords.map((keyword, index) => (
+          <button
+            key={`${keyword.text}-${index}`}
+            onClick={() => onChange(group.keywords.filter((_, itemIndex) => itemIndex !== index))}
+            className="rounded-full bg-[var(--color-soft)] px-3 py-2 text-sm font-semibold"
+            title="Click to remove"
+          >
+            {keyword.text} <span className="text-[var(--color-muted)]">{keyword.matchType}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px_auto]">
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && add()} className="input" placeholder="Add keyword" />
+        <select value={matchType} onChange={(event) => setMatchType(event.target.value as Keyword["matchType"])} className="input">
+          <option value="BROAD">Broad</option>
+          <option value="PHRASE">Phrase</option>
+          <option value="EXACT">Exact</option>
+        </select>
+        <button onClick={add} className="btn btn-secondary h-11 px-4">Add</button>
+      </div>
+    </div>
+  )
+}
+
+function TextList({
+  label,
+  values,
+  maxLength,
+  onChange,
+}: {
+  label: string
+  values: string[]
+  maxLength: number
+  onChange: (values: string[]) => void
+}) {
+  return (
+    <Field label={label}>
+      <div className="space-y-2">
+        {values.map((value, index) => (
+          <div key={index} className="grid gap-2 md:grid-cols-[1fr_70px_auto]">
+            <input
+              value={value}
+              onChange={(event) => {
+                const next = [...values]
+                next[index] = event.target.value.slice(0, maxLength)
+                onChange(next)
+              }}
+              className="input"
+            />
+            <div className={cn("grid h-11 place-items-center rounded-xl bg-[var(--color-soft)] text-xs font-bold", value.length >= maxLength ? "text-red-600" : "text-[var(--color-muted)]")}>
+              {value.length}/{maxLength}
+            </div>
+            <button onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))} className="btn btn-secondary h-11 px-3">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => onChange([...values, ""])} className="btn btn-secondary h-10 px-4">Add {label.toLowerCase()}</button>
+      </div>
+    </Field>
+  )
+}
+
+function GooglePreview({ plan, group }: { plan: CampaignPlan; group?: AdGroup }) {
+  const headlines = group?.headlines?.filter(Boolean).slice(0, 3) || []
+  const descriptions = group?.descriptions?.filter(Boolean).slice(0, 2) || []
+  const url = plan.finalUrl || "https://your-site.com"
+  const host = url.replace(/^https?:\/\//, "").split("/")[0] || "your-site.com"
+
+  return (
+    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-soft)]">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Live preview</div>
+          <h3 className="mt-1 font-black text-[var(--color-text)]">Google Search ad</h3>
+        </div>
+        <Search className="h-5 w-5 text-[var(--color-muted)]" />
+      </div>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-white p-4">
+        <div className="mb-4 rounded-full border border-[var(--color-border)] px-4 py-3 text-sm text-[var(--color-muted)]">
+          {group?.keywords?.[0]?.text || plan.campaignName}
+        </div>
+        <div className="text-xs text-[var(--color-muted)]">Sponsored</div>
+        <div className="mt-1 flex items-center gap-2 text-sm text-[var(--color-text)]">
+          {host}
+          <ExternalLink className="h-3 w-3" />
+        </div>
+        <div className="mt-2 text-xl font-semibold leading-7 text-[#1a0dab]">
+          {headlines.length ? headlines.join(" | ") : plan.campaignName}
+        </div>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
+          {descriptions[0] || "Your description will appear here as you edit the responsive search ad."}
+        </p>
+        {descriptions[1] && <p className="mt-1 text-sm leading-6 text-[var(--color-muted)]">{descriptions[1]}</p>}
+      </div>
+      <div className="mt-4 rounded-xl bg-[var(--color-soft)] p-4">
+        <div className="flex items-center justify-between text-sm font-bold">
+          <span>Budget</span>
+          <span>${plan.dailyBudget}/day</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-sm font-bold">
+          <span>Publish state</span>
+          <span className="text-amber-700">Paused</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-sm font-bold">
+          <span>Policy</span>
+          <span>{plan.policyCheck?.status || "Not checked"}</span>
+        </div>
+      </div>
+      <button className="mt-4 flex w-full items-center justify-between rounded-xl border border-[var(--color-border)] px-4 py-3 text-left text-sm font-bold">
+        Preview combinations
+        <ChevronDown className="h-4 w-4" />
+      </button>
     </div>
   )
 }
