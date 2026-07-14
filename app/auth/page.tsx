@@ -101,7 +101,7 @@ function AuthPageContent() {
         })
 
         if (result?.error) throw new Error("Login after registration failed")
-        router.replace(callbackUrl === "/dashboard" ? "/dashboard/settings?tab=applications" : callbackUrl)
+        router.replace(callbackUrl === "/dashboard" ? "/dashboard/onboarding" : callbackUrl)
       }
     } catch (err: any) {
       if (err?.name === "TypeError") {

@@ -119,6 +119,11 @@ model Workspace {
   slug               String              @unique
   logo               String?
   ownerId            String
+  websiteUrl         String?
+  primaryGoal        String?
+  currencyCode       String?             @default("USD")
+  timezone           String?
+  productDescription String?
   dailyBudgetCeiling Float?
   defaultAutomationMode String @default("ALERT")
   targetCpa          Float?

@@ -1,0 +1,6 @@
+ALTER TABLE "Workspace"
+  ADD COLUMN IF NOT EXISTS "websiteUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "primaryGoal" TEXT,
+  ADD COLUMN IF NOT EXISTS "currencyCode" TEXT DEFAULT 'USD',
+  ADD COLUMN IF NOT EXISTS "timezone" TEXT,
+  ADD COLUMN IF NOT EXISTS "productDescription" TEXT;

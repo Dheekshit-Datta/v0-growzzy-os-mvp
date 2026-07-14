@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { ensureDefaultWorkspace } from "@/lib/workspace"
+import { ensureDefaultWorkspace, getRequestWorkspaceId } from "@/lib/workspace"
 
 export const dynamic = "force-dynamic"
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(2).max(80),
   logo: z.string().url().optional().or(z.literal("")),
+})
+
+const UpdateWorkspaceSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  websiteUrl: z.string().url().optional().or(z.literal("")),
+  primaryGoal: z.enum(["SALES", "LEADS", "TRAFFIC", "APP_INSTALLS"]).optional(),
+  currencyCode: z.string().min(3).max(3).optional(),
+  timezone: z.string().min(1).max(80).optional(),
+  dailyBudgetCeiling: z.coerce.number().min(1).max(100000).optional(),
+  productDescription: z.string().max(1000).optional(),
 })
 
 function slugify(value: string) {
@@ -60,4 +70,29 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json({ ok: true, workspace }, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const parsed = UpdateWorkspaceSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
+
+  const workspaceId = await getRequestWorkspaceId(session.user.id, req)
+  const data = parsed.data
+  const workspace = await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.websiteUrl !== undefined ? { websiteUrl: data.websiteUrl || null } : {}),
+      ...(data.primaryGoal !== undefined ? { primaryGoal: data.primaryGoal } : {}),
+      ...(data.currencyCode !== undefined ? { currencyCode: data.currencyCode.toUpperCase() } : {}),
+      ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
+      ...(data.dailyBudgetCeiling !== undefined ? { dailyBudgetCeiling: data.dailyBudgetCeiling } : {}),
+      ...(data.productDescription !== undefined ? { productDescription: data.productDescription || null } : {}),
+    },
+  })
+
+  return NextResponse.json({ ok: true, workspace })
 }
