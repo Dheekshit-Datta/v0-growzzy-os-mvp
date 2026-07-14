@@ -1,4 +1,3 @@
-@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -55,24 +54,25 @@
 
 :root {
   /* Design system tokens */
-  --bg-app: #F7F6F4;
+  --bg-app: #F7F8F7;
   --bg-surface: #FFFFFF;
-  --bg-hover: #F1F0EE;
-  --bg-active: #EDECEA;
-  --bg-inset: #FBFBFA;
+  --bg-hover: #F2F5F3;
+  --bg-active: #EAF6EE;
+  --bg-inset: #FAFBFA;
 
-  --text-primary: #1D1D1B;
-  --text-secondary: #6B6B68;
-  --text-muted: #9B9B97;
-  --text-faint: #B8B8B4;
+  --text-primary: #202522;
+  --text-secondary: #626963;
+  --text-muted: #929994;
+  --text-faint: #B0B6B1;
 
-  --border-subtle: #ECEBE8;
-  --border-strong: #DEDDD9;
+  --border-subtle: #E8ECE9;
+  --border-strong: #D9DFDB;
 
-  --accent: #1F57F5;
-  --accent-weak: #EAF0FE;
+  --accent: #2FA85A;
+  --accent-hover: #278E4C;
+  --accent-weak: #E7F5EC;
 
-  --btn-primary-bg: #1E1E1C;
+  --btn-primary-bg: #2FA85A;
   --btn-primary-text: #FFFFFF;
 
   --status-good-bg: #E4F1E7;
@@ -90,18 +90,27 @@
   --shadow-popover: 0 8px 28px rgba(30,30,28,0.12), 0 2px 6px rgba(30,30,28,0.06);
   --shadow-window: 0 24px 60px rgba(40,40,60,0.18);
 
-  --radius-window: 18px;
-  --radius-card: 14px;
-  --radius-input: 10px;
+  --radius-window: 14px;
+  --radius-card: 10px;
+  --radius-input: 8px;
   --radius-pill: 999px;
   --radius-avatar: 8px;
   --row-height: 48px;
-  --sidebar-width: 244px;
-  --page-pad: 28px;
+  --sidebar-width: 188px;
+  --page-pad: 20px;
+
+  /* Builder aliases retained for the persisted campaign flow. */
+  --color-bg: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-soft: var(--bg-inset);
+  --color-border: var(--border-subtle);
+  --color-text: var(--text-primary);
+  --color-muted: var(--text-muted);
+  --shadow-soft: var(--shadow-card);
 
   /* Compatibility aliases used across the current app */
   --primary: var(--btn-primary-bg);
-  --primary-hover: #050505;
+  --primary-hover: var(--accent-hover);
   --secondary: var(--bg-active);
   --primary-light: var(--accent-weak);
 
@@ -164,8 +173,8 @@
 
   body {
     @apply bg-background text-text-primary antialiased;
-    font-family: var(--font-satoshi);
-    font-size: 14px;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 13px;
     line-height: 1.45;
     font-variant-numeric: tabular-nums;
   }
@@ -180,7 +189,7 @@
   }
 
   h1 {
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1.25;
     font-weight: 600;
   }
@@ -202,7 +211,7 @@
 
   /* Enterprise Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 h-10 rounded-[10px] text-[14px] font-medium transition-all duration-200 outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-4 h-9 rounded-[8px] text-[12px] font-semibold transition-all duration-200 outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
@@ -212,7 +221,7 @@
   }
 
   .btn-primary:hover {
-    background: #050505;
+    background: var(--accent-hover);
   }
 
   .btn-primary:active {
@@ -229,7 +238,7 @@
 
   /* Enterprise Cards */
   .card {
-    @apply bg-white border border-border rounded-[14px] p-6 shadow-xs;
+    @apply bg-white border border-border rounded-[10px] p-5 shadow-xs;
   }
 
   .glass-card {
@@ -241,7 +250,7 @@
 
   /* Enterprise Inputs */
   .input {
-    @apply h-10 px-4 bg-muted-100 border border-border-hover rounded-[10px] text-[14px] text-text-primary placeholder:text-text-tertiary transition-colors focus:bg-white focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none w-full;
+    @apply h-9 px-3 bg-white border border-border-hover rounded-[8px] text-[12px] text-text-primary placeholder:text-text-tertiary transition-colors focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none w-full;
   }
 
   /* Data Tables */

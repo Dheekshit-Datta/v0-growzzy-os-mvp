@@ -4,12 +4,15 @@ import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   ChevronDown,
   ExternalLink,
   Loader2,
   MapPin,
+  Mic,
   Play,
+  Plus,
   Search,
   ShieldCheck,
   Sparkles,
@@ -57,12 +60,12 @@ type CampaignPlan = {
   }
 }
 
-const flowSteps = ["Brief", "Goal", "Targeting", "Keywords", "Ads", "Budget", "Publish"]
+const flowSteps = ["Set Goal", "Creative", "Audience", "Website", "Placements", "Budget", "Publish"]
 const goals = ["Leads", "Sales", "Website Traffic", "Brand Awareness"]
 
 export default function NewCampaignPage() {
   const router = useRouter()
-  const [activeStep, setActiveStep] = useState("Brief")
+  const [activeStep, setActiveStep] = useState("Set Goal")
   const [selectedGroupIndex, setSelectedGroupIndex] = useState(0)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -82,15 +85,14 @@ export default function NewCampaignPage() {
   const checklist = useMemo(
     () => [
       { label: "Ad objective", done: Boolean(brief.goal) },
-      { label: "Product or offer", done: brief.offer.trim().length > 10 },
-      { label: "Target audience", done: brief.targetCustomer.trim().length > 4 },
+      { label: "Target audience", done: brief.targetCustomer.trim().length > 4 || brief.offer.trim().length > 24 },
+      { label: "Age", done: /\b(?:1[89]|[2-6]\d)(?:\s*[-–]\s*(?:1[89]|[2-6]\d))?\b/.test(brief.offer) },
       { label: "Location", done: brief.location.trim().length > 2 },
       { label: "Budget", done: Number(brief.budget) > 0 },
-      { label: "Landing page", done: /^https?:\/\//.test(brief.landingPageUrl) },
     ],
     [brief]
   )
-  const readyToGenerate = checklist.slice(0, 5).every((item) => item.done)
+  const readyToGenerate = brief.offer.trim().length > 10
   const selectedGroup = plan?.adGroups?.[selectedGroupIndex] || plan?.adGroups?.[0]
 
   useEffect(() => {
@@ -149,14 +151,14 @@ export default function NewCampaignPage() {
       const response = await fetch("/api/ai/campaign-builder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...brief, budget: Number(brief.budget) }),
+        body: JSON.stringify({ ...brief, targetCustomer: brief.targetCustomer || "Infer the target customer from the offer", budget: Number(brief.budget) }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.ok) throw new Error(data.error || "AI Campaign Builder failed")
       setPlan(data.plan)
       setCampaignPlanId(data.campaignPlanId)
       setSelectedGroupIndex(0)
-      setActiveStep("Goal")
+      setActiveStep("Set Goal")
       toast.success("Campaign plan generated and saved")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not generate campaign plan")
@@ -211,15 +213,16 @@ export default function NewCampaignPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="min-h-screen bg-[var(--color-bg)] px-5 py-6">
-        <button
-          onClick={() => router.push("/dashboard/campaigns")}
-          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Campaigns
-        </button>
+    <DashboardLayout immersive={Boolean(plan)}>
+      <div className={cn("min-h-screen bg-[var(--color-bg)]", plan ? "" : "px-4 py-4")}>
+        {plan && (
+          <header className="flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-white px-5">
+            <button onClick={() => setPlan(null)} className="inline-flex items-center gap-2 text-[12px] font-semibold text-[var(--color-text)]">
+              <ArrowLeft className="h-4 w-4" /> Create Campaign
+            </button>
+            <div className="flex items-center gap-4 text-[11px] text-[var(--color-muted)]"><span>Help</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--accent)] font-bold text-white">G</span></div>
+          </header>
+        )}
 
         {!plan ? (
           <PromptIntake
@@ -231,68 +234,72 @@ export default function NewCampaignPage() {
             onGenerate={generatePlan}
           />
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)_420px]">
-            <aside className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-soft)]">
-              <div className="mb-3 px-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+          <div className="grid min-h-[calc(100vh-56px)] overflow-hidden bg-white xl:grid-cols-[286px_minmax(520px,634px)_minmax(520px,1fr)]">
+            <aside className="border-b border-[var(--color-border)] bg-[var(--bg-inset)] p-5 xl:border-b-0 xl:border-r">
+              <div className="mb-4 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-faint)]">
                 Campaign flow
               </div>
-              <div className="space-y-2">
-                {flowSteps.map((step) => (
+              <div className="space-y-0.5">
+                {flowSteps.map((step, index) => (
                   <button
                     key={step}
                     onClick={() => setActiveStep(step)}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold",
+                      "flex w-full items-center gap-2.5 rounded-[8px] px-2 py-2 text-left text-[11px] font-medium",
                       activeStep === step
-                        ? "bg-[var(--color-text)] text-white"
-                        : "text-[var(--color-text)] hover:bg-[var(--color-soft)]"
+                        ? "bg-[var(--accent-weak)] text-[var(--accent)]"
+                        : "text-[var(--text-secondary)] hover:bg-white"
                     )}
                   >
-                    {step}
-                    {step !== "Publish" && <Check className="h-4 w-4 opacity-70" />}
+                    <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[9px] font-bold", activeStep === step ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)] bg-white")}>{index + 1}</span>
+                    <span className="flex-1">{step === "Website" ? "Website or Product Page" : step}</span>
+                    {step !== "Publish" && <Check className="h-3 w-3 opacity-60" />}
                   </button>
                 ))}
               </div>
-              <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-3 text-xs leading-5 text-[var(--color-muted)]">
+              <div className="mt-5 rounded-[8px] border border-[var(--color-border)] bg-white p-3 text-[10px] leading-4 text-[var(--color-muted)]">
                 AI proposes. You edit. Every change saves back to the persisted launch plan.
               </div>
             </aside>
 
-            <main className="min-w-0 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] p-5">
+            <main className="min-w-0 overflow-y-auto border-b border-[var(--color-border)] bg-white xl:max-h-[calc(100vh-56px)] xl:border-b-0 xl:border-r">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] p-4">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted)]">
                     Google Search
                     <span className="rounded-full bg-[var(--color-soft)] px-2 py-1">starts paused</span>
                   </div>
                   <input
                     value={plan.campaignName}
                     onChange={(event) => updatePlan({ campaignName: event.target.value })}
-                    className="mt-2 w-full min-w-[280px] bg-transparent text-2xl font-black text-[var(--color-text)] outline-none"
+                    className="mt-1 w-full min-w-[280px] bg-transparent text-[20px] font-semibold text-[var(--color-text)] outline-none"
                   />
-                  <p className="mt-1 text-sm text-[var(--color-muted)]">
+                  <p className="mt-1 text-[10px] text-[var(--color-muted)]">
                     {isSaving ? "Saving..." : "Saved plan"} {campaignPlanId ? `- ${campaignPlanId}` : ""}
                   </p>
                 </div>
-                <div className="rounded-full border border-[var(--color-border)] px-3 py-2 text-sm font-bold">
+                <div className="rounded-full border border-[var(--color-border)] px-2.5 py-1.5 text-[10px] font-semibold">
                   Score {plan.launchReadinessScore || 70}/100
                 </div>
               </div>
 
-              <div className="p-5">
-                {activeStep === "Brief" && (
-                  <Section title="AI brief" subtitle="This is the source context for the plan.">
+              <div className="p-4">
+                {activeStep === "Website" && (
+                  <Section title="Website or Product Page" subtitle="Review the offer and choose where the ad sends people.">
                     <div className="grid gap-3 md:grid-cols-2">
                       <ReadOnly label="Offer" value={brief.offer} />
                       <ReadOnly label="Audience" value={brief.targetCustomer} />
                       <ReadOnly label="Goal" value={brief.goal} />
                       <ReadOnly label="Original budget" value={`$${brief.budget}/day`} />
                     </div>
+                    <Field label="Final URL">
+                      <input value={plan.finalUrl || ""} onChange={(event) => updatePlan({ finalUrl: event.target.value })} className="input" placeholder="https://example.com" />
+                    </Field>
                     <Rationale title="What AI understood" value={plan.rationale?.whyThisStructure} />
                   </Section>
                 )}
 
-                {activeStep === "Goal" && (
+                {activeStep === "Set Goal" && (
                   <Section title="Goal and bidding" subtitle="Choose what Google should optimize toward.">
                     <div className="grid gap-3 md:grid-cols-2">
                       <Field label="Objective">
@@ -323,8 +330,8 @@ export default function NewCampaignPage() {
                   </Section>
                 )}
 
-                {activeStep === "Targeting" && (
-                  <Section title="Targeting" subtitle="Google first: location and language only for this pass.">
+                {activeStep === "Audience" && (
+                  <Section title="Audience" subtitle="Review locations and the search intent Growzzy selected.">
                     <Field label="Locations">
                       <ChipEditor
                         values={plan.locations || []}
@@ -341,27 +348,12 @@ export default function NewCampaignPage() {
                         {plan.rationale?.whyTheseKeywords || "Targeting is based on your prompt and selected location."}
                       </p>
                     </div>
+                    {selectedGroup && <><GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} /><Field label="Keywords"><KeywordEditor group={selectedGroup} onChange={(keywords) => updateAdGroup(selectedGroupIndex, { keywords })} /></Field><Field label="Negative keywords"><ChipEditor values={selectedGroup.negativeKeywords || []} placeholder="Add waste keyword" onChange={(negativeKeywords) => updateAdGroup(selectedGroupIndex, { negativeKeywords })} /></Field></>}
                   </Section>
                 )}
 
-                {activeStep === "Keywords" && selectedGroup && (
-                  <Section title="Keywords and negatives" subtitle="Select an ad group, then edit keyword chips.">
-                    <GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} />
-                    <Field label="Keywords">
-                      <KeywordEditor group={selectedGroup} onChange={(keywords) => updateAdGroup(selectedGroupIndex, { keywords })} />
-                    </Field>
-                    <Field label="Negative keywords">
-                      <ChipEditor
-                        values={selectedGroup.negativeKeywords || []}
-                        placeholder="Add waste keyword"
-                        onChange={(negativeKeywords) => updateAdGroup(selectedGroupIndex, { negativeKeywords })}
-                      />
-                    </Field>
-                  </Section>
-                )}
-
-                {activeStep === "Ads" && selectedGroup && (
-                  <Section title="Responsive search ad" subtitle="Google rotates these. Keep headlines under 30 characters.">
+                {activeStep === "Creative" && selectedGroup && (
+                  <Section title="Creative" subtitle="Google rotates this responsive search ad copy automatically.">
                     <GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} />
                     <TextList
                       label="Headlines"
@@ -375,14 +367,12 @@ export default function NewCampaignPage() {
                       values={selectedGroup.descriptions || []}
                       onChange={(descriptions) => updateAdGroup(selectedGroupIndex, { descriptions })}
                     />
-                    <Field label="Final URL">
-                      <input
-                        value={plan.finalUrl || ""}
-                        onChange={(event) => updatePlan({ finalUrl: event.target.value })}
-                        className="input"
-                        placeholder="https://example.com"
-                      />
-                    </Field>
+                  </Section>
+                )}
+
+                {activeStep === "Placements" && (
+                  <Section title="Placements" subtitle="This first launch path is Google Search only.">
+                    <div className="rounded-[10px] border border-[var(--accent)] bg-[var(--accent-weak)] p-4"><div className="flex items-center gap-3"><span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-white"><Check className="h-3 w-3" /></span><div><p className="text-[12px] font-semibold">Google Search results</p><p className="mt-0.5 text-[10px] text-[var(--color-muted)]">Responsive search ads on Google search pages.</p></div></div></div>
                   </Section>
                 )}
 
@@ -440,7 +430,7 @@ export default function NewCampaignPage() {
               </div>
             </main>
 
-            <aside className="xl:sticky xl:top-5 xl:self-start">
+            <aside className="min-w-0 bg-[#EEF7F1] p-8 xl:sticky xl:top-0 xl:h-[calc(100vh-56px)] xl:self-start">
               <GooglePreview plan={plan} group={selectedGroup} />
             </aside>
           </div>
@@ -466,16 +456,16 @@ function PromptIntake({
   onGenerate: () => void
 }) {
   return (
-    <div className="mx-auto max-w-4xl pt-8">
-      <div className="mb-6 flex justify-center">
-        <div className="inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-soft)]">
+    <div className="mx-auto max-w-[900px] pt-[6vh]">
+      <div className="mb-8 flex justify-center">
+        <div className="inline-flex rounded-full border border-[var(--color-border)] bg-white p-1">
           {["Campaign", "Boolean search", "Create image", "Launch ads"].map((tab, index) => (
             <button
               key={tab}
               disabled={index !== 0}
               className={cn(
-                "rounded-full px-4 py-2 text-sm font-bold",
-                index === 0 ? "bg-[var(--color-text)] text-white" : "text-[var(--color-muted)] opacity-50"
+                "rounded-full px-4 py-1.5 text-[11px] font-medium",
+                index === 0 ? "bg-[var(--accent-weak)] text-[var(--accent)]" : "text-[var(--color-muted)] opacity-50"
               )}
             >
               {tab}
@@ -484,58 +474,46 @@ function PromptIntake({
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-soft)]">
+      <div>
         <div className="text-center">
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--color-text)] text-white">
-            <Sparkles className="h-6 w-6" />
-          </div>
-          <h1 className="text-3xl font-black text-[var(--color-text)]">What do you want to launch?</h1>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--color-muted)]">
-            Describe your offer once. Growzzy turns it into an editable Google campaign plan with live ad preview.
+          <h1 className="text-[26px] font-semibold leading-tight text-[var(--color-text)]">Run ad campaigns in minutes.</h1>
+          <p className="mx-auto mt-2 max-w-xl text-[12px] leading-5 text-[var(--color-muted)]">
+            Tell Growzzy what you want to promote. AI builds the strategy, targeting and ads for you.
           </p>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-7 rounded-[12px] border border-[var(--accent)] bg-white p-2 shadow-[0_0_0_3px_var(--accent-weak)]">
           <textarea
             value={brief.offer}
             onChange={(event) => onChange("offer", event.target.value)}
-            rows={6}
-            className="w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-soft)] px-5 py-4 text-base outline-none focus:border-[var(--color-text)] focus:bg-white"
+            rows={5}
+            className="w-full resize-none border-0 bg-white px-3 py-3 text-[13px] leading-5 outline-none"
             placeholder="Example: Online yoga classes for busy professionals. First class free, then $25/month. I want local leads."
           />
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <input value={brief.targetCustomer} onChange={(event) => onChange("targetCustomer", event.target.value)} className="input" placeholder="Target audience" />
-          <input value={brief.location} onChange={(event) => onChange("location", event.target.value)} className="input" placeholder="Location" />
-          <input value={brief.budget} onChange={(event) => onChange("budget", event.target.value)} className="input" type="number" min="1" placeholder="Daily budget" />
-          <select value={brief.goal} onChange={(event) => onChange("goal", event.target.value)} className="input">
-            {goals.map((goal) => <option key={goal}>{goal}</option>)}
-          </select>
-        </div>
-        <input
-          value={brief.landingPageUrl}
-          onChange={(event) => onChange("landingPageUrl", event.target.value)}
-          className="input mt-3"
-          placeholder="Landing page URL, optional until launch"
-        />
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {checklist.map((item) => (
-            <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 text-sm font-bold">
-              <span className={cn("grid h-6 w-6 place-items-center rounded-full", item.done ? "bg-[var(--color-text)] text-white" : "bg-[var(--color-soft)] text-[var(--color-muted)]")}>
-                {item.done ? <Check className="h-4 w-4" /> : ""}
-              </span>
-              {item.label}
+          <div className="flex items-end justify-between gap-3 border-t border-[var(--color-border)] px-2 pt-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 py-1">
+              {checklist.map((item) => (
+                <span key={item.label} className={cn("inline-flex items-center gap-1 text-[10px] font-medium", item.done ? "text-[var(--accent)]" : "text-[var(--color-muted)]")}>
+                  <span className={cn("grid h-3.5 w-3.5 place-items-center rounded-full border", item.done ? "border-[var(--accent)]" : "border-[var(--border-strong)]")}>{item.done && <Check className="h-2.5 w-2.5" />}</span>{item.label}
+                </span>
+              ))}
             </div>
-          ))}
-        </div>
-
-        <div className="mt-6 flex justify-center">
-          <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} className="btn btn-primary h-12 px-6 disabled:opacity-50">
-            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            AI enhance and build plan
-          </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} className="h-8 rounded-[8px] px-3 text-[11px] font-semibold italic text-[var(--accent)] hover:bg-[var(--accent-weak)] disabled:opacity-50">AI Enhance</button>
+              <details className="relative">
+                <summary title="Campaign details" className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full border border-[var(--border-strong)] text-[var(--accent)]"><Plus className="h-4 w-4" /></summary>
+                <div className="absolute bottom-11 right-0 z-20 grid w-[520px] max-w-[80vw] gap-2 rounded-[10px] border bg-white p-3 shadow-[var(--shadow-popover)] md:grid-cols-2">
+                  <input value={brief.targetCustomer} onChange={(event) => onChange("targetCustomer", event.target.value)} className="input" placeholder="Target audience" />
+                  <input value={brief.location} onChange={(event) => onChange("location", event.target.value)} className="input" placeholder="Location" />
+                  <input value={brief.budget} onChange={(event) => onChange("budget", event.target.value)} className="input" type="number" min="1" placeholder="Daily budget" />
+                  <select value={brief.goal} onChange={(event) => onChange("goal", event.target.value)} className="input">{goals.map((goal) => <option key={goal}>{goal}</option>)}</select>
+                  <input value={brief.landingPageUrl} onChange={(event) => onChange("landingPageUrl", event.target.value)} className="input md:col-span-2" placeholder="Landing page URL, optional until launch" />
+                </div>
+              </details>
+              <button disabled title="Voice input is not enabled yet" className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border-strong)] text-[var(--accent)] opacity-50"><Mic className="h-4 w-4" /></button>
+              <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} title="Build campaign" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--accent)] text-white shadow-sm disabled:opacity-40">{isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -545,11 +523,11 @@ function PromptIntake({
 function Section({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-xl font-black text-[var(--color-text)]">{title}</h2>
-        <p className="mt-1 text-sm text-[var(--color-muted)]">{subtitle}</p>
+      <div className="mb-4">
+        <h2 className="text-[16px] font-semibold text-[var(--color-text)]">{title}</h2>
+        <p className="mt-1 text-[11px] text-[var(--color-muted)]">{subtitle}</p>
       </div>
-      <div className="space-y-5">{children}</div>
+      <div className="space-y-4">{children}</div>
     </div>
   )
 }
@@ -557,7 +535,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-bold text-[var(--color-text)]">{label}</span>
+      <span className="mb-1.5 block text-[11px] font-semibold text-[var(--color-text)]">{label}</span>
       {children}
     </label>
   )
@@ -574,12 +552,12 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
 
 function Rationale({ title, value }: { title: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
-      <div className="flex items-center gap-2 text-sm font-black text-[var(--color-text)]">
+    <div className="rounded-[9px] border border-[var(--color-border)] bg-[var(--color-soft)] p-3">
+      <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--color-text)]">
         <Sparkles className="h-4 w-4" />
         {title}
       </div>
-      <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{value || "Growzzy will explain the recommendation once the plan is generated."}</p>
+      <p className="mt-2 text-[11px] leading-5 text-[var(--color-muted)]">{value || "Growzzy will explain the recommendation once the plan is generated."}</p>
     </div>
   )
 }
@@ -730,46 +708,46 @@ function GooglePreview({ plan, group }: { plan: CampaignPlan; group?: AdGroup })
   const host = url.replace(/^https?:\/\//, "").split("/")[0] || "your-site.com"
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-soft)]">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Live preview</div>
-          <h3 className="mt-1 font-black text-[var(--color-text)]">Google Search ad</h3>
-        </div>
-        <Search className="h-5 w-5 text-[var(--color-muted)]" />
+    <div className="mx-auto max-w-[720px]">
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex gap-2"><span className="rounded-full bg-[var(--accent)] px-4 py-2 text-[11px] font-semibold text-white">Ad group 1</span><button disabled className="rounded-full border bg-white px-4 py-2 text-[11px] text-[var(--color-muted)]">+ Add more ad groups</button></div>
+        <span className="rounded-[8px] bg-[var(--accent)] px-4 py-2 text-[11px] font-semibold text-white">Ad combinations</span>
       </div>
-      <div className="rounded-2xl border border-[var(--color-border)] bg-white p-4">
-        <div className="mb-4 rounded-full border border-[var(--color-border)] px-4 py-3 text-sm text-[var(--color-muted)]">
+      <div className="mb-5 flex gap-6 border-b border-[var(--color-border)] text-[12px]"><span className="border-b-2 border-[var(--accent)] px-1 pb-2 font-semibold text-[var(--accent)]">Google Search</span><span className="px-1 pb-2 text-[var(--color-muted)]">Search partners</span></div>
+      <div className="mx-auto max-w-[580px] rounded-[16px] bg-[#DCEFE2] p-8 md:p-12">
+        <div className="rounded-[12px] border border-[var(--color-border)] bg-white p-5 shadow-sm">
+        <div className="mb-4 rounded-full border border-[var(--color-border)] px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
           {group?.keywords?.[0]?.text || plan.campaignName}
         </div>
-        <div className="text-xs text-[var(--color-muted)]">Sponsored</div>
-        <div className="mt-1 flex items-center gap-2 text-sm text-[var(--color-text)]">
+        <div className="text-[10px] text-[var(--color-muted)]">Sponsored</div>
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--color-text)]">
           {host}
           <ExternalLink className="h-3 w-3" />
         </div>
-        <div className="mt-2 text-xl font-semibold leading-7 text-[#1a0dab]">
+        <div className="mt-2 text-[18px] font-medium leading-6 text-[#1a0dab]">
           {headlines.length ? headlines.join(" | ") : plan.campaignName}
         </div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
+        <p className="mt-2 text-[11px] leading-5 text-[var(--color-muted)]">
           {descriptions[0] || "Your description will appear here as you edit the responsive search ad."}
         </p>
-        {descriptions[1] && <p className="mt-1 text-sm leading-6 text-[var(--color-muted)]">{descriptions[1]}</p>}
+        {descriptions[1] && <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">{descriptions[1]}</p>}
+        </div>
       </div>
-      <div className="mt-4 rounded-xl bg-[var(--color-soft)] p-4">
-        <div className="flex items-center justify-between text-sm font-bold">
+      <div className="mx-auto mt-4 max-w-[580px] rounded-[10px] bg-white p-4">
+        <div className="flex items-center justify-between text-[11px] font-semibold">
           <span>Budget</span>
           <span>${plan.dailyBudget}/day</span>
         </div>
-        <div className="mt-2 flex items-center justify-between text-sm font-bold">
+        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
           <span>Publish state</span>
           <span className="text-amber-700">Paused</span>
         </div>
-        <div className="mt-2 flex items-center justify-between text-sm font-bold">
+        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
           <span>Policy</span>
           <span>{plan.policyCheck?.status || "Not checked"}</span>
         </div>
       </div>
-      <button className="mt-4 flex w-full items-center justify-between rounded-xl border border-[var(--color-border)] px-4 py-3 text-left text-sm font-bold">
+      <button className="mx-auto mt-3 flex w-full max-w-[580px] items-center justify-between rounded-[9px] border border-[var(--color-border)] bg-white px-4 py-3 text-left text-[11px] font-semibold">
         Preview combinations
         <ChevronDown className="h-4 w-4" />
       </button>
