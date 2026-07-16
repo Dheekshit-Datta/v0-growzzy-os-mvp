@@ -1,14 +1,70 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { Zap, Bell, CheckSquare, Cpu } from "lucide-react"
+import { Zap, Bell, CheckSquare, Cpu, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type OTab = "recommendations" | "log" | "autopilot"
 
+type Suggestion = {
+  id: string
+  title?: string
+  summary?: string
+  description?: string
+  rationale?: string
+  severity?: string
+  priority?: string
+  campaignName?: string
+  applied?: boolean
+}
+
 export default function OptimizationPage() {
   const [activeTab, setActiveTab] = useState<OTab>("recommendations")
+  const [loading, setLoading] = useState(true)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/ai/recommendations", { cache: "no-store" })
+      if (res.ok) {
+        const json = await res.json()
+        setSuggestions((json?.suggestions ?? []).filter((s: Suggestion) => !s.applied))
+      }
+    } catch {
+      /* empty state covers */
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const act = async (id: string, action: "apply" | "dismiss") => {
+    setBusyId(id)
+    try {
+      const url = action === "apply" ? "/api/ai/recommendations/apply" : `/api/ai/recommendations`
+      await fetch(url, {
+        method: action === "apply" ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestionId: id, dismissed: action === "dismiss" }),
+      }).catch(() => {})
+      setSuggestions((prev) => prev.filter((s) => s.id !== id))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const sevPill = (s?: string) => {
+    const v = (s || "").toUpperCase()
+    if (v.includes("CRIT") || v.includes("HIGH")) return "bg-[#FBE7E5] text-[#D3564C]"
+    if (v.includes("MED")) return "bg-[#FBF0DA] text-[#B8892B]"
+    return "bg-[#E7EFFB] text-[#4B79C7]"
+  }
 
   return (
     <Shell title="AI Optimization">
@@ -40,15 +96,56 @@ export default function OptimizationPage() {
 
           <div className="p-5">
             {activeTab === "recommendations" && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-12 h-12 bg-[#F6F7F9] rounded-full flex items-center justify-center mb-4">
-                  <Zap size={20} className="text-[#D1D5DB]" />
+              loading ? (
+                <div className="flex items-center justify-center py-16 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
+              ) : suggestions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-12 h-12 bg-[#F6F7F9] rounded-full flex items-center justify-center mb-4">
+                    <Zap size={20} className="text-[#D1D5DB]" />
+                  </div>
+                  <p className="text-[14px] font-semibold text-[#374151]">No recommendations yet</p>
+                  <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-[300px]">
+                    Once your campaigns are live, AI will flag issues and opportunities here with plain-English suggestions.
+                  </p>
                 </div>
-                <p className="text-[14px] font-semibold text-[#374151]">No recommendations yet</p>
-                <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-[300px]">
-                  Once your campaigns are live, AI will flag issues and opportunities here with plain-English suggestions.
-                </p>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  {suggestions.map((s) => (
+                    <div key={s.id} className="rounded-[12px] border border-[#E9EBEF] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {(s.severity || s.priority) && (
+                              <span className={cn("inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold uppercase", sevPill(s.severity || s.priority))}>
+                                {s.severity || s.priority}
+                              </span>
+                            )}
+                            {s.campaignName && <span className="text-[11px] text-[#9CA3AF] truncate">{s.campaignName}</span>}
+                          </div>
+                          <p className="text-[13px] font-semibold text-[#111827]">{s.title || s.summary || "Optimization opportunity"}</p>
+                          <p className="text-[12px] text-[#6B7280] mt-1 leading-relaxed">{s.description || s.rationale || ""}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => act(s.id, "apply")}
+                            disabled={busyId === s.id}
+                            className="h-7 px-3 text-white text-[11.5px] font-semibold rounded-[7px] sku-btn-primary disabled:opacity-60"
+                          >
+                            {busyId === s.id ? "…" : "Apply"}
+                          </button>
+                          <button
+                            onClick={() => act(s.id, "dismiss")}
+                            disabled={busyId === s.id}
+                            className="h-7 px-3 text-[#6B7280] text-[11.5px] font-semibold rounded-[7px] sku-btn disabled:opacity-60"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {activeTab === "log" && (
