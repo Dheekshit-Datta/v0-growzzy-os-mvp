@@ -1,26 +1,29 @@
-import Link from "next/link"
+const links = [
+  { label: "Home", href: "/#home" },
+  { label: "Features", href: "/#features" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "Privacy", href: "/privacy" },
+  { label: "Terms", href: "/terms" },
+]
 
 export function Footer() {
   return (
-    <footer className="border-t border-border/70 px-6 py-8 md:px-12">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 md:flex-row">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-ink">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none">
-              <path d="M4 14c4-8 12-8 16 0" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-              <circle cx="12" cy="16" r="2" fill="white" />
-            </svg>
-          </span>
-          <span className="font-display text-lg text-ink">growzzyos</span>
-          <span className="ml-3 text-xs text-ink-soft">The AI workspace for your ads.</span>
+    <footer id="footer" className="bg-black border-t border-white/10 px-8 md:px-16 py-12">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center">
+          <img src="/growzzy-logo.png" alt="Growzzy OS logo" className="h-9 w-9 object-contain" loading="lazy" />
+          <span className="font-body text-sm text-white/50 ml-3">Growzzy OS</span>
         </div>
-        <div className="flex items-center gap-6 text-xs text-ink-soft">
-          <Link href="/privacy" className="hover:text-ink">Privacy</Link>
-          <Link href="/terms" className="hover:text-ink">Terms</Link>
-          <Link href="/compliance" className="hover:text-ink">Compliance</Link>
-          <Link href="/auth" className="hover:text-ink">Contact</Link>
-          <span>© {new Date().getFullYear()} GrowzzyOS</span>
-        </div>
+        <nav className="flex flex-wrap gap-6">
+          {links.map((l) => (
+            <a key={l.label} href={l.href} className="font-body text-xs text-white/40 hover:text-white/70 transition-colors">
+              {l.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+      <div className="mt-8 font-body text-xs text-white/25 text-center">
+        © 2026 Growzzy OS. Built for founders who move fast.
       </div>
     </footer>
   )

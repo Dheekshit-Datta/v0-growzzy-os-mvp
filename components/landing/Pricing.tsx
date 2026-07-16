@@ -1,112 +1,116 @@
-import { Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+"use client"
 
-const tiers = [
-  {
-    name: "Starter",
-    price: "$79",
-    blurb: "For solo operators and small teams getting started.",
-    features: ["1 ad account per platform", "AI suggestions (review mode)", "Unified reporting", "Email support"],
-    cta: "Start free trial",
-    highlight: false,
-  },
-  {
-    name: "Growth",
-    price: "$249",
-    blurb: "For growth teams running multi-platform campaigns at scale.",
-    features: [
-      "Unlimited ad accounts",
-      "AI Copilot autopilot mode",
-      "Cross-channel attribution",
-      "Audience overlap & dedupe",
-      "Priority support",
-    ],
-    cta: "Start free trial",
-    highlight: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    blurb: "For agencies and brands with multi-brand workspaces.",
-    features: ["SSO & SCIM", "Custom guardrails & approvals", "Dedicated CSM", "Audit & compliance exports"],
-    cta: "Book a demo",
-    highlight: false,
-  },
-];
+import { motion } from "framer-motion"
+
+const starter = [
+  "2 active campaigns",
+  "Google Ads + Meta",
+  "AI creative generation",
+  "Basic performance dashboard",
+  "1 ad account per platform",
+]
+
+const growth = [
+  "Unlimited campaigns",
+  "Google Ads + Meta",
+  "AI creative studio (all formats)",
+  "Optimization autopilot",
+  "Advanced analytics",
+  "Priority support",
+  "Multiple ad accounts",
+]
+
+const anim = {
+  initial: { opacity: 0, y: 30 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.7, ease: "easeOut" as const },
+}
+
+function FeatureList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-3">
+      {items.map((f) => (
+        <li key={f} className="font-body text-sm text-white/70 font-light flex gap-3">
+          <span className="text-white">✦</span>
+          <span>{f}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export function Pricing() {
   return (
-    <section id="pricing" className="border-t border-border/70 px-6 py-20 md:px-12">
-      <div className="mx-auto max-w-5xl text-center">
-        <p className="text-xs uppercase tracking-[0.25em] text-ink-soft">Pricing</p>
-        <h2 className="mt-4 font-display text-4xl leading-[1.05] text-ink md:text-5xl">
-          Simple plans that scale with you.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-[15px] text-ink-soft">
-          14-day free trial on every plan. No credit card required.
-        </p>
-      </div>
+    <section id="pricing" className="bg-black px-8 md:px-16 lg:px-20 py-32">
+      <div className="max-w-4xl mx-auto text-center">
+        <motion.div {...anim} className="text-sm font-body text-white/60 tracking-widest uppercase mb-6">
+          // Pricing
+        </motion.div>
+        <motion.h2
+          {...anim}
+          transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
+          className="font-heading italic text-white text-6xl md:text-7xl tracking-[-3px] leading-[0.9] mb-4"
+        >
+          Simple.
+          <br />
+          No surprises.
+        </motion.h2>
+        <motion.p
+          {...anim}
+          transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+          className="font-body text-sm text-white/50 font-light mb-16"
+        >
+          Start free. Upgrade when you're ready. Cancel any time.
+        </motion.p>
 
-      <div className="mx-auto mt-12 grid max-w-6xl gap-5 md:grid-cols-3">
-        {tiers.map((t) => (
-          <div
-            key={t.name}
-            className={`flex flex-col rounded-2xl border p-7 ${
-              t.highlight
-                ? "border-ink bg-ink text-primary-foreground shadow-[var(--shadow-card)]"
-                : "border-border bg-surface text-ink"
-            }`}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.25 }}
+            className="liquid-glass rounded-[1.25rem] p-8"
           >
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-2xl">{t.name}</h3>
-              {t.highlight && (
-                <span className="rounded-full bg-primary-foreground/15 px-2.5 py-0.5 text-[11px]">
-                  Most popular
-                </span>
-              )}
+            <div className="font-body text-xs text-white/50 uppercase tracking-widest font-medium">
+              Starter
             </div>
-            <div className="mt-4 flex items-baseline gap-1">
-              <span className="font-display text-5xl">{t.price}</span>
-              {t.price !== "Custom" && (
-                <span className={t.highlight ? "text-primary-foreground/70" : "text-ink-soft"}>
-                  /mo
-                </span>
-              )}
+            <div className="mt-4 flex items-baseline gap-2">
+              <div className="font-heading italic text-white text-6xl tracking-[-2px]">$0</div>
+              <div className="font-body text-sm text-white/40">forever</div>
             </div>
-            <p
-              className={`mt-2 text-sm ${
-                t.highlight ? "text-primary-foreground/80" : "text-ink-soft"
-              }`}
-            >
-              {t.blurb}
-            </p>
+            <div className="border-t border-white/10 my-6" />
+            <FeatureList items={starter} />
+            <a href="/auth" className="liquid-glass rounded-full block w-full text-center py-3 text-sm text-white font-medium mt-8">
+              Get started free
+            </a>
+          </motion.div>
 
-            <ul className="mt-6 flex-1 space-y-2.5 text-sm">
-              {t.features.map((f) => (
-                <li key={f} className="flex items-start gap-2">
-                  <Check
-                    className={`mt-0.5 h-4 w-4 ${
-                      t.highlight ? "text-primary-foreground" : "text-ink"
-                    }`}
-                  />
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Button
-              className={`mt-7 rounded-full ${
-                t.highlight
-                  ? "bg-primary-foreground text-ink hover:bg-primary-foreground/90"
-                  : "bg-ink text-primary-foreground hover:bg-ink/90"
-              }`}
-              asChild
-            >
-              <a href="#">{t.cta}</a>
-            </Button>
-          </div>
-        ))}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.35 }}
+            className="liquid-glass-strong rounded-[1.25rem] p-8 relative"
+          >
+            <span className="liquid-glass rounded-full absolute top-4 right-4 px-3 py-1 text-[11px] text-white/90 font-body">
+              Most popular
+            </span>
+            <div className="font-body text-xs text-white/50 uppercase tracking-widest font-medium">
+              Growth
+            </div>
+            <div className="mt-4 flex items-baseline gap-2">
+              <div className="font-heading italic text-white text-6xl tracking-[-2px]">$49</div>
+              <div className="font-body text-sm text-white/40">/month</div>
+            </div>
+            <div className="border-t border-white/10 my-6" />
+            <FeatureList items={growth} />
+            <a href="/auth" className="rounded-full block w-full text-center py-3 text-sm font-medium bg-white text-black mt-8">
+              Start 14-day free trial
+            </a>
+          </motion.div>
+        </div>
       </div>
     </section>
-  );
+  )
 }

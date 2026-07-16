@@ -1,0 +1,248 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import Image from "next/image"
+import { usePathname } from "next/navigation"
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Megaphone,
+  FolderKanban,
+  Sparkles,
+  History,
+  LayoutDashboard,
+  MonitorPlay,
+  BarChart3,
+  Zap,
+  Palette,
+  Settings,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ElementType
+}
+
+const CREATE_NAV: NavItem[] = [
+  { href: "/campaigns/new", label: "New Campaign", icon: Megaphone },
+  { href: "/projects",      label: "Projects",      icon: FolderKanban },
+  { href: "/brand",         label: "My Brand",       icon: Sparkles },
+  { href: "/prompts",       label: "Recent Prompts", icon: History },
+]
+
+const MANAGE_NAV: NavItem[] = [
+  { href: "/dashboard",    label: "Dashboard",      icon: LayoutDashboard },
+  { href: "/ads",          label: "Ads Manager",    icon: MonitorPlay },
+  { href: "/analytics",    label: "Analytics",      icon: BarChart3 },
+  { href: "/optimization", label: "AI Optimization",icon: Zap },
+  { href: "/studio",       label: "Ad Studio",      icon: Palette },
+]
+
+const SETTINGS_ITEM: NavItem = { href: "/settings", label: "Settings", icon: Settings }
+
+interface SidebarProps {
+  collapsed?: boolean
+  onToggle?: () => void
+}
+
+export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+  const pathname = usePathname()
+  const [promptsExpanded, setPromptsExpanded] = useState(true)
+  const [progress] = useState(0)
+
+  const isActive = (href: string) => {
+    if (href === "/campaigns/new") return pathname === "/campaigns/new" || pathname === "/"
+    return pathname.startsWith(href)
+  }
+
+  const navLink = (item: NavItem) => {
+    const active = isActive(item.href)
+    const Icon = item.icon
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={cn(
+          "flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-[13px] transition-colors",
+          active
+            ? "bg-white text-[#111827] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.05)]"
+            : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+        )}
+      >
+        <Icon
+          size={15}
+          strokeWidth={active ? 2.2 : 1.8}
+          className={cn("shrink-0", active ? "text-[#1F57F5]" : "text-[#6B7280]")}
+        />
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </Link>
+    )
+  }
+
+  return (
+    <aside
+      className={cn(
+        "sku-sidebar flex flex-col h-screen border-r border-[#DDE1E7] transition-all duration-200 shrink-0",
+        collapsed ? "w-[52px]" : "w-[224px]"
+      )}
+    >
+      {/* Logo header */}
+      <div className="flex items-center justify-between px-3.5 py-3 border-b border-[#DDE1E7]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Image
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/output-onlinepngtools-removebg-preview-95GfoqyAofAHyCJ7WBGJR0U3Kb9z35.png"
+            alt="Growzzy OS"
+            width={28}
+            height={28}
+            className="shrink-0"
+            unoptimized
+          />
+          {!collapsed && (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-semibold text-[14px] text-[#111827] tracking-tight leading-none truncate">
+                Growzzy OS
+              </span>
+              <span
+                className="text-[9px] font-bold text-[#1F57F5] px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none shrink-0"
+                style={{ background: "#EAF0FE" }}
+              >
+                BETA
+              </span>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onToggle}
+          className="w-6 h-6 flex items-center justify-center rounded-[6px] text-[#9CA3AF] hover:text-[#374151] hover:bg-black/5 transition-colors shrink-0"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+
+        {/* CREATE group */}
+        {!collapsed && (
+          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-[0.1em] px-2 pt-1 pb-1.5 select-none">
+            Create
+          </p>
+        )}
+
+        {CREATE_NAV.map((item) => {
+          if (item.href === "/prompts") {
+            const active = isActive(item.href)
+            const Icon = item.icon
+            return (
+              <div key={item.href}>
+                <div className="flex items-center gap-0.5">
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex-1 flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-[13px] transition-colors",
+                      active
+                        ? "bg-white text-[#111827] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.05)]"
+                        : "text-[#4B5563] hover:bg-white/60 hover:text-[#111827]"
+                    )}
+                  >
+                    <Icon
+                      size={15}
+                      strokeWidth={active ? 2.2 : 1.8}
+                      className={cn("shrink-0", active ? "text-[#1F57F5]" : "text-[#6B7280]")}
+                    />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                  {!collapsed && (
+                    <>
+                      <button
+                        onClick={() => setPromptsExpanded(!promptsExpanded)}
+                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#374151] transition-colors"
+                        aria-label={promptsExpanded ? "Collapse prompts" : "Expand prompts"}
+                      >
+                        {promptsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </button>
+                      <button
+                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#1F57F5] transition-colors"
+                        aria-label="New prompt"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </>
+                  )}
+                </div>
+                {!collapsed && promptsExpanded && (
+                  <div className="ml-7 mt-0.5">
+                    <p className="text-[11px] text-[#9CA3AF] px-2 py-1.5 italic">No saved prompts yet</p>
+                  </div>
+                )}
+              </div>
+            )
+          }
+          return navLink(item)
+        })}
+
+        {/* MANAGE group */}
+        {!collapsed && (
+          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-[0.1em] px-2 pt-3 pb-1.5 select-none">
+            Manage
+          </p>
+        )}
+        {collapsed && <div className="my-2 mx-2 border-t border-[#DDE1E7]" />}
+
+        {MANAGE_NAV.map((item) => navLink(item))}
+      </nav>
+
+      {/* Bottom */}
+      <div className="border-t border-[#DDE1E7] px-2 py-2.5 space-y-1">
+
+        {/* Getting Started progress */}
+        {!collapsed && (
+          <div className="px-2 pt-1 pb-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11.5px] font-semibold text-[#374151]">Getting Started</span>
+              <span className="text-[11px] font-bold text-[#9CA3AF] tabular">{progress}%</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden bg-[#E5E7EB]">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${progress}%`, background: "#1F57F5" }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Settings */}
+        {navLink(SETTINGS_ITEM)}
+
+        {/* User card */}
+        <button
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[9px] hover:bg-white/60 cursor-pointer transition-colors"
+          aria-label="Account menu"
+        >
+          <span
+            className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+            style={{ background: "#1F57F5" }}
+          >
+            ?
+          </span>
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-[12px] font-semibold text-[#111827] truncate leading-tight">Your Account</p>
+                <p className="text-[10.5px] text-[#9CA3AF] truncate leading-tight">My Workspace</p>
+              </div>
+              <ChevronDown size={12} className="text-[#9CA3AF] shrink-0" />
+            </>
+          )}
+        </button>
+      </div>
+    </aside>
+  )
+}
