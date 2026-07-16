@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
                 userId,
                 workspaceId,
                 hasAdsAccess: true,
-                status: "ACTIVE",
+                status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
                 ...(platformName ? { platform: platformName as any } : {}),
             },
             select: { id: true, selectedAdAccountId: true, accountId: true },
