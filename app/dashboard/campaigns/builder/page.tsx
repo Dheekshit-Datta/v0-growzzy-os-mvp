@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Shell } from '@/components/shell'
+import { Shell } from '@/components/dashboard-v2/shell'
 import {
   ArrowLeft, Check, X, Plus, Trash2, AlertCircle, CheckCircle2,
   Eye, EyeOff, ChevronRight, Sparkles,

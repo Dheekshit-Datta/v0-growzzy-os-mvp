@@ -1,6 +1,6 @@
 "use client"
 
-import { Shell } from "@/components/shell"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { Upload, Check, ChevronDown } from "lucide-react"
 
 function FormField({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {

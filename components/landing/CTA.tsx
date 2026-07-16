@@ -1,44 +1,39 @@
-"use client"
+'use client'
 
-import { motion } from "framer-motion"
-import { ArrowUpRight } from "./Icons"
+import { motion } from 'framer-motion'
+import { ArrowUpRight } from 'lucide-react'
 
-export function CTA() {
+const easeOut = [0.16, 1, 0.3, 1] as const
+
+export function FinalCtaSection() {
   return (
-    <section className="bg-black px-8 md:px-16 lg:px-20 py-40 text-center">
-      <motion.h2
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: "easeOut" }}
-        className="font-heading italic text-white text-6xl md:text-8xl lg:text-[7rem] tracking-[-4px] leading-[0.85] max-w-4xl mx-auto"
-      >
-        Your first campaign
-        <br />
-        could be live
-        <br />
-        tonight.
-      </motion.h2>
-      <motion.p
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
-        className="font-body text-base text-white/50 font-light mt-8 max-w-xl mx-auto leading-relaxed"
-      >
-        No agency. No guesswork. No wasted budget. Just describe your product and let Growzzy do the rest.
-      </motion.p>
+    <section className="bg-white px-8 py-40 text-center">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: "easeOut", delay: 0.3 }}
-        className="mt-10 flex flex-col items-center"
+        transition={{ duration: 0.7, ease: easeOut }}
+        className="flex flex-col items-center"
       >
-        <a href="/auth" className="liquid-glass-strong rounded-full px-10 py-4 text-base font-medium text-white inline-flex items-center gap-2">
-          Start for free <ArrowUpRight className="h-4 w-4" />
+        <h2 className="mx-auto max-w-4xl font-heading text-6xl leading-[0.85] tracking-[-4px] text-neutral-900 md:text-8xl lg:text-[7rem]">
+          Your first campaign
+          <br />
+          could be live
+          <br />
+          tonight.
+        </h2>
+        <p className="mx-auto mt-8 max-w-xl text-base font-light leading-relaxed text-neutral-500">
+          No agency. No guesswork. No wasted budget. Just describe your product and let Growzzy
+          do the rest.
+        </p>
+        <a
+          href="/auth"
+          className="mt-10 inline-flex items-center gap-2 rounded-full bg-neutral-900 px-10 py-4 text-base font-medium text-white transition-colors hover:bg-neutral-800"
+        >
+          Start for free
+          <ArrowUpRight className="h-5 w-5" />
         </a>
-        <p className="font-body text-xs text-white/30 font-light mt-4">
+        <p className="mt-4 font-body text-xs font-light text-neutral-400">
           Free forever · No credit card · Cancel anytime
         </p>
       </motion.div>

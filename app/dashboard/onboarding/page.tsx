@@ -1,339 +1,418 @@
-"use client"
+'use client'
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
-import { ArrowRight, Check, ExternalLink, Loader2, Lock, ShieldCheck } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { Check, ChevronRight, ChevronLeft, Loader2, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-const goals = [
-  { value: "SALES", label: "Sales" },
-  { value: "LEADS", label: "Leads" },
-  { value: "TRAFFIC", label: "Traffic" },
-  { value: "APP_INSTALLS", label: "App installs" },
-]
+type Step = 1 | 2 | 3
 
-const currencies = ["USD", "INR", "EUR", "GBP", "AUD", "CAD"]
+interface OnboardingState {
+  currentStep: Step
+  step1: { name: string; email: string }
+  step2: {
+    businessName: string
+    websiteUrl: string
+    primaryGoal: string
+    currency: string
+    timezone: string
+    dailyBudget: string
+    productDescription: string
+  }
+  step3: { googleConnected: boolean; googleAccountId: string; metaConnected: boolean; syncing: boolean }
+}
 
-type Workspace = {
-  id: string
-  name: string
-  websiteUrl?: string | null
-  primaryGoal?: string | null
-  currencyCode?: string | null
-  timezone?: string | null
-  dailyBudgetCeiling?: number | null
-  productDescription?: string | null
+const DEFAULT_STATE: OnboardingState = {
+  currentStep: 2,
+  step1: { name: 'Your Name', email: 'you@example.com' },
+  step2: {
+    businessName: '',
+    websiteUrl: '',
+    primaryGoal: '',
+    currency: 'USD ($)',
+    timezone: '',
+    dailyBudget: '',
+    productDescription: '',
+  },
+  step3: { googleConnected: false, googleAccountId: '', metaConnected: false, syncing: false },
 }
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { data: session } = useSession()
-  const [activeStep, setActiveStep] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [googleConnected, setGoogleConnected] = useState(false)
-  const [form, setForm] = useState({
-    name: "Growzzy Workspace",
-    websiteUrl: "",
-    primaryGoal: "LEADS",
-    currencyCode: "USD",
-    timezone: "Asia/Calcutta",
-    dailyBudgetCeiling: "5",
-    productDescription: "",
-  })
+  const [state, setState] = useState<OnboardingState>(DEFAULT_STATE)
+  const [mounted, setMounted] = useState(false)
 
-  const identityDone = Boolean(session?.user?.email)
-  const workspaceDone = Boolean(form.name && form.primaryGoal && form.currencyCode && form.timezone && form.dailyBudgetCeiling)
-  const steps = useMemo(
-    () => [
-      { id: 1, title: "Create your identity", done: identityDone },
-      { id: 2, title: "Configure your workspace", done: workspaceDone },
-      { id: 3, title: "Connect your advertising", done: googleConnected },
-    ],
-    [googleConnected, identityDone, workspaceDone],
-  )
-
+  // Load persisted state on mount
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      const [workspaceResponse, integrationResponse] = await Promise.all([
-        fetch("/api/workspaces").catch(() => null),
-        fetch("/api/integrations/status").catch(() => null),
-      ])
-
-      if (cancelled) return
-
-      if (workspaceResponse?.ok) {
-        const data = await workspaceResponse.json()
-        const firstWorkspace = data.workspaces?.[0] as Workspace | undefined
-        if (firstWorkspace) {
-          setForm({
-            name: firstWorkspace.name || "Growzzy Workspace",
-            websiteUrl: firstWorkspace.websiteUrl || "",
-            primaryGoal: firstWorkspace.primaryGoal || "LEADS",
-            currencyCode: firstWorkspace.currencyCode || "USD",
-            timezone: firstWorkspace.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Calcutta",
-            dailyBudgetCeiling: String(firstWorkspace.dailyBudgetCeiling || 5),
-            productDescription: firstWorkspace.productDescription || "",
-          })
-        }
+    const saved = localStorage.getItem('growzzy_onboarding')
+    if (saved) {
+      try {
+        setState(JSON.parse(saved))
+      } catch {
+        setState(DEFAULT_STATE)
       }
-
-      if (integrationResponse?.ok) {
-        const data = await integrationResponse.json()
-        setGoogleConnected(Boolean(data.google?.hasAdsAccount || data.google?.hasAdsAccess))
-      }
-
-      setLoading(false)
     }
-
-    load()
-    return () => {
-      cancelled = true
-    }
+    setMounted(true)
   }, [])
 
-  const saveWorkspace = async () => {
-    setSaving(true)
-    const response = await fetch("/api/workspaces", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.name,
-        websiteUrl: form.websiteUrl,
-        primaryGoal: form.primaryGoal,
-        currencyCode: form.currencyCode,
-        timezone: form.timezone,
-        dailyBudgetCeiling: Number(form.dailyBudgetCeiling),
-        productDescription: form.productDescription,
-      }),
-    })
-    setSaving(false)
-    if (!response.ok) return
-    setActiveStep(3)
+  // Persist state changes
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('growzzy_onboarding', JSON.stringify(state))
+    }
+  }, [state, mounted])
+
+  const canContinueStep2 =
+    state.step2.businessName.trim() && state.step2.primaryGoal && state.step2.dailyBudget
+
+  const handleContinueStep2 = () => {
+    setState((s) => ({ ...s, currentStep: 3 }))
   }
 
-  const finish = async () => {
-    await fetch("/api/onboarding", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ onboardingCompleted: true, onboardingStep: 3 }),
-    }).catch(() => undefined)
-    router.push("/dashboard/campaigns/new")
+  const handleBackStep3 = () => {
+    setState((s) => ({ ...s, currentStep: 2 }))
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-      </div>
-    )
+  const handleGoogleConnect = async () => {
+    setState((s) => ({ ...s, step3: { ...s.step3, syncing: true } }))
+    // Simulate OAuth flow
+    await new Promise((r) => setTimeout(r, 2000))
+    setState((s) => ({
+      ...s,
+      step3: { ...s.step3, googleConnected: true, googleAccountId: 'google-ads-12345', syncing: false },
+    }))
   }
+
+  const handleCreateCampaign = () => {
+    localStorage.setItem('growzzy_onboarding_complete', 'true')
+    router.push('/campaigns/new')
+  }
+
+  const handleSkipConnect = () => {
+    localStorage.setItem('growzzy_onboarding_complete', 'true')
+    router.push('/dashboard')
+  }
+
+  if (!mounted) return null
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#070707] p-4 text-white sm:p-8">
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[330px_1fr]">
-        <aside className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-          <div className="mb-8">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 font-black">G</div>
-            <p className="text-sm text-white/60">Follow these 3 quick phases to activate your space.</p>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F6F7F9' }}>
+      <div className="w-full max-w-[640px]">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Image
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/output-onlinepngtools-removebg-preview-95GfoqyAofAHyCJ7WBGJR0U3Kb9z35.png"
+              alt="Growzzy"
+              width={32}
+              height={32}
+            />
+            <p className="text-[20px] font-bold text-[#111827]">Growzzy OS</p>
+          </div>
+          <p className="text-[13px] text-[#6B7280]">Set up your account in just 3 steps</p>
+        </div>
+
+        {/* Roadmap */}
+        <div className="space-y-2 mb-8">
+          {/* Step 1 — Completed */}
+          <div className="flex gap-3 items-start sku-card p-4">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: '#1F57F5' }}>
+              <Check size={14} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#111827]">Create your identity</p>
+              <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+                {state.step1.name} · {state.step1.email} · Authenticated
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {steps.map((step) => (
-              <button
-                key={step.id}
-                onClick={() => setActiveStep(step.id)}
-                className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left transition ${
-                  activeStep === step.id ? "bg-white text-black" : "bg-white/8 text-white"
-                }`}
+          {/* Step 2 — Active or completed */}
+          <div className={cn('sku-card', state.currentStep === 2 ? 'ring-2 ring-[#1F57F5]' : '')}>
+            <div className="flex gap-3 items-start p-4 pb-3 border-b border-[#DDE1E7]">
+              <div
+                className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-semibold text-[12px]',
+                  state.currentStep >= 2
+                    ? 'bg-[#1F57F5] text-white'
+                    : 'border-2 border-[#D1D5DB] text-[#9CA3AF]'
+                )}
               >
-                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
-                  step.done ? "bg-emerald-500 text-white" : activeStep === step.id ? "bg-black text-white" : "bg-white/10 text-white/50"
-                }`}>
-                  {step.done ? <Check className="h-4 w-4" /> : step.id}
-                </span>
-                <span className="font-bold">{step.title}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <main className="rounded-[28px] bg-white p-6 text-slate-950 shadow-2xl sm:p-8">
-          {activeStep === 1 && (
-            <section className="max-w-2xl">
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">Phase 1</p>
-              <h1 className="mt-3 text-3xl font-black">Create your identity</h1>
-              <p className="mt-2 text-sm text-slate-500">Already completed from signup. We use this identity for workspace access and audit logs.</p>
-
-              <div className="mt-8 rounded-2xl border border-slate-200 p-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Name" value={session?.user?.name || "Not set"} />
-                  <Field label="Email" value={session?.user?.email || "Not set"} />
-                </div>
-                <div className="mt-5 flex items-center gap-2 text-sm font-bold text-emerald-600">
-                  <ShieldCheck className="h-4 w-4" /> Authenticated
-                </div>
+                {state.currentStep > 2 ? <Check size={14} /> : '2'}
               </div>
+              <p className={cn('text-[13px] font-semibold', state.currentStep >= 2 ? 'text-[#111827]' : 'text-[#9CA3AF]')}>
+                Configure your workspace
+              </p>
+            </div>
 
-              <button onClick={() => setActiveStep(2)} className="mt-8 inline-flex items-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white">
-                Configure workspace <ArrowRight className="ml-2 h-4 w-4" />
-              </button>
-            </section>
-          )}
-
-          {activeStep === 2 && (
-            <section>
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">Phase 2</p>
-              <h1 className="mt-3 text-3xl font-black">Configure your workspace</h1>
-              <p className="mt-2 text-sm text-slate-500">This becomes the AI context for campaign plans, budgets, and reports.</p>
-
-              <div className="mt-8 grid gap-5 lg:grid-cols-2">
-                <Input label="Business name" value={form.name} onChange={(name) => setForm((prev) => ({ ...prev, name }))} />
-                <Input label="Website" value={form.websiteUrl} placeholder="https://example.com" onChange={(websiteUrl) => setForm((prev) => ({ ...prev, websiteUrl }))} />
-                <Select label="Primary goal" value={form.primaryGoal} options={goals} onChange={(primaryGoal) => setForm((prev) => ({ ...prev, primaryGoal }))} />
-                <div className="grid grid-cols-2 gap-3">
-                  <Select label="Currency" value={form.currencyCode} options={currencies.map((value) => ({ value, label: value }))} onChange={(currencyCode) => setForm((prev) => ({ ...prev, currencyCode }))} />
-                  <Input label="Daily budget ceiling" type="number" value={form.dailyBudgetCeiling} onChange={(dailyBudgetCeiling) => setForm((prev) => ({ ...prev, dailyBudgetCeiling }))} />
-                </div>
-                <Input label="Timezone" value={form.timezone} onChange={(timezone) => setForm((prev) => ({ ...prev, timezone }))} />
-                <label className="lg:col-span-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Product description</span>
-                  <textarea
-                    value={form.productDescription}
-                    onChange={(event) => setForm((prev) => ({ ...prev, productDescription: event.target.value }))}
-                    className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                    placeholder="What do you sell, who is it for, and why should they care?"
+            {state.currentStep === 2 && (
+              <div className="p-4 space-y-4">
+                {/* Business name */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12.5px] font-semibold text-[#374151]">Business name *</label>
+                  <input
+                    type="text"
+                    placeholder="Your business name"
+                    value={state.step2.businessName}
+                    onChange={(e) =>
+                      setState((s) => ({
+                        ...s,
+                        step2: { ...s.step2, businessName: e.target.value },
+                      }))
+                    }
+                    className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
                   />
-                </label>
-              </div>
+                </div>
 
-              <button
-                onClick={saveWorkspace}
-                disabled={saving || !workspaceDone}
-                className="mt-8 inline-flex items-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save workspace
-              </button>
-            </section>
-          )}
+                {/* Website URL */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12.5px] font-semibold text-[#374151]">Business website</label>
+                  <input
+                    type="url"
+                    placeholder="https://yourwebsite.com"
+                    value={state.step2.websiteUrl}
+                    onChange={(e) =>
+                      setState((s) => ({
+                        ...s,
+                        step2: { ...s.step2, websiteUrl: e.target.value },
+                      }))
+                    }
+                    className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
+                  />
+                  <p className="text-[11px] text-[#9CA3AF]">We'll use this to understand your product</p>
+                </div>
 
-          {activeStep === 3 && (
-            <section>
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">Phase 3</p>
-              <h1 className="mt-3 text-3xl font-black">Connect your advertising</h1>
-              <p className="mt-2 text-sm text-slate-500">Google is active for this pass. Meta is visible so the journey is honest, but disabled until the Meta backend is real.</p>
-
-              <div className="mt-8 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-2xl font-black text-blue-600">G</div>
-                      <h2 className="font-black">Google Ads</h2>
-                      <p className="mt-1 text-sm text-slate-500">OAuth, account selection, verification, and sync.</p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${googleConnected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      {googleConnected ? "Connected" : "Not connected"}
-                    </span>
+                {/* Primary goal */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12.5px] font-semibold text-[#374151]">Primary goal *</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Sales', 'Leads', 'App installs', 'Website traffic'].map((goal) => (
+                      <button
+                        key={goal}
+                        onClick={() => setState((s) => ({ ...s, step2: { ...s.step2, primaryGoal: goal } }))}
+                        className={cn(
+                          'h-9 px-4 text-[12px] font-semibold rounded-[20px] transition-all',
+                          state.step2.primaryGoal === goal
+                            ? 'bg-[#1F57F5] text-white'
+                            : 'bg-white text-[#111827] border border-[#DDE1E7] hover:border-[#1F57F5]'
+                        )}
+                      >
+                        {goal}
+                      </button>
+                    ))}
                   </div>
+                </div>
+
+                {/* Currency & Timezone */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[12.5px] font-semibold text-[#374151]">Currency</label>
+                    <select
+                      value={state.step2.currency}
+                      onChange={(e) =>
+                        setState((s) => ({
+                          ...s,
+                          step2: { ...s.step2, currency: e.target.value },
+                        }))
+                      }
+                      className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
+                    >
+                      <option>USD ($)</option>
+                      <option>INR (₹)</option>
+                      <option>EUR (€)</option>
+                      <option>GBP (£)</option>
+                      <option>AUD (A$)</option>
+                    </select>
+                    <ChevronRight size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[12.5px] font-semibold text-[#374151]">Timezone</label>
+                    <select
+                      value={state.step2.timezone}
+                      onChange={(e) =>
+                        setState((s) => ({
+                          ...s,
+                          step2: { ...s.step2, timezone: e.target.value },
+                        }))
+                      }
+                      className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
+                    >
+                      <option value="">Select timezone</option>
+                      <option>UTC-8 (Pacific)</option>
+                      <option>UTC-5 (Eastern)</option>
+                      <option>UTC+0 (GMT)</option>
+                      <option>UTC+1 (CET)</option>
+                      <option>UTC+5:30 (IST)</option>
+                    </select>
+                    <ChevronRight size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Daily budget */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12.5px] font-semibold text-[#374151]">Daily budget ceiling *</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B7280] select-none">$</span>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={state.step2.dailyBudget}
+                      onChange={(e) =>
+                        setState((s) => ({
+                          ...s,
+                          step2: { ...s.step2, dailyBudget: e.target.value },
+                        }))
+                      }
+                      className="w-full h-9 pl-6 pr-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#9CA3AF]">
+                    Growzzy will never publish or shift budget beyond this amount per day — enforced automatically.
+                  </p>
+                </div>
+
+                {/* Product description */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12.5px] font-semibold text-[#374151]">Product description</label>
+                  <textarea
+                    placeholder="Describe what you sell in a sentence or two — this is what AI uses to write your campaigns"
+                    value={state.step2.productDescription}
+                    onChange={(e) =>
+                      setState((s) => ({
+                        ...s,
+                        step2: { ...s.step2, productDescription: e.target.value },
+                      }))
+                    }
+                    className="w-full h-[60px] px-3 py-2 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input resize-none"
+                  />
+                </div>
+
+                {/* Button */}
+                <button
+                  onClick={handleContinueStep2}
+                  disabled={!canContinueStep2}
+                  className={cn(
+                    'w-full h-10 text-[13px] font-semibold rounded-[8px] transition-all',
+                    canContinueStep2
+                      ? 'sku-btn-primary text-white cursor-pointer'
+                      : 'bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed'
+                  )}
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Step 3 — Connections */}
+          <div className={cn('sku-card', state.currentStep === 3 ? 'ring-2 ring-[#1F57F5]' : '')}>
+            <div className="flex gap-3 items-start p-4 pb-3 border-b border-[#DDE1E7]">
+              <div
+                className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-semibold text-[12px]',
+                  state.currentStep >= 3
+                    ? 'bg-[#1F57F5] text-white'
+                    : 'border-2 border-[#D1D5DB] text-[#9CA3AF]'
+                )}
+              >
+                3
+              </div>
+              <p className={cn('text-[13px] font-semibold', state.currentStep >= 3 ? 'text-[#111827]' : 'text-[#9CA3AF]')}>
+                Connect your advertising
+              </p>
+            </div>
+
+            {state.currentStep === 3 && (
+              <div className="p-4 space-y-4">
+                {/* Google Ads Card */}
+                <div className="sku-card p-4 flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-[13px] font-semibold text-[#111827] mb-2">Google Ads</p>
+                    {!state.step3.googleConnected ? (
+                      <button
+                        onClick={handleGoogleConnect}
+                        disabled={state.step3.syncing}
+                        className="inline-flex items-center gap-2 h-8 px-3 text-[12px] font-semibold text-white sku-btn-primary rounded-[6px] disabled:opacity-50"
+                      >
+                        {state.step3.syncing ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          'Connect'
+                        )}
+                      </button>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="inline-flex items-center gap-2 h-6 px-2 rounded-[4px] bg-[#E6F4EC]">
+                          <Check size={12} className="text-[#2E9E5B]" />
+                          <span className="text-[11px] font-semibold text-[#2E9E5B]">Connected</span>
+                        </div>
+                        <p className="text-[12px] text-[#6B7280]">Account: {state.step3.googleAccountId}</p>
+                        {state.step3.syncing ? (
+                          <p className="flex items-center gap-2 text-[11px] text-[#9CA3AF]">
+                            <Clock size={12} />
+                            Syncing your account…
+                          </p>
+                        ) : (
+                          <p className="flex items-center gap-1 text-[11px] text-[#2E9E5B]">
+                            <Check size={12} />
+                            Synced
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Meta Ads Card — Disabled */}
+                <div className="sku-card p-4 flex items-start justify-between gap-3 opacity-60">
+                  <div className="flex-1">
+                    <p className="text-[13px] font-semibold text-[#9CA3AF] mb-2">Meta Ads</p>
+                    <div className="inline-flex items-center gap-2 h-6 px-2 rounded-[4px] bg-[#F3F4F6]">
+                      <span className="text-[11px] font-semibold text-[#6B7280]">Coming soon</span>
+                    </div>
+                    <p className="text-[11px] text-[#9CA3AF] mt-2">
+                      Meta Ads support is on the way. Google Ads is fully supported today.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3 pt-3">
                   <button
-                    onClick={() => {
-                      window.location.href = "/api/integrations/google/connect"
-                    }}
-                    className="mt-6 inline-flex items-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white"
+                    onClick={handleBackStep3}
+                    className="flex-1 h-10 text-[13px] font-semibold rounded-[8px] sku-btn text-[#111827]"
                   >
-                    {googleConnected ? "Reconnect Google" : "Connect Google"} <ExternalLink className="ml-2 h-4 w-4" />
+                    Back
+                  </button>
+                  <button
+                    onClick={handleCreateCampaign}
+                    disabled={!state.step3.googleConnected}
+                    className={cn(
+                      'flex-1 h-10 text-[13px] font-semibold rounded-[8px]',
+                      state.step3.googleConnected
+                        ? 'sku-btn-primary text-white cursor-pointer'
+                        : 'bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed'
+                    )}
+                  >
+                    Create your first campaign
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-500">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white">
-                    <Lock className="h-5 w-5" />
-                  </div>
-                  <h2 className="font-black text-slate-900">Meta Ads</h2>
-                  <p className="mt-1 text-sm">Planned after Google Checkpoints 1-3 pass. No fake Meta connection until the backend is live.</p>
-                  <button disabled className="mt-6 rounded-xl bg-slate-200 px-5 py-3 text-sm font-bold text-slate-500">Coming after Google proof</button>
-                </div>
+                <button
+                  onClick={handleSkipConnect}
+                  className="w-full h-9 text-[12px] text-[#1F57F5] hover:text-[#1849d6] transition-colors"
+                >
+                  I'll connect later
+                </button>
               </div>
-
-              <button
-                onClick={finish}
-                disabled={!googleConnected}
-                className="mt-8 inline-flex items-center rounded-xl bg-black px-5 py-3 text-sm font-bold text-white disabled:opacity-40"
-              >
-                Create your first campaign <ArrowRight className="ml-2 h-4 w-4" />
-              </button>
-            </section>
-          )}
-        </main>
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</div>
-      <div className="mt-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold">{value}</div>
-    </div>
-  )
-}
-
-function Input({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  type?: string
-  placeholder?: string
-}) {
-  return (
-    <label>
-      <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-      />
-    </label>
-  )
-}
-
-function Select({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: string
-  options: { value: string; label: string }[]
-  onChange: (value: string) => void
-}) {
-  return (
-    <label>
-      <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

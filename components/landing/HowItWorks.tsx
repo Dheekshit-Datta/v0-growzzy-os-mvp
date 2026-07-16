@@ -1,76 +1,81 @@
-"use client"
+'use client'
 
-import { motion } from "framer-motion"
-import { ArrowUpRight } from "./Icons"
+import { motion } from 'framer-motion'
+import { ArrowUpRight } from 'lucide-react'
 
-const steps = [
+const easeOut = [0.16, 1, 0.3, 1] as const
+
+const STEPS = [
   {
-    n: "01",
-    title: "Describe Your Product",
-    body: "Tell Growzzy what you're selling, who your customer is, and what you want — more signups, sales, or app installs. Takes 2 minutes.",
+    number: '01',
+    title: 'Create your identity',
+    body: "Set up your workspace and tell Growzzy what you're selling, who your customer is, and what success looks like — more signups, sales, or app installs. Takes 2 minutes.",
   },
   {
-    n: "02",
-    title: "AI Builds Everything",
-    body: "Growzzy generates your ad creatives, headlines, audience targeting, and bidding strategy for both Google and Meta — ready to review before anything goes live.",
+    number: '02',
+    title: 'Configure your workspace',
+    body: 'Growzzy generates your ad creatives, headlines, audience targeting, and bidding strategy for both Google and Meta — ready to review before anything goes live.',
   },
   {
-    n: "03",
-    title: "Launch and Let It Run",
-    body: "One click publishes your campaigns. Growzzy monitors performance daily, reallocates budget to winning ads, and pauses what isn't working.",
+    number: '03',
+    title: 'Connect your advertising',
+    body: 'Connect Google Ads and Meta with one click. Growzzy publishes, then monitors performance daily, reallocates budget to winning ads, and pauses what isn’t working.',
   },
 ]
 
-const anim = {
-  initial: { opacity: 0, y: 30 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.7, ease: "easeOut" as const },
-}
-
-export function HowItWorks() {
+export function HowItWorksSection() {
   return (
-    <section className="bg-black px-8 md:px-16 lg:px-20 py-32">
-      <motion.div {...anim} className="text-sm font-body text-white/60 tracking-widest uppercase mb-6">
-        // How It Works
-      </motion.div>
-      <motion.h2
-        {...anim}
-        transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
-        className="font-heading italic text-white text-6xl md:text-7xl tracking-[-3px] leading-[0.9] mb-20"
+    <section id="how" className="bg-white px-8 py-32 md:px-16 lg:px-20">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7, ease: easeOut }}
       >
-        Three steps.
-        <br />
-        Zero guesswork.
-      </motion.h2>
+        <p className="mb-6 font-body text-sm uppercase tracking-widest text-neutral-500">
+          // How It Works
+        </p>
+        <h2 className="mb-20 font-heading text-6xl leading-[0.9] tracking-[-3px] text-neutral-900 md:text-7xl">
+          Three steps.
+          <br />
+          Zero guesswork.
+        </h2>
+      </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-        {steps.map((s, i) => (
+      <div className="grid grid-cols-1 gap-12 md:grid-cols-3">
+        {STEPS.map((step, i) => (
           <motion.div
-            key={s.n}
+            key={step.number}
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: "easeOut", delay: i * 0.15 }}
+            transition={{ duration: 0.7, delay: i * 0.1, ease: easeOut }}
+            className="border-t border-neutral-200 pt-6"
           >
-            <div className="border-t border-white/10 pt-6">
-              <div className="font-heading italic text-white/10 text-[7rem] leading-none tracking-[-4px]">
-                {s.n}
-              </div>
-              <h3 className="font-heading italic text-white text-3xl tracking-[-1px] mt-2">
-                {s.title}
-              </h3>
-              <p className="font-body text-sm text-white/60 font-light leading-relaxed mt-3 max-w-[28ch]">
-                {s.body}
-              </p>
+            <div className="font-heading text-[7rem] leading-none tracking-[-4px] text-neutral-200">
+              {step.number}
             </div>
+            <h3 className="mt-2 font-heading text-3xl text-neutral-900">{step.title}</h3>
+            <p className="mt-3 max-w-[28ch] text-sm font-light leading-relaxed text-neutral-600">
+              {step.body}
+            </p>
           </motion.div>
         ))}
       </div>
 
-      <motion.div {...anim} className="flex justify-center mt-20">
-        <a href="/auth" className="liquid-glass-strong rounded-full px-8 py-3 text-sm font-medium text-white inline-flex items-center gap-2">
-          Try it free — no card needed <ArrowUpRight className="h-4 w-4" />
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7, ease: easeOut }}
+        className="mt-20 flex justify-center"
+      >
+        <a
+          href="/auth"
+          className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-medium text-neutral-900 liquid-glass-light-strong"
+        >
+          Try it free — no card needed
+          <ArrowUpRight className="h-4 w-4" />
         </a>
       </motion.div>
     </section>

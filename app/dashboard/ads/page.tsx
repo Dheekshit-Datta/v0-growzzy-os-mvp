@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Shell } from "@/components/shell"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { Search, Filter, RefreshCw, Plus, Megaphone, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -96,7 +96,7 @@ export default function AdsManagerPage() {
               <RefreshCw size={13} className={cn("transition-transform", refreshing && "animate-spin")} />
             </button>
             <Link
-              href="/campaigns/new"
+              href="/dashboard/campaigns/new"
               className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary"
             >
               <Plus size={13} />
@@ -145,7 +145,7 @@ export default function AdsManagerPage() {
                       Create your first campaign to start running ads on Google.
                     </p>
                     <Link
-                      href="/campaigns/new"
+                      href="/dashboard/campaigns/new"
                       className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary"
                     >
                       <Plus size={13} />
@@ -190,7 +190,7 @@ export default function AdsManagerPage() {
                 </div>
               </div>
               <Link
-                href="/settings?tab=integrations"
+                href="/dashboard/settings?tab=integrations"
                 className="h-7 px-3 text-white text-[11.5px] font-semibold rounded-[7px] sku-btn-primary"
               >
                 Connect

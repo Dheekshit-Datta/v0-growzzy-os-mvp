@@ -1,30 +1,56 @@
-const links = [
-  { label: "Home", href: "/#home" },
-  { label: "Features", href: "/#features" },
-  { label: "Pricing", href: "/#pricing" },
-  { label: "Privacy", href: "/privacy" },
-  { label: "Terms", href: "/terms" },
-]
+'use client'
+
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 export function Footer() {
+  const pathname = usePathname()
+  const isLanding = pathname === '/'
+  const href = (hash: string) => (isLanding ? hash : `/${hash}`)
+
+  if (pathname?.startsWith('/auth')) return null
+
   return (
-    <footer id="footer" className="bg-black border-t border-white/10 px-8 md:px-16 py-12">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+    <footer className="border-t border-neutral-200 bg-white px-8 py-12 md:px-16">
+      <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
+        {/* Left: logo + wordmark */}
         <div className="flex items-center">
-          <img src="/growzzy-logo.png" alt="Growzzy OS logo" className="h-9 w-9 object-contain" loading="lazy" />
-          <span className="font-body text-sm text-white/50 ml-3">Growzzy OS</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white liquid-glass-light">
+            <Image
+              src="/growzzy-logo.png"
+              alt="GrowzzyOS logo"
+              width={24}
+              height={24}
+              className="h-5 w-5 object-contain"
+            />
+          </span>
+          <span className="ml-3 text-sm text-neutral-500">GrowzzyOS</span>
         </div>
-        <nav className="flex flex-wrap gap-6">
-          {links.map((l) => (
-            <a key={l.label} href={l.href} className="font-body text-xs text-white/40 hover:text-white/70 transition-colors">
-              {l.label}
-            </a>
-          ))}
+
+        {/* Right: nav links */}
+        <nav className="flex flex-wrap items-center justify-center gap-6 text-xs text-neutral-500">
+          <Link href={href('#home')} className="hover:text-neutral-900">
+            Home
+          </Link>
+          <Link href={href('#features')} className="hover:text-neutral-900">
+            Features
+          </Link>
+          <Link href={href('#pricing')} className="hover:text-neutral-900">
+            Pricing
+          </Link>
+          <Link href="/privacy" className="hover:text-neutral-900">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-neutral-900">
+            Terms
+          </Link>
         </nav>
       </div>
-      <div className="mt-8 font-body text-xs text-white/25 text-center">
-        © 2026 Growzzy OS. Built for founders who move fast.
-      </div>
+
+      <p className="mt-8 text-center font-body text-xs text-neutral-400">
+        © 2026 GrowzzyOS. Built for founders who move fast.
+      </p>
     </footer>
   )
 }

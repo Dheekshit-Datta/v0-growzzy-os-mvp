@@ -1,111 +1,114 @@
-"use client"
+'use client'
 
-import { motion } from "framer-motion"
+import { motion } from 'framer-motion'
 
-const starter = [
-  "2 active campaigns",
-  "Google Ads + Meta",
-  "AI creative generation",
-  "Basic performance dashboard",
-  "1 ad account per platform",
+const easeOut = [0.16, 1, 0.3, 1] as const
+
+const STARTER_FEATURES = [
+  '2 active campaigns',
+  'Google Ads + Meta',
+  'AI creative generation',
+  'Basic performance dashboard',
+  '1 ad account per platform',
 ]
 
-const growth = [
-  "Unlimited campaigns",
-  "Google Ads + Meta",
-  "AI creative studio (all formats)",
-  "Optimization autopilot",
-  "Advanced analytics",
-  "Priority support",
-  "Multiple ad accounts",
+const GROWTH_FEATURES = [
+  'Unlimited campaigns',
+  'Google Ads + Meta',
+  'AI creative studio (all formats)',
+  'Optimization autopilot',
+  'Advanced analytics',
+  'Priority support',
+  'Multiple ad accounts',
 ]
 
-const anim = {
-  initial: { opacity: 0, y: 30 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.7, ease: "easeOut" as const },
-}
-
-function FeatureList({ items }: { items: string[] }) {
+export function PricingSection() {
   return (
-    <ul className="space-y-3">
-      {items.map((f) => (
-        <li key={f} className="font-body text-sm text-white/70 font-light flex gap-3">
-          <span className="text-white">✦</span>
-          <span>{f}</span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-export function Pricing() {
-  return (
-    <section id="pricing" className="bg-black px-8 md:px-16 lg:px-20 py-32">
-      <div className="max-w-4xl mx-auto text-center">
-        <motion.div {...anim} className="text-sm font-body text-white/60 tracking-widest uppercase mb-6">
-          // Pricing
+    <section id="pricing" className="bg-white px-8 py-32">
+      <div className="mx-auto max-w-4xl text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: easeOut }}
+        >
+          <p className="mb-6 font-body text-sm uppercase tracking-widest text-neutral-500">
+            // Pricing
+          </p>
+          <h2 className="mb-4 font-heading text-6xl leading-[0.9] tracking-[-3px] text-neutral-900 md:text-7xl">
+            Simple.
+            <br />
+            No surprises.
+          </h2>
+          <p className="mb-16 text-sm font-light text-neutral-500">
+            Start free. Upgrade when you&apos;re ready. Cancel any time.
+          </p>
         </motion.div>
-        <motion.h2
-          {...anim}
-          transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
-          className="font-heading italic text-white text-6xl md:text-7xl tracking-[-3px] leading-[0.9] mb-4"
-        >
-          Simple.
-          <br />
-          No surprises.
-        </motion.h2>
-        <motion.p
-          {...anim}
-          transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
-          className="font-body text-sm text-white/50 font-light mb-16"
-        >
-          Start free. Upgrade when you're ready. Cancel any time.
-        </motion.p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+        <div className="grid grid-cols-1 gap-6 text-left md:grid-cols-2">
+          {/* Starter */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: "easeOut", delay: 0.25 }}
-            className="liquid-glass rounded-[1.25rem] p-8"
+            transition={{ duration: 0.7, ease: easeOut }}
+            className="rounded-[1.25rem] p-8 liquid-glass-light"
           >
-            <div className="font-body text-xs text-white/50 uppercase tracking-widest font-medium">
+            <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">
               Starter
+            </p>
+            <div className="mt-2 flex items-end gap-2">
+              <span className="font-heading text-6xl tracking-[-2px] text-neutral-900">$0</span>
+              <span className="mb-2 text-sm text-neutral-400">forever</span>
             </div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <div className="font-heading italic text-white text-6xl tracking-[-2px]">$0</div>
-              <div className="font-body text-sm text-white/40">forever</div>
-            </div>
-            <div className="border-t border-white/10 my-6" />
-            <FeatureList items={starter} />
-            <a href="/auth" className="liquid-glass rounded-full block w-full text-center py-3 text-sm text-white font-medium mt-8">
+            <div className="my-6 border-t border-neutral-200" />
+            <ul className="space-y-3">
+              {STARTER_FEATURES.map((f) => (
+                <li key={f} className="flex gap-2 text-sm font-light text-neutral-700">
+                  <span className="text-neutral-400">✦</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="/auth"
+              className="mt-8 block w-full rounded-full py-3 text-center text-sm font-medium text-neutral-900 liquid-glass-light"
+            >
               Get started free
             </a>
           </motion.div>
 
+          {/* Growth */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: "easeOut", delay: 0.35 }}
-            className="liquid-glass-strong rounded-[1.25rem] p-8 relative"
+            transition={{ duration: 0.7, delay: 0.1, ease: easeOut }}
+            className="relative rounded-[1.25rem] p-8 liquid-glass-light-strong"
           >
-            <span className="liquid-glass rounded-full absolute top-4 right-4 px-3 py-1 text-[11px] text-white/90 font-body">
+            <span className="absolute right-6 top-6 rounded-full px-3 py-1 text-[11px] text-neutral-900 liquid-glass-light">
               Most popular
             </span>
-            <div className="font-body text-xs text-white/50 uppercase tracking-widest font-medium">
+            <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">
               Growth
+            </p>
+            <div className="mt-2 flex items-end gap-1">
+              <span className="font-heading text-6xl tracking-[-2px] text-neutral-900">$49</span>
+              <span className="mb-2 text-sm text-neutral-400">/month</span>
             </div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <div className="font-heading italic text-white text-6xl tracking-[-2px]">$49</div>
-              <div className="font-body text-sm text-white/40">/month</div>
-            </div>
-            <div className="border-t border-white/10 my-6" />
-            <FeatureList items={growth} />
-            <a href="/auth" className="rounded-full block w-full text-center py-3 text-sm font-medium bg-white text-black mt-8">
+            <div className="my-6 border-t border-neutral-200" />
+            <ul className="space-y-3">
+              {GROWTH_FEATURES.map((f) => (
+                <li key={f} className="flex gap-2 text-sm font-light text-neutral-700">
+                  <span className="text-neutral-400">✦</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="/auth"
+              className="mt-8 block w-full rounded-full bg-neutral-900 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+            >
               Start 14-day free trial
             </a>
           </motion.div>

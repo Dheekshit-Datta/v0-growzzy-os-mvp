@@ -1,6 +1,6 @@
 "use client"
 
-import { Shell } from "@/components/shell"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { FolderOpen, Plus, MoreHorizontal } from "lucide-react"
 import Link from "next/link"
 

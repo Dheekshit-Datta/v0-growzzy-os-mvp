@@ -361,31 +361,28 @@
 }
 
 /* -------------------- Landing page: liquid glass + display font -------------------- */
-@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap");
-
-:root {
-  --font-heading: "Instrument Serif", serif;
-  --font-body: "Inter", sans-serif;
-}
+/* --font-heading / --font-body are supplied by next/font in app/(marketing)/layout.tsx */
 
 .font-heading {
   font-family: var(--font-heading);
+  font-style: italic;
 }
 
 .font-body {
   font-family: var(--font-body);
 }
 
-.liquid-glass {
+/* Dark surfaces (hero only) */
+.liquid-glass-dark {
   background: rgba(255, 255, 255, 0.01);
   background-blend-mode: luminosity;
   backdrop-filter: blur(4px);
-  border: none;
+  -webkit-backdrop-filter: blur(4px);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
 }
-.liquid-glass::before {
+.liquid-glass-dark::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -405,16 +402,16 @@
   mask-composite: exclude;
   pointer-events: none;
 }
-.liquid-glass-strong {
+.liquid-glass-dark-strong {
   background: rgba(255, 255, 255, 0.01);
   background-blend-mode: luminosity;
   backdrop-filter: blur(50px);
-  border: none;
-  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  -webkit-backdrop-filter: blur(50px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
 }
-.liquid-glass-strong::before {
+.liquid-glass-dark-strong::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -433,4 +430,37 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* Light surfaces (everywhere else) */
+.liquid-glass-light {
+  background: rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass-light-strong {
+  background: rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 1px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Cinematic slow zoom-out on the hero video */
+@keyframes hero-zoom-out {
+  0% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.hero-zoom-out {
+  animation: hero-zoom-out 20s ease-out forwards;
 }

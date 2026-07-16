@@ -84,7 +84,7 @@ export function TopBar({ title }: TopBarProps) {
 
         {/* New campaign CTA */}
         <Link
-          href="/campaigns/new"
+          href="/dashboard/campaigns/new"
           className="flex items-center gap-1.5 h-8 px-3.5 text-white text-[12.5px] font-semibold rounded-[8px] transition-colors sku-btn-primary"
         >
           <Plus size={13} />

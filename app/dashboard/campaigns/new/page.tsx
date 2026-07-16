@@ -1,756 +1,668 @@
 "use client"
 
-import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { Shell } from "@/components/dashboard-v2/shell"
 import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ExternalLink,
-  Loader2,
-  MapPin,
-  Mic,
-  Play,
-  Plus,
-  Search,
-  ShieldCheck,
-  Sparkles,
+  Sparkles, Mic, Plus, CheckCircle2, Circle, ArrowRight,
+  Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
+  Download, Copy, Wand2, X, Check,
 } from "lucide-react"
-import { toast } from "sonner"
-import DashboardLayout from "@/components/dashboard-layout"
 import { cn } from "@/lib/utils"
 
-type Keyword = {
-  text: string
-  matchType: "BROAD" | "PHRASE" | "EXACT"
-  intent?: string
+const CHIPS = [
+  { id: "objective", label: "Ad Objective" },
+  { id: "audience", label: "Target Audience" },
+  { id: "age", label: "Age" },
+  { id: "location", label: "Location" },
+  { id: "budget", label: "Budget" },
+]
+
+const KEYWORD_MAP: Record<string, RegExp> = {
+  objective: /sell|promote|generate leads?|drive|awareness|install/i,
+  audience: /women|men|audience|people|customers?|target/i,
+  age: /\b\d{2}\s*[-–]\s*\d{2}\b|\bage\b|\byears?\b/i,
+  location: /india|us|uk|city|cities|tier|country|region|location/i,
+  budget: /\$|\b\d+\s*(?:\/day|per day|daily|budget)\b|budget/i,
 }
 
-type AdGroup = {
-  name: string
-  theme?: string
-  keywords: Keyword[]
-  negativeKeywords: string[]
-  headlines: string[]
-  descriptions: string[]
-}
 
-type CampaignPlan = {
-  campaignName: string
-  campaignType: string
-  objective: string
-  biddingStrategy: "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA"
-  dailyBudget: number
-  finalUrl?: string
-  locations: string[]
-  languages?: string[]
-  adGroups: AdGroup[]
-  rationale?: {
-    whyThisStructure?: string
-    whyTheseKeywords?: string
-    whyThisBidding?: string
-    expectedResultsRange?: string
+const AD_STYLES = ["Luxury", "Bold", "Minimal", "Festive", "Corporate", "Playful"]
+const ASPECT_RATIOS = [
+  { label: "1:1", desc: "Square" },
+  { label: "4:5", desc: "Portrait" },
+  { label: "16:9", desc: "Landscape" },
+  { label: "9:16", desc: "Story" },
+]
+
+type Tab = "campaign" | "boolean" | "creatives" | "launch"
+
+const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "campaign", label: "Campaign", icon: Sparkles },
+  { id: "boolean", label: "Boolean search", icon: Search },
+  { id: "creatives", label: "AI Creatives", icon: ImageIcon },
+  { id: "launch", label: "Launch Ads", icon: Rocket },
+]
+
+/* Placeholder creative card component */
+function CreativeCard({
+  index,
+  style,
+  ratio,
+  headline,
+  onCopy,
+  onDownload,
+}: {
+  index: number
+  style: string
+  ratio: string
+  headline: string
+  onCopy: () => void
+  onDownload: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const colors = [
+    ["#1a1a2e", "#e94560"],
+    ["#0f3460", "#533483"],
+    ["#2d6a4f", "#95d5b2"],
+    ["#b5838d", "#ffcdb2"],
+  ]
+  const [bg, accent] = colors[index % colors.length]
+
+  const handleCopy = () => {
+    onCopy()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
-  risks?: string[]
-  launchReadinessScore?: number
-  policyCheck?: {
-    status: "PASS" | "WARN" | "FAIL"
-    flags?: Array<{ text: string; reason: string; suggestion?: string }>
-  }
-}
 
-const flowSteps = ["Set Goal", "Creative", "Audience", "Website", "Placements", "Budget", "Publish"]
-const goals = ["Leads", "Sales", "Website Traffic", "Brand Awareness"]
+  return (
+    <div className="sku-card overflow-hidden group">
+      {/* Ad visual preview */}
+      <div
+        className="w-full relative overflow-hidden"
+        style={{
+          aspectRatio: ratio === "16:9" ? "16/9" : ratio === "4:5" ? "4/5" : ratio === "9:16" ? "9/16" : "1/1",
+          background: `linear-gradient(135deg, ${bg} 0%, ${accent}99 100%)`,
+          maxHeight: 200,
+        }}
+      >
+        {/* Simulated ad layout */}
+        <div className="absolute inset-0 flex flex-col justify-end p-4">
+          <div className="mb-2">
+            <div className="h-2 w-20 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.4)' }} />
+            <div className="h-3 w-36 rounded-full mb-1" style={{ background: 'rgba(255,255,255,0.85)' }} />
+            <div className="h-2 w-28 rounded-full" style={{ background: 'rgba(255,255,255,0.5)' }} />
+          </div>
+          <div
+            className="self-start px-3 py-1.5 rounded-[6px] text-[11px] font-bold"
+            style={{ background: accent, color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)' }}
+          >
+            Shop Now
+          </div>
+        </div>
+        {/* Style + ratio badge */}
+        <div className="absolute top-2 right-2 flex gap-1">
+          <span className="text-[9.5px] font-semibold text-white bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-full">{style}</span>
+          <span className="text-[9.5px] font-semibold text-white bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-full">{ratio}</span>
+        </div>
+        {/* Overlay actions on hover */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+          <button
+            onClick={handleCopy}
+            className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] hover:bg-[#F0F2F5] transition-colors shadow"
+            aria-label="Copy headline"
+          >
+            {copied ? <Check size={14} className="text-[#2E9E5B]" /> : <Copy size={14} />}
+          </button>
+          <button
+            onClick={onDownload}
+            className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] hover:bg-[#F0F2F5] transition-colors shadow"
+            aria-label="Download creative"
+          >
+            <Download size={14} />
+          </button>
+        </div>
+      </div>
+      {/* Caption */}
+      <div className="px-3 py-2.5">
+        <p className="text-[12px] font-semibold text-[#111827] leading-tight line-clamp-2">{headline}</p>
+        <p className="text-[10.5px] text-[#9CA3AF] mt-0.5">Ad creative #{index + 1}</p>
+      </div>
+    </div>
+  )
+}
 
 export default function NewCampaignPage() {
-  const router = useRouter()
-  const [activeStep, setActiveStep] = useState("Set Goal")
-  const [selectedGroupIndex, setSelectedGroupIndex] = useState(0)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isCheckingPolicy, setIsCheckingPolicy] = useState(false)
-  const [isLaunching, setIsLaunching] = useState(false)
-  const [campaignPlanId, setCampaignPlanId] = useState("")
-  const [plan, setPlan] = useState<CampaignPlan | null>(null)
-  const [brief, setBrief] = useState({
-    offer: "",
-    landingPageUrl: "",
-    targetCustomer: "",
-    budget: "1",
-    location: "United States",
-    goal: "Leads",
-  })
+  const [activeTab, setActiveTab] = useState<Tab>("campaign")
+  const [prompt, setPrompt] = useState("")
+  const [detected, setDetected] = useState<Set<string>>(new Set())
+  const [enhancing, setEnhancing] = useState(false)
+  const [building, setBuilding] = useState(false)
+  const [built, setBuilt] = useState(false)
 
-  const checklist = useMemo(
-    () => [
-      { label: "Ad objective", done: Boolean(brief.goal) },
-      { label: "Target audience", done: brief.targetCustomer.trim().length > 4 || brief.offer.trim().length > 24 },
-      { label: "Age", done: /\b(?:1[89]|[2-6]\d)(?:\s*[-–]\s*(?:1[89]|[2-6]\d))?\b/.test(brief.offer) },
-      { label: "Location", done: brief.location.trim().length > 2 },
-      { label: "Budget", done: Number(brief.budget) > 0 },
-    ],
-    [brief]
-  )
-  const readyToGenerate = brief.offer.trim().length > 10
-  const selectedGroup = plan?.adGroups?.[selectedGroupIndex] || plan?.adGroups?.[0]
+  // Creatives state
+  const [creativesPrompt, setCreativesPrompt] = useState("")
+  const [selectedStyle, setSelectedStyle] = useState("Luxury")
+  const [selectedRatio, setSelectedRatio] = useState("1:1")
+  const [generatingCreatives, setGeneratingCreatives] = useState(false)
+  const [generatedCreatives, setGeneratedCreatives] = useState<string[]>([])
+  const [creativesCount, setCreativesCount] = useState(4)
+
+  // Boolean search
+  const [booleanQuery, setBooleanQuery] = useState("")
+
+  const router = useRouter()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    if (!campaignPlanId || !plan) return
-    const timeout = window.setTimeout(async () => {
-      setIsSaving(true)
-      try {
-        const response = await fetch(`/api/ai/campaign-plan/${campaignPlanId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            campaignName: plan.campaignName,
-            dailyBudget: plan.dailyBudget,
-            biddingStrategy: plan.biddingStrategy,
-            finalUrl: plan.finalUrl,
-            locations: plan.locations,
-            adGroups: plan.adGroups,
-          }),
-        })
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok || data.ok === false) throw new Error(data.error || "Could not save plan")
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save plan")
-      } finally {
-        setIsSaving(false)
-      }
-    }, 800)
-    return () => window.clearTimeout(timeout)
-  }, [campaignPlanId, plan])
+    const s = new Set<string>()
+    for (const [k, r] of Object.entries(KEYWORD_MAP)) {
+      if (r.test(prompt)) s.add(k)
+    }
+    setDetected(s)
+  }, [prompt])
 
-  const updateBrief = (key: keyof typeof brief, value: string) => {
-    setBrief((previous) => ({ ...previous, [key]: value }))
+  const handleEnhance = async () => {
+    if (!prompt.trim() || enhancing) return
+    setEnhancing(true)
+    await new Promise((r) => setTimeout(r, 2200))
+    const enhancements = [
+      "\n\nTarget audience: Primary ICP includes decision-makers with mid-to-high disposable income, interested in premium offerings. Secondary audience: gift-givers and enthusiasts seeking quality products.",
+      "\n\nProposed marketing angle: Highlight exclusivity, craftsmanship, and limited availability. Emphasize seasonal urgency and social proof through testimonials and user-generated content.",
+      "\n\nKey messaging: Quality, reliability, exclusivity. Support with 3-5 visual assets showing product in lifestyle context.",
+    ]
+    const randomEnhancement = enhancements[Math.floor(Math.random() * enhancements.length)]
+    setPrompt((p) => p + randomEnhancement)
+    setEnhancing(false)
   }
 
-  const updatePlan = (updates: Partial<CampaignPlan>) => {
-    setPlan((previous) => (previous ? { ...previous, ...updates, policyCheck: undefined } : previous))
+  const handleBuild = async () => {
+    if (!prompt.trim() || building) return
+    setBuilding(true)
+    await new Promise((r) => setTimeout(r, 2200))
+    
+    // Prepare campaign data
+    const campaignData = {
+      prompt,
+      detectedChips: Array.from(detected),
+      audience: { ageMin: 25, ageMax: 55, location: 'Global', description: '' },
+      creative: { style: undefined, aspectRatio: undefined, variants: 4 },
+      budget: { dailyAmount: 50, currency: 'USD ($)', totalDays: 30 },
+    }
+    
+    // Navigate to builder with encoded data
+    const encoded = btoa(JSON.stringify(campaignData))
+    router.push(`/campaigns/builder?data=${encoded}`)
   }
 
-  const updateAdGroup = (index: number, updates: Partial<AdGroup>) => {
-    setPlan((previous) => {
-      if (!previous) return previous
-      const adGroups = previous.adGroups.map((group, groupIndex) =>
-        groupIndex === index ? { ...group, ...updates } : group
-      )
-      return { ...previous, adGroups, policyCheck: undefined }
-    })
-  }
-
-  const generatePlan = async () => {
-    if (!readyToGenerate) {
-      toast.error("Add the offer, audience, location, budget, and goal first")
-      return
-    }
-    setIsGenerating(true)
-    try {
-      const response = await fetch("/api/ai/campaign-builder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...brief, targetCustomer: brief.targetCustomer || "Infer the target customer from the offer", budget: Number(brief.budget) }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || !data.ok) throw new Error(data.error || "AI Campaign Builder failed")
-      setPlan(data.plan)
-      setCampaignPlanId(data.campaignPlanId)
-      setSelectedGroupIndex(0)
-      setActiveStep("Set Goal")
-      toast.success("Campaign plan generated and saved")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not generate campaign plan")
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  const checkPolicy = async () => {
-    if (!campaignPlanId) return
-    setIsCheckingPolicy(true)
-    try {
-      const response = await fetch("/api/ai/policy-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignPlanId }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || data.ok === false) throw new Error(data.error || "Policy check failed")
-      setPlan((previous) => (previous ? { ...previous, policyCheck: data.data } : previous))
-      toast.success(`Policy check: ${data.data.status}`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Policy check failed")
-    } finally {
-      setIsCheckingPolicy(false)
-    }
-  }
-
-  const launchPlan = async () => {
-    if (!campaignPlanId || !plan) return
-    if (!plan.finalUrl) {
-      toast.error("Add a final URL before launch")
-      return
-    }
-    if (plan.policyCheck?.status === "FAIL") {
-      toast.error("Policy check failed. Fix blocked copy before launch.")
-      return
-    }
-    setIsLaunching(true)
-    try {
-      if (!plan.policyCheck) await checkPolicy()
-      const response = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || !data.ok) throw new Error(data.error || "Google Ads launch failed")
-      toast.success(`Campaign ${data.data.externalCampaignId} created paused in Google Ads`)
-      router.push("/dashboard/campaigns")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not launch campaign")
-    } finally {
-      setIsLaunching(false)
-    }
+  const handleGenerateCreatives = async () => {
+    if (generatingCreatives) return
+    setGeneratingCreatives(true)
+    setGeneratedCreatives([])
+    await new Promise((r) => setTimeout(r, 2500))
+    const headlines = Array.from({ length: creativesCount }, (_, i) => `AI Creative #${i + 1} — based on your campaign brief`)
+    setGeneratedCreatives(headlines)
+    setGeneratingCreatives(false)
   }
 
   return (
-    <DashboardLayout immersive={Boolean(plan)}>
-      <div className={cn("min-h-screen bg-[var(--color-bg)]", plan ? "" : "px-4 py-4")}>
-        {plan && (
-          <header className="flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-white px-5">
-            <button onClick={() => setPlan(null)} className="inline-flex items-center gap-2 text-[12px] font-semibold text-[var(--color-text)]">
-              <ArrowLeft className="h-4 w-4" /> Create Campaign
-            </button>
-            <div className="flex items-center gap-4 text-[11px] text-[var(--color-muted)]"><span>Help</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--accent)] font-bold text-white">G</span></div>
-          </header>
-        )}
+    <Shell title="">
+      <div className="flex h-full">
+        {/* Sidebar panel — recent searches */}
+        <div
+          className="w-[200px] shrink-0 border-r border-[#DDE1E7] flex flex-col overflow-y-auto"
+          style={{ background: 'linear-gradient(180deg, #f8f9fb 0%, #f3f5f7 100%)' }}
+        >
+          <div className="px-3 pt-4 pb-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10.5px] font-semibold text-[#9CA3AF] uppercase tracking-[0.08em]">
+                Recent
+              </span>
+              <button
+                className="w-5 h-5 flex items-center justify-center rounded-[5px] text-[#9CA3AF] hover:text-[#1F57F5] hover:bg-[#EAF0FE] transition-colors"
+                aria-label="New search"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+            <p className="text-[11px] text-[#9CA3AF] italic px-2 py-1">No recent searches yet.</p>
+          </div>
+        </div>
 
-        {!plan ? (
-          <PromptIntake
-            brief={brief}
-            checklist={checklist}
-            readyToGenerate={readyToGenerate}
-            isGenerating={isGenerating}
-            onChange={updateBrief}
-            onGenerate={generatePlan}
-          />
-        ) : (
-          <div className="grid min-h-[calc(100vh-56px)] overflow-hidden bg-white xl:grid-cols-[286px_minmax(520px,634px)_minmax(520px,1fr)]">
-            <aside className="border-b border-[var(--color-border)] bg-[var(--bg-inset)] p-5 xl:border-b-0 xl:border-r">
-              <div className="mb-4 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-faint)]">
-                Campaign flow
-              </div>
-              <div className="space-y-0.5">
-                {flowSteps.map((step, index) => (
+        {/* Main content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0 overflow-y-auto">
+          {/* Hero */}
+          <div className="w-full max-w-[680px] text-center mb-8">
+            <h1 className="text-[30px] text-[#111827] leading-tight mb-2 tracking-tight text-balance" style={{ fontWeight: 500 }}>
+              {built ? "Campaign plan ready." : "Run ad campaigns in minutes."}
+            </h1>
+            <p className="text-[14px] text-[#6B7280] leading-relaxed">
+              {built
+                ? "Your AI campaign strategy, targeting and ad creatives are ready to review."
+                : "Tell Growzzy what you want to promote. AI builds the strategy, targeting and ads for you."}
+            </p>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex items-center gap-1.5 mb-6">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  "flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12.5px] transition-colors",
+                  activeTab === id
+                    ? "bg-[#EAF0FE] text-[#1F57F5] font-semibold"
+                    : "text-[#6B7280] hover:text-[#374151] sku-btn"
+                )}
+                style={activeTab === id ? {
+                  boxShadow: '0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 3px rgba(31,87,245,0.15), 0 0 0 1px rgba(31,87,245,0.2)',
+                } : {}}
+              >
+                <Icon size={12} className="shrink-0" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Campaign tab ── */}
+          {activeTab === "campaign" && (
+            <div className="w-full max-w-[680px]">
+              <div
+                className="bg-white rounded-[16px] overflow-hidden"
+                style={{
+                  border: '2px solid #1F57F5',
+                  boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)',
+                }}
+              >
+                <textarea
+                  ref={textareaRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
+                  rows={6}
+                  className="w-full px-4 pt-4 pb-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-transparent resize-none outline-none leading-relaxed"
+                />
+                {/* Enhance */}
+                <div className="flex justify-end px-4 pb-2">
                   <button
-                    key={step}
-                    onClick={() => setActiveStep(step)}
+                    onClick={handleEnhance}
+                    disabled={!prompt.trim() || enhancing}
+                    className="flex items-center gap-1 text-[12px] font-semibold text-[#1F57F5] hover:text-[#1849d6] disabled:opacity-40 transition-colors"
+                  >
+                    {enhancing ? (
+                      <>
+                        <RefreshCw size={11} className="animate-spin" />
+                        Enhancing…
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 size={11} />
+                        AI Enhance
+                      </>
+                    )}
+                  </button>
+                </div>
+                {/* Bottom bar */}
+                <div className="flex items-center justify-between px-3 pb-3 pt-1 border-t border-[#E9EBEF]">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {CHIPS.map((chip) => {
+                      const active = detected.has(chip.id)
+                      return (
+                        <span
+                          key={chip.id}
+                          className={cn(
+                            "flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full transition-colors",
+                            active ? "text-[#2E9E5B] font-semibold" : "text-[#9CA3AF] font-medium"
+                          )}
+                        >
+                          {active
+                            ? <CheckCircle2 size={11} className="text-[#2E9E5B]" />
+                            : <Circle size={11} className="text-[#D1D5DB]" />}
+                          {chip.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <button
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn"
+                      aria-label="Attach file"
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn"
+                      aria-label="Voice input"
+                    >
+                      <Mic size={14} />
+                    </button>
+                    <button
+                      onClick={handleBuild}
+                      disabled={!prompt.trim() || building}
+                      className={cn(
+                        "flex items-center gap-1.5 h-8 px-4 rounded-full text-[12.5px] font-semibold transition-colors",
+                        prompt.trim() && !building
+                          ? "text-white sku-btn-primary"
+                          : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                      )}
+                    >
+                      {building ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Building…
+                        </span>
+                      ) : built ? (
+                        <span className="flex items-center gap-1.5">
+                          <Check size={12} />
+                          Plan ready
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles size={12} />
+                          Build plan
+                          <ArrowRight size={12} />
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {built && (
+                <div className="mt-4 p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
+                  <p className="text-[13px] font-semibold text-[#2E9E5B] mb-1 flex items-center gap-1.5">
+                    <Check size={14} /> Campaign plan generated
+                  </p>
+                  <p className="text-[12px] text-[#374151]">
+                    Your campaign strategy and targeting have been prepared. Review each step before launching.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("creatives")}
+                    className="mt-3 flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors"
+                  >
+                    Generate AI creatives <ArrowRight size={12} />
+                  </button>
+                </div>
+              )}
+              <p className="text-center text-[11px] text-[#9CA3AF] mt-3">
+                AI can make mistakes. Check important info.{" "}
+                <button className="underline hover:text-[#6B7280] transition-colors">See cookie preferences.</button>
+              </p>
+            </div>
+          )}
+
+          {/* ── Boolean search tab ── */}
+          {activeTab === "boolean" && (
+            <div className="w-full max-w-[680px]">
+              <div className="sku-card p-5">
+                <p className="text-[14px] font-semibold text-[#111827] mb-1">Boolean Audience Search</p>
+                <p className="text-[12.5px] text-[#6B7280] mb-4">
+                  Build precise LinkedIn / Google audience queries using AND, OR, NOT operators.
+                </p>
+                <div className="space-y-3">
+                  <textarea
+                    value={booleanQuery}
+                    onChange={(e) => setBooleanQuery(e.target.value)}
+                    rows={4}
+                    placeholder={`e.g. (women OR female) AND (fashion OR jewelry) AND (India OR Mumbai) AND age:30-50`}
+                    className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
+                  />
+                  <div className="flex gap-2">
+                    {["AND", "OR", "NOT", "( )", "age:", "location:"].map((op) => (
+                      <button
+                        key={op}
+                        onClick={() => setBooleanQuery((q) => q + (q ? " " : "") + op)}
+                        className="h-7 px-2.5 text-[11.5px] font-semibold text-[#374151] rounded-[6px] sku-btn"
+                      >
+                        {op}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    disabled={!booleanQuery.trim()}
                     className={cn(
-                      "flex w-full items-center gap-2.5 rounded-[8px] px-2 py-2 text-left text-[11px] font-medium",
-                      activeStep === step
-                        ? "bg-[var(--accent-weak)] text-[var(--accent)]"
-                        : "text-[var(--text-secondary)] hover:bg-white"
+                      "flex items-center gap-1.5 h-9 px-5 rounded-[8px] text-[13px] font-semibold transition-colors",
+                      booleanQuery.trim() ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                     )}
                   >
-                    <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[9px] font-bold", activeStep === step ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)] bg-white")}>{index + 1}</span>
-                    <span className="flex-1">{step === "Website" ? "Website or Product Page" : step}</span>
-                    {step !== "Publish" && <Check className="h-3 w-3 opacity-60" />}
+                    <Search size={13} />
+                    Search audience
                   </button>
-                ))}
-              </div>
-              <div className="mt-5 rounded-[8px] border border-[var(--color-border)] bg-white p-3 text-[10px] leading-4 text-[var(--color-muted)]">
-                AI proposes. You edit. Every change saves back to the persisted launch plan.
-              </div>
-            </aside>
-
-            <main className="min-w-0 overflow-y-auto border-b border-[var(--color-border)] bg-white xl:max-h-[calc(100vh-56px)] xl:border-b-0 xl:border-r">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] p-4">
-                <div>
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted)]">
-                    Google Search
-                    <span className="rounded-full bg-[var(--color-soft)] px-2 py-1">starts paused</span>
-                  </div>
-                  <input
-                    value={plan.campaignName}
-                    onChange={(event) => updatePlan({ campaignName: event.target.value })}
-                    className="mt-1 w-full min-w-[280px] bg-transparent text-[20px] font-semibold text-[var(--color-text)] outline-none"
-                  />
-                  <p className="mt-1 text-[10px] text-[var(--color-muted)]">
-                    {isSaving ? "Saving..." : "Saved plan"} {campaignPlanId ? `- ${campaignPlanId}` : ""}
-                  </p>
-                </div>
-                <div className="rounded-full border border-[var(--color-border)] px-2.5 py-1.5 text-[10px] font-semibold">
-                  Score {plan.launchReadinessScore || 70}/100
                 </div>
               </div>
-
-              <div className="p-4">
-                {activeStep === "Website" && (
-                  <Section title="Website or Product Page" subtitle="Review the offer and choose where the ad sends people.">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <ReadOnly label="Offer" value={brief.offer} />
-                      <ReadOnly label="Audience" value={brief.targetCustomer} />
-                      <ReadOnly label="Goal" value={brief.goal} />
-                      <ReadOnly label="Original budget" value={`$${brief.budget}/day`} />
-                    </div>
-                    <Field label="Final URL">
-                      <input value={plan.finalUrl || ""} onChange={(event) => updatePlan({ finalUrl: event.target.value })} className="input" placeholder="https://example.com" />
-                    </Field>
-                    <Rationale title="What AI understood" value={plan.rationale?.whyThisStructure} />
-                  </Section>
-                )}
-
-                {activeStep === "Set Goal" && (
-                  <Section title="Goal and bidding" subtitle="Choose what Google should optimize toward.">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="Objective">
-                        <select
-                          value={plan.objective}
-                          onChange={(event) => updatePlan({ objective: event.target.value })}
-                          className="input"
-                        >
-                          <option value="LEADS">Leads</option>
-                          <option value="SALES">Sales</option>
-                          <option value="TRAFFIC">Website traffic</option>
-                          <option value="AWARENESS">Brand awareness</option>
-                        </select>
-                      </Field>
-                      <Field label="Bidding">
-                        <select
-                          value={plan.biddingStrategy}
-                          onChange={(event) => updatePlan({ biddingStrategy: event.target.value as CampaignPlan["biddingStrategy"] })}
-                          className="input"
-                        >
-                          <option value="MAXIMIZE_CONVERSIONS">Maximize conversions</option>
-                          <option value="MAXIMIZE_CLICKS">Maximize clicks</option>
-                          <option value="TARGET_CPA">Target CPA</option>
-                        </select>
-                      </Field>
-                    </div>
-                    <Rationale title="Why this bidding" value={plan.rationale?.whyThisBidding} />
-                  </Section>
-                )}
-
-                {activeStep === "Audience" && (
-                  <Section title="Audience" subtitle="Review locations and the search intent Growzzy selected.">
-                    <Field label="Locations">
-                      <ChipEditor
-                        values={plan.locations || []}
-                        placeholder="Add city, region, or country"
-                        onChange={(locations) => updatePlan({ locations })}
-                      />
-                    </Field>
-                    <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
-                      <div className="flex items-center gap-2 text-sm font-bold">
-                        <MapPin className="h-4 w-4" />
-                        Targeting rationale
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
-                        {plan.rationale?.whyTheseKeywords || "Targeting is based on your prompt and selected location."}
-                      </p>
-                    </div>
-                    {selectedGroup && <><GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} /><Field label="Keywords"><KeywordEditor group={selectedGroup} onChange={(keywords) => updateAdGroup(selectedGroupIndex, { keywords })} /></Field><Field label="Negative keywords"><ChipEditor values={selectedGroup.negativeKeywords || []} placeholder="Add waste keyword" onChange={(negativeKeywords) => updateAdGroup(selectedGroupIndex, { negativeKeywords })} /></Field></>}
-                  </Section>
-                )}
-
-                {activeStep === "Creative" && selectedGroup && (
-                  <Section title="Creative" subtitle="Google rotates this responsive search ad copy automatically.">
-                    <GroupTabs groups={plan.adGroups} selected={selectedGroupIndex} onSelect={setSelectedGroupIndex} />
-                    <TextList
-                      label="Headlines"
-                      maxLength={30}
-                      values={selectedGroup.headlines || []}
-                      onChange={(headlines) => updateAdGroup(selectedGroupIndex, { headlines })}
-                    />
-                    <TextList
-                      label="Descriptions"
-                      maxLength={90}
-                      values={selectedGroup.descriptions || []}
-                      onChange={(descriptions) => updateAdGroup(selectedGroupIndex, { descriptions })}
-                    />
-                  </Section>
-                )}
-
-                {activeStep === "Placements" && (
-                  <Section title="Placements" subtitle="This first launch path is Google Search only.">
-                    <div className="rounded-[10px] border border-[var(--accent)] bg-[var(--accent-weak)] p-4"><div className="flex items-center gap-3"><span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-white"><Check className="h-3 w-3" /></span><div><p className="text-[12px] font-semibold">Google Search results</p><p className="mt-0.5 text-[10px] text-[var(--color-muted)]">Responsive search ads on Google search pages.</p></div></div></div>
-                  </Section>
-                )}
-
-                {activeStep === "Budget" && (
-                  <Section title="Budget safety" subtitle="New campaigns publish paused. Enable delivery only after review.">
-                    <Field label="Daily budget">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl font-black">$</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={plan.dailyBudget}
-                          onChange={(event) => updatePlan({ dailyBudget: Number(event.target.value) })}
-                          className="input max-w-[220px]"
-                        />
-                        <span className="text-sm font-semibold text-[var(--color-muted)]">per day</span>
-                      </div>
-                    </Field>
-                    <Rationale title="Expected results" value={plan.rationale?.expectedResultsRange} />
-                  </Section>
-                )}
-
-                {activeStep === "Publish" && (
-                  <Section title="Review and launch paused" subtitle="This creates the real Google campaign hierarchy in PAUSED state.">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Summary label="Ad groups" value={String(plan.adGroups.length)} />
-                      <Summary label="Keywords" value={String(plan.adGroups.reduce((sum, group) => sum + group.keywords.length, 0))} />
-                      <Summary label="Budget" value={`$${plan.dailyBudget}/day`} />
-                      <Summary label="Status" value="Paused on launch" />
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-3">
-                      <button onClick={checkPolicy} disabled={isCheckingPolicy} className="btn btn-secondary h-11 px-4">
-                        {isCheckingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                        Run policy check
-                      </button>
-                      <button onClick={launchPlan} disabled={isLaunching || isSaving} className="btn btn-primary h-11 px-5">
-                        {isLaunching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                        Launch paused
-                      </button>
-                    </div>
-                    {plan.policyCheck && (
-                      <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
-                        <div className="font-bold">Policy check: {plan.policyCheck.status}</div>
-                        {!!plan.policyCheck.flags?.length && (
-                          <ul className="mt-2 space-y-2 text-sm text-[var(--color-muted)]">
-                            {plan.policyCheck.flags.slice(0, 4).map((flag, index) => (
-                              <li key={`${flag.text}-${index}`}>{flag.text}: {flag.reason}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </Section>
-                )}
-              </div>
-            </main>
-
-            <aside className="min-w-0 bg-[#EEF7F1] p-8 xl:sticky xl:top-0 xl:h-[calc(100vh-56px)] xl:self-start">
-              <GooglePreview plan={plan} group={selectedGroup} />
-            </aside>
-          </div>
-        )}
-      </div>
-    </DashboardLayout>
-  )
-}
-
-function PromptIntake({
-  brief,
-  checklist,
-  readyToGenerate,
-  isGenerating,
-  onChange,
-  onGenerate,
-}: {
-  brief: { offer: string; landingPageUrl: string; targetCustomer: string; budget: string; location: string; goal: string }
-  checklist: Array<{ label: string; done: boolean }>
-  readyToGenerate: boolean
-  isGenerating: boolean
-  onChange: (key: keyof typeof brief, value: string) => void
-  onGenerate: () => void
-}) {
-  return (
-    <div className="mx-auto max-w-[900px] pt-[6vh]">
-      <div className="mb-8 flex justify-center">
-        <div className="inline-flex rounded-full border border-[var(--color-border)] bg-white p-1">
-          {["Campaign", "Boolean search", "Create image", "Launch ads"].map((tab, index) => (
-            <button
-              key={tab}
-              disabled={index !== 0}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-[11px] font-medium",
-                index === 0 ? "bg-[var(--accent-weak)] text-[var(--accent)]" : "text-[var(--color-muted)] opacity-50"
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="text-center">
-          <h1 className="text-[26px] font-semibold leading-tight text-[var(--color-text)]">Run ad campaigns in minutes.</h1>
-          <p className="mx-auto mt-2 max-w-xl text-[12px] leading-5 text-[var(--color-muted)]">
-            Tell Growzzy what you want to promote. AI builds the strategy, targeting and ads for you.
-          </p>
-        </div>
-
-        <div className="mt-7 rounded-[12px] border border-[var(--accent)] bg-white p-2 shadow-[0_0_0_3px_var(--accent-weak)]">
-          <textarea
-            value={brief.offer}
-            onChange={(event) => onChange("offer", event.target.value)}
-            rows={5}
-            className="w-full resize-none border-0 bg-white px-3 py-3 text-[13px] leading-5 outline-none"
-            placeholder="Example: Online yoga classes for busy professionals. First class free, then $25/month. I want local leads."
-          />
-          <div className="flex items-end justify-between gap-3 border-t border-[var(--color-border)] px-2 pt-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-3 py-1">
-              {checklist.map((item) => (
-                <span key={item.label} className={cn("inline-flex items-center gap-1 text-[10px] font-medium", item.done ? "text-[var(--accent)]" : "text-[var(--color-muted)]")}>
-                  <span className={cn("grid h-3.5 w-3.5 place-items-center rounded-full border", item.done ? "border-[var(--accent)]" : "border-[var(--border-strong)]")}>{item.done && <Check className="h-2.5 w-2.5" />}</span>{item.label}
-                </span>
-              ))}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} className="h-8 rounded-[8px] px-3 text-[11px] font-semibold italic text-[var(--accent)] hover:bg-[var(--accent-weak)] disabled:opacity-50">AI Enhance</button>
-              <details className="relative">
-                <summary title="Campaign details" className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full border border-[var(--border-strong)] text-[var(--accent)]"><Plus className="h-4 w-4" /></summary>
-                <div className="absolute bottom-11 right-0 z-20 grid w-[520px] max-w-[80vw] gap-2 rounded-[10px] border bg-white p-3 shadow-[var(--shadow-popover)] md:grid-cols-2">
-                  <input value={brief.targetCustomer} onChange={(event) => onChange("targetCustomer", event.target.value)} className="input" placeholder="Target audience" />
-                  <input value={brief.location} onChange={(event) => onChange("location", event.target.value)} className="input" placeholder="Location" />
-                  <input value={brief.budget} onChange={(event) => onChange("budget", event.target.value)} className="input" type="number" min="1" placeholder="Daily budget" />
-                  <select value={brief.goal} onChange={(event) => onChange("goal", event.target.value)} className="input">{goals.map((goal) => <option key={goal}>{goal}</option>)}</select>
-                  <input value={brief.landingPageUrl} onChange={(event) => onChange("landingPageUrl", event.target.value)} className="input md:col-span-2" placeholder="Landing page URL, optional until launch" />
-                </div>
-              </details>
-              <button disabled title="Voice input is not enabled yet" className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border-strong)] text-[var(--accent)] opacity-50"><Mic className="h-4 w-4" /></button>
-              <button onClick={onGenerate} disabled={!readyToGenerate || isGenerating} title="Build campaign" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--accent)] text-white shadow-sm disabled:opacity-40">{isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-[16px] font-semibold text-[var(--color-text)]">{title}</h2>
-        <p className="mt-1 text-[11px] text-[var(--color-muted)]">{subtitle}</p>
-      </div>
-      <div className="space-y-4">{children}</div>
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[11px] font-semibold text-[var(--color-text)]">{label}</span>
-      {children}
-    </label>
-  )
-}
-
-function ReadOnly({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
-      <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">{label}</div>
-      <div className="mt-2 text-sm font-semibold text-[var(--color-text)]">{value || "Not provided"}</div>
-    </div>
-  )
-}
-
-function Rationale({ title, value }: { title: string; value?: string }) {
-  return (
-    <div className="rounded-[9px] border border-[var(--color-border)] bg-[var(--color-soft)] p-3">
-      <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--color-text)]">
-        <Sparkles className="h-4 w-4" />
-        {title}
-      </div>
-      <p className="mt-2 text-[11px] leading-5 text-[var(--color-muted)]">{value || "Growzzy will explain the recommendation once the plan is generated."}</p>
-    </div>
-  )
-}
-
-function Summary({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-soft)] p-4">
-      <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-muted)]">{label}</div>
-      <div className="mt-2 text-lg font-black text-[var(--color-text)]">{value}</div>
-    </div>
-  )
-}
-
-function GroupTabs({ groups, selected, onSelect }: { groups: AdGroup[]; selected: number; onSelect: (index: number) => void }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {groups.map((group, index) => (
-        <button
-          key={`${group.name}-${index}`}
-          onClick={() => onSelect(index)}
-          className={cn(
-            "rounded-full border px-4 py-2 text-sm font-bold",
-            selected === index ? "border-[var(--color-text)] bg-[var(--color-text)] text-white" : "border-[var(--color-border)]"
           )}
-        >
-          {group.name}
-        </button>
-      ))}
-    </div>
-  )
-}
 
-function ChipEditor({
-  values,
-  placeholder,
-  onChange,
-}: {
-  values: string[]
-  placeholder: string
-  onChange: (values: string[]) => void
-}) {
-  const [draft, setDraft] = useState("")
-  const add = () => {
-    const value = draft.trim()
-    if (!value) return
-    onChange([...values, value])
-    setDraft("")
-  }
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] p-3">
-      <div className="flex flex-wrap gap-2">
-        {values.map((value, index) => (
-          <button
-            key={`${value}-${index}`}
-            onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-            className="rounded-full bg-[var(--color-soft)] px-3 py-2 text-sm font-semibold"
-            title="Click to remove"
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 flex gap-2">
-        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && add()} className="input" placeholder={placeholder} />
-        <button onClick={add} className="btn btn-secondary h-11 px-4">Add</button>
-      </div>
-    </div>
-  )
-}
+          {/* ── AI Creatives tab ── */}
+          {activeTab === "creatives" && (
+            <div className="w-full max-w-[720px]">
+              {/* Controls card */}
+              <div className="sku-card p-5 mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <ImageIcon size={15} className="text-[#1F57F5]" />
+                  <p className="text-[14px] font-semibold text-[#111827]">AI Ad Creatives</p>
+                  <span className="text-[10px] font-bold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-0.5 rounded-full uppercase tracking-wide">
+                    High-performing
+                  </span>
+                </div>
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Describe the ad visual</label>
+                    <textarea
+                      value={creativesPrompt}
+                      onChange={(e) => setCreativesPrompt(e.target.value)}
+                      rows={3}
+                      placeholder="A luxury jewelry ad showing a woman at a festive wedding event, warm gold tones, elegant and premium feel..."
+                      className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
+                    />
+                  </div>
 
-function KeywordEditor({ group, onChange }: { group: AdGroup; onChange: (keywords: Keyword[]) => void }) {
-  const [draft, setDraft] = useState("")
-  const [matchType, setMatchType] = useState<Keyword["matchType"]>("PHRASE")
-  const add = () => {
-    const value = draft.trim()
-    if (!value) return
-    onChange([...group.keywords, { text: value, matchType }])
-    setDraft("")
-  }
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] p-3">
-      <div className="flex flex-wrap gap-2">
-        {group.keywords.map((keyword, index) => (
-          <button
-            key={`${keyword.text}-${index}`}
-            onClick={() => onChange(group.keywords.filter((_, itemIndex) => itemIndex !== index))}
-            className="rounded-full bg-[var(--color-soft)] px-3 py-2 text-sm font-semibold"
-            title="Click to remove"
-          >
-            {keyword.text} <span className="text-[var(--color-muted)]">{keyword.matchType}</span>
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px_auto]">
-        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && add()} className="input" placeholder="Add keyword" />
-        <select value={matchType} onChange={(event) => setMatchType(event.target.value as Keyword["matchType"])} className="input">
-          <option value="BROAD">Broad</option>
-          <option value="PHRASE">Phrase</option>
-          <option value="EXACT">Exact</option>
-        </select>
-        <button onClick={add} className="btn btn-secondary h-11 px-4">Add</button>
-      </div>
-    </div>
-  )
-}
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* Style */}
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Ad Style</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {AD_STYLES.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setSelectedStyle(s)}
+                            className={cn(
+                              "h-7 px-2.5 text-[11.5px] rounded-[6px] transition-colors",
+                              selectedStyle === s
+                                ? "bg-[#EAF0FE] text-[#1F57F5] font-semibold"
+                                : "text-[#4B5563] font-medium sku-btn"
+                            )}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-function TextList({
-  label,
-  values,
-  maxLength,
-  onChange,
-}: {
-  label: string
-  values: string[]
-  maxLength: number
-  onChange: (values: string[]) => void
-}) {
-  return (
-    <Field label={label}>
-      <div className="space-y-2">
-        {values.map((value, index) => (
-          <div key={index} className="grid gap-2 md:grid-cols-[1fr_70px_auto]">
-            <input
-              value={value}
-              onChange={(event) => {
-                const next = [...values]
-                next[index] = event.target.value.slice(0, maxLength)
-                onChange(next)
-              }}
-              className="input"
-            />
-            <div className={cn("grid h-11 place-items-center rounded-xl bg-[var(--color-soft)] text-xs font-bold", value.length >= maxLength ? "text-red-600" : "text-[var(--color-muted)]")}>
-              {value.length}/{maxLength}
+                    {/* Aspect ratio */}
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Aspect Ratio</label>
+                      <div className="flex gap-1.5">
+                        {ASPECT_RATIOS.map(({ label, desc }) => (
+                          <button
+                            key={label}
+                            onClick={() => setSelectedRatio(label)}
+                            className={cn(
+                              "flex flex-col items-center px-2 py-1.5 rounded-[6px] transition-colors",
+                              selectedRatio === label
+                                ? "bg-[#EAF0FE] text-[#1F57F5]"
+                                : "text-[#4B5563] sku-btn"
+                            )}
+                          >
+                            <span className="text-[11.5px] font-bold leading-none">{label}</span>
+                            <span className="text-[9.5px] text-[#9CA3AF] leading-none mt-0.5">{desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Count */}
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">No. of variants</label>
+                      <div className="relative">
+                        <select
+                          value={creativesCount}
+                          onChange={(e) => setCreativesCount(Number(e.target.value))}
+                          className="w-full h-9 pl-3 pr-8 text-[12.5px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
+                        >
+                          {[1, 2, 3, 4].map((n) => (
+                            <option key={n} value={n}>{n} variant{n > 1 ? "s" : ""}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleGenerateCreatives}
+                    disabled={generatingCreatives}
+                    className={cn(
+                      "flex items-center justify-center gap-2 h-10 w-full rounded-[10px] text-[13.5px] font-semibold transition-colors",
+                      !generatingCreatives ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                    )}
+                  >
+                    {generatingCreatives ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-[#9CA3AF]/30 border-t-[#9CA3AF] rounded-full animate-spin" />
+                        Generating creatives…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        Generate {creativesCount} AI creative{creativesCount > 1 ? "s" : ""}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Generated creatives grid */}
+              {generatedCreatives.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[13.5px] font-semibold text-[#111827]">
+                      {generatedCreatives.length} creative{generatedCreatives.length > 1 ? "s" : ""} generated
+                    </p>
+                    <button
+                      onClick={handleGenerateCreatives}
+                      className="flex items-center gap-1 text-[12px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors"
+                    >
+                      <RefreshCw size={12} />
+                      Regenerate
+                    </button>
+                  </div>
+                  <div className={cn(
+                    "grid gap-4",
+                    generatedCreatives.length === 1 ? "grid-cols-1 max-w-[280px]" :
+                    generatedCreatives.length === 2 ? "grid-cols-2" :
+                    "grid-cols-2 lg:grid-cols-4"
+                  )}>
+                    {generatedCreatives.map((headline, i) => (
+                      <CreativeCard
+                        key={i}
+                        index={i}
+                        style={selectedStyle}
+                        ratio={selectedRatio}
+                        headline={headline}
+                        onCopy={() => navigator.clipboard.writeText(headline).catch(() => {})}
+                        onDownload={() => {}}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => setActiveTab("launch")}
+                      className="flex items-center gap-1.5 h-9 px-5 text-white text-[13px] font-semibold rounded-[8px] sku-btn-primary"
+                    >
+                      <Rocket size={13} />
+                      Continue to Launch
+                      <ArrowRight size={13} />
+                    </button>
+                    <button className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-[#374151] rounded-[8px] sku-btn">
+                      <Download size={13} />
+                      Download all
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <button onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))} className="btn btn-secondary h-11 px-3">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => onChange([...values, ""])} className="btn btn-secondary h-10 px-4">Add {label.toLowerCase()}</button>
-      </div>
-    </Field>
-  )
-}
+          )}
 
-function GooglePreview({ plan, group }: { plan: CampaignPlan; group?: AdGroup }) {
-  const headlines = group?.headlines?.filter(Boolean).slice(0, 3) || []
-  const descriptions = group?.descriptions?.filter(Boolean).slice(0, 2) || []
-  const url = plan.finalUrl || "https://your-site.com"
-  const host = url.replace(/^https?:\/\//, "").split("/")[0] || "your-site.com"
-
-  return (
-    <div className="mx-auto max-w-[720px]">
-      <div className="mb-5 flex items-center justify-between">
-        <div className="flex gap-2"><span className="rounded-full bg-[var(--accent)] px-4 py-2 text-[11px] font-semibold text-white">Ad group 1</span><button disabled className="rounded-full border bg-white px-4 py-2 text-[11px] text-[var(--color-muted)]">+ Add more ad groups</button></div>
-        <span className="rounded-[8px] bg-[var(--accent)] px-4 py-2 text-[11px] font-semibold text-white">Ad combinations</span>
+          {/* ── Launch Ads tab ── */}
+          {activeTab === "launch" && (
+            <div className="w-full max-w-[680px]">
+              <div className="sku-card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Rocket size={16} className="text-[#1F57F5]" />
+                  <p className="text-[14px] font-semibold text-[#111827]">Launch to Google Ads</p>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { step: 1, label: "Campaign strategy", done: built },
+                    { step: 2, label: "AI creatives generated", done: generatedCreatives.length > 0 },
+                    { step: 3, label: "Target audience configured", done: detected.has("audience") },
+                    { step: 4, label: "Budget set", done: detected.has("budget") },
+                    { step: 5, label: "Google Ads connected", done: false },
+                  ].map(({ step, label, done }) => (
+                    <div
+                      key={step}
+                      className="flex items-center gap-3 p-3 rounded-[10px]"
+                      style={{ background: done ? '#E6F4EC' : 'linear-gradient(145deg, #f8f9fb 0%, #f0f2f5 100%)' }}
+                    >
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11.5px] font-bold"
+                        style={done ? {
+                          background: 'linear-gradient(135deg, #34c471 0%, #2E9E5B 100%)',
+                          color: 'white',
+                          boxShadow: '0 1px 0 rgba(255,255,255,0.3) inset, 0 2px 4px rgba(46,158,91,0.3)',
+                        } : {
+                          background: 'linear-gradient(145deg, #e8eaed 0%, #f4f5f7 100%)',
+                          color: '#9CA3AF',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.08) inset',
+                        }}
+                      >
+                        {done ? <Check size={13} /> : step}
+                      </div>
+                      <span className={cn("text-[13px]", done ? "font-semibold text-[#2E9E5B]" : "font-medium text-[#4B5563]")}>
+                        {label}
+                      </span>
+                      {!done && step < 5 && (
+                        <button
+                          onClick={() => {
+                            if (step === 1) setActiveTab("campaign")
+                            if (step === 2) setActiveTab("creatives")
+                          }}
+                          className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors"
+                        >
+                          Complete →
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  disabled={!built || generatedCreatives.length === 0}
+                  className={cn(
+                    "mt-5 flex items-center justify-center gap-2 h-11 w-full rounded-[10px] text-[14px] font-semibold transition-colors",
+                    built && generatedCreatives.length > 0
+                      ? "text-white sku-btn-primary"
+                      : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                  )}
+                >
+                  <Rocket size={15} />
+                  Publish to Google Ads
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="mb-5 flex gap-6 border-b border-[var(--color-border)] text-[12px]"><span className="border-b-2 border-[var(--accent)] px-1 pb-2 font-semibold text-[var(--accent)]">Google Search</span><span className="px-1 pb-2 text-[var(--color-muted)]">Search partners</span></div>
-      <div className="mx-auto max-w-[580px] rounded-[16px] bg-[#DCEFE2] p-8 md:p-12">
-        <div className="rounded-[12px] border border-[var(--color-border)] bg-white p-5 shadow-sm">
-        <div className="mb-4 rounded-full border border-[var(--color-border)] px-4 py-2.5 text-[11px] text-[var(--color-muted)]">
-          {group?.keywords?.[0]?.text || plan.campaignName}
-        </div>
-        <div className="text-[10px] text-[var(--color-muted)]">Sponsored</div>
-        <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--color-text)]">
-          {host}
-          <ExternalLink className="h-3 w-3" />
-        </div>
-        <div className="mt-2 text-[18px] font-medium leading-6 text-[#1a0dab]">
-          {headlines.length ? headlines.join(" | ") : plan.campaignName}
-        </div>
-        <p className="mt-2 text-[11px] leading-5 text-[var(--color-muted)]">
-          {descriptions[0] || "Your description will appear here as you edit the responsive search ad."}
-        </p>
-        {descriptions[1] && <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">{descriptions[1]}</p>}
-        </div>
-      </div>
-      <div className="mx-auto mt-4 max-w-[580px] rounded-[10px] bg-white p-4">
-        <div className="flex items-center justify-between text-[11px] font-semibold">
-          <span>Budget</span>
-          <span>${plan.dailyBudget}/day</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
-          <span>Publish state</span>
-          <span className="text-amber-700">Paused</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
-          <span>Policy</span>
-          <span>{plan.policyCheck?.status || "Not checked"}</span>
-        </div>
-      </div>
-      <button className="mx-auto mt-3 flex w-full max-w-[580px] items-center justify-between rounded-[9px] border border-[var(--color-border)] bg-white px-4 py-3 text-left text-[11px] font-semibold">
-        Preview combinations
-        <ChevronDown className="h-4 w-4" />
-      </button>
-    </div>
+    </Shell>
   )
 }

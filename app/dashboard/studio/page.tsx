@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Shell } from "@/components/shell"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { Sparkles, ChevronDown, Grid, RefreshCw, Download, Copy, Check, Wand2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -65,8 +65,9 @@ export default function AdStudioPage() {
   const [format, setFormat] = useState("Social image")
   const [ratio, setRatio] = useState("1:1 Square")
   const [generating, setGenerating] = useState(false)
-  const [creatives, setCreatives] = useState<typeof SAMPLE_CREATIVES>([])
-  const [library, setLibrary] = useState<typeof SAMPLE_CREATIVES>([])
+  type Creative = { colors: string[]; headline: string; body: string }
+  const [creatives, setCreatives] = useState<Creative[]>([])
+  const [library, setLibrary] = useState<Creative[]>([])
 
   const handleGenerate = async () => {
     if (!prompt.trim() || generating) return

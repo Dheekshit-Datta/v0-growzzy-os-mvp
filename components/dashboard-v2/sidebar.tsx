@@ -30,21 +30,21 @@ interface NavItem {
 }
 
 const CREATE_NAV: NavItem[] = [
-  { href: "/campaigns/new", label: "New Campaign", icon: Megaphone },
-  { href: "/projects",      label: "Projects",      icon: FolderKanban },
-  { href: "/brand",         label: "My Brand",       icon: Sparkles },
-  { href: "/prompts",       label: "Recent Prompts", icon: History },
+  { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
+  { href: "/dashboard/projects",      label: "Projects",      icon: FolderKanban },
+  { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
+  { href: "/dashboard/prompts",       label: "Recent Prompts", icon: History },
 ]
 
 const MANAGE_NAV: NavItem[] = [
-  { href: "/dashboard",    label: "Dashboard",      icon: LayoutDashboard },
-  { href: "/ads",          label: "Ads Manager",    icon: MonitorPlay },
-  { href: "/analytics",    label: "Analytics",      icon: BarChart3 },
-  { href: "/optimization", label: "AI Optimization",icon: Zap },
-  { href: "/studio",       label: "Ad Studio",      icon: Palette },
+  { href: "/dashboard",              label: "Dashboard",      icon: LayoutDashboard },
+  { href: "/dashboard/ads",          label: "Ads Manager",    icon: MonitorPlay },
+  { href: "/dashboard/analytics",    label: "Analytics",      icon: BarChart3 },
+  { href: "/dashboard/optimization", label: "AI Optimization",icon: Zap },
+  { href: "/dashboard/studio",       label: "Ad Studio",      icon: Palette },
 ]
 
-const SETTINGS_ITEM: NavItem = { href: "/settings", label: "Settings", icon: Settings }
+const SETTINGS_ITEM: NavItem = { href: "/dashboard/settings", label: "Settings", icon: Settings }
 
 interface SidebarProps {
   collapsed?: boolean
@@ -57,7 +57,8 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const [progress] = useState(0)
 
   const isActive = (href: string) => {
-    if (href === "/campaigns/new") return pathname === "/campaigns/new" || pathname === "/"
+    if (href === "/dashboard/campaigns/new") return pathname === "/dashboard/campaigns/new"
+    if (href === "/dashboard") return pathname === "/dashboard"
     return pathname.startsWith(href)
   }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { Shell } from "@/components/shell"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { PenSquare, Plus } from "lucide-react"
 import Link from "next/link"
 
@@ -13,7 +13,7 @@ export default function PromptsPage() {
             Your saved campaign briefs. Re-run any to instantly start a new campaign.
           </p>
           <Link
-            href="/campaigns/new"
+            href="/dashboard/campaigns/new"
             className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary"
           >
             <Plus size={13} />
