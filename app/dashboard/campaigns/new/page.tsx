@@ -176,23 +176,33 @@ export default function NewCampaignPage() {
     setEnhancing(false)
   }
 
+  const [buildError, setBuildError] = useState("")
+
   const handleBuild = async () => {
     if (!prompt.trim() || building) return
     setBuilding(true)
-    await new Promise((r) => setTimeout(r, 2200))
-    
-    // Prepare campaign data
-    const campaignData = {
-      prompt,
-      detectedChips: Array.from(detected),
-      audience: { ageMin: 25, ageMax: 55, location: 'Global', description: '' },
-      creative: { style: undefined, aspectRatio: undefined, variants: 4 },
-      budget: { dailyAmount: 50, currency: 'USD ($)', totalDays: 30 },
+    setBuildError("")
+    try {
+      const res = await fetch("/api/ai/campaign-builder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offer: prompt.trim(),
+          targetCustomer: prompt.trim().slice(0, 200),
+          budget: 50,
+          location: "United States",
+          goal: "LEADS",
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json?.campaignPlanId) {
+        throw new Error(json?.error || "Couldn't build a plan. Connect Google Ads and select an account first.")
+      }
+      router.push(`/dashboard/campaigns/builder?id=${json.campaignPlanId}`)
+    } catch (err: any) {
+      setBuildError(err?.message || "Something went wrong building your plan.")
+      setBuilding(false)
     }
-    
-    // Navigate to builder with encoded data
-    const encoded = btoa(JSON.stringify(campaignData))
-    router.push(`/campaigns/builder?data=${encoded}`)
   }
 
   const handleGenerateCreatives = async () => {
@@ -368,6 +378,11 @@ export default function NewCampaignPage() {
                   </div>
                 </div>
               </div>
+              {buildError && (
+                <div className="mt-4 p-3 rounded-[12px] border border-[#D3564C]/30 bg-[#FBE7E5]">
+                  <p className="text-[12.5px] font-medium text-[#D3564C]">{buildError}</p>
+                </div>
+              )}
               {built && (
                 <div className="mt-4 p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
                   <p className="text-[13px] font-semibold text-[#2E9E5B] mb-1 flex items-center gap-1.5">

@@ -54,14 +54,53 @@ export default function CampaignBuilderPage() {
   const headlineRef = useRef<HTMLInputElement>(null)
   const descRef = useRef<HTMLTextAreaElement>(null)
 
+  const [planId, setPlanId] = useState<string | null>(null)
+  const [launching, setLaunching] = useState(false)
+  const [launchError, setLaunchError] = useState('')
+  const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
+
+  // Load a real persisted plan by id, or fall back to legacy base64 ?data=
   useEffect(() => {
+    const id = searchParams.get('id')
+    if (id) {
+      setPlanId(id)
+      fetch(`/api/ai/campaign-plan/${id}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          const plan = json?.data?.plan
+          if (!plan) return
+          const group = Array.isArray(plan.adGroups) && plan.adGroups[0] ? plan.adGroups[0] : {}
+          const keywords = [
+            ...((group.keywords || []) as any[]).map((k: any) => ({
+              keyword: String(k?.text || k || ''),
+              type: (String(k?.matchType || 'broad').toLowerCase() as 'broad' | 'phrase' | 'exact'),
+              isNegative: false,
+            })),
+            ...((group.negativeKeywords || []) as any[]).map((k: any) => ({
+              keyword: String(k?.text || k || ''),
+              type: 'broad' as const,
+              isNegative: true,
+            })),
+          ].filter((k) => k.keyword)
+          setData((prev) => ({
+            ...prev,
+            prompt: plan.campaignName || prev.prompt,
+            goal: plan.objective || plan.goal || prev.goal,
+            keywords,
+            headline: (group.headlines && group.headlines[0]) || prev.headline,
+            description: (group.descriptions && group.descriptions[0]) || prev.description,
+            dailyBudget: Number(plan.dailyBudget) || prev.dailyBudget,
+          }))
+        })
+        .catch(() => {})
+      return
+    }
     const encoded = searchParams.get('data')
     if (encoded) {
       try {
-        const decoded = JSON.parse(atob(encoded))
-        setData(decoded)
-      } catch (e) {
-        console.log('[v0] Failed to decode campaign data')
+        setData(JSON.parse(atob(encoded)))
+      } catch {
+        /* ignore malformed legacy payload */
       }
     }
   }, [searchParams])
@@ -101,8 +140,26 @@ export default function CampaignBuilderPage() {
     }
   }
 
-  const handlePublish = () => {
-    router.push('/dashboard')
+  const handlePublish = async () => {
+    if (launching) return
+    if (!planId) {
+      setLaunchError("This plan can't be launched — start from New Campaign so it's saved first.")
+      return
+    }
+    setLaunching(true)
+    setLaunchError('')
+    try {
+      const res = await fetch(`/api/ai/campaign-plan/${planId}/launch`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Launch failed. Please review the plan and try again.')
+      }
+      setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
+      setTimeout(() => router.push('/dashboard/ads'), 1400)
+    } catch (err: any) {
+      setLaunchError(err?.message || 'Launch failed.')
+      setLaunching(false)
+    }
   }
 
   // Policy check logic
@@ -480,11 +537,27 @@ export default function CampaignBuilderPage() {
                 </button>
               )}
               {stepIndex === STEPS.length - 1 && (
-                <button onClick={handlePublish} className="sku-btn-primary flex-1 py-2.5 text-[12px] font-medium">
-                  🚀 Launch Campaign
+                <button
+                  onClick={handlePublish}
+                  disabled={launching || !!launched}
+                  className="sku-btn-primary flex-1 py-2.5 text-[12px] font-medium disabled:opacity-70"
+                >
+                  {launching ? "Launching…" : launched ? "✓ Launched (paused)" : "🚀 Launch (starts paused)"}
                 </button>
               )}
             </div>
+            {launchError && (
+              <div className="mt-3 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
+                <p className="text-[12px] font-medium text-[#D3564C]">{launchError}</p>
+              </div>
+            )}
+            {launched && (
+              <div className="mt-3 p-3 rounded-[10px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
+                <p className="text-[12px] font-medium text-[#2E9E5B]">
+                  Campaign published to Google Ads in paused state{launched.externalCampaignId ? ` (ID ${launched.externalCampaignId})` : ""}. Enable it from Ads Manager when ready.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
