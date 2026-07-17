@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         const userId = await resolveUserId(session.user.id!)
         const workspaceId = await getRequestWorkspaceId(userId, request)
         const integrations = await prisma.integration.findMany({
-            where: { userId, workspaceId, status: "ACTIVE", hasAdsAccess: true },
+            where: { userId, workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
             select: { id: true, selectedAdAccountId: true, accountId: true },
         })
         const integrationIds = integrations.map((item) => item.id)

@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         workspaceId,
         platform: String(input.platform || campaign?.platform || "GOOGLE").toUpperCase() as any,
         hasAdsAccess: true,
-        status: "ACTIVE",
+        status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
       },
       select: { selectedAdAccountId: true, accountId: true },
     })

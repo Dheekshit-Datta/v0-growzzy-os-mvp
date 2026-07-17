@@ -51,7 +51,7 @@ export async function calculateReportMetrics(
     throw new Error("A workspace is required to generate a report.");
   }
   const integrations = await prisma.integration.findMany({
-    where: { userId, workspaceId: scope.workspaceId, status: "ACTIVE", hasAdsAccess: true },
+    where: { userId, workspaceId: scope.workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
     select: { selectedAdAccountId: true, accountId: true },
   })
   const activeAccountIds = integrations.map((integration) => integration.selectedAdAccountId || integration.accountId).filter(Boolean) as string[]

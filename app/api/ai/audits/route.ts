@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, _req)
     const integration = await prisma.integration.findFirst({
-      where: { userId, workspaceId, platform: "GOOGLE", status: "ACTIVE", hasAdsAccess: true },
+      where: { userId, workspaceId, platform: "GOOGLE", status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
       select: { selectedAdAccountId: true, accountId: true },
     })
     const adAccountId = integration?.selectedAdAccountId || integration?.accountId || null

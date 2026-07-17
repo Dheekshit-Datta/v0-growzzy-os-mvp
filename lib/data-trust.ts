@@ -43,7 +43,7 @@ export function verifiedCampaignWhere(input: CampaignScopeInput): Prisma.Campaig
     integration: {
       userId: input.userId,
       hasAdsAccess: true,
-      status: "ACTIVE",
+      status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     },
     NOT: unverifiedCampaignWhere(),

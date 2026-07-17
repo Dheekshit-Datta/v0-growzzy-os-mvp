@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       create: { userId, primaryKpi: "ROAS", riskLevel: "BALANCED" },
     })
     const googleIntegration = await prisma.integration.findFirst({
-      where: { userId, workspaceId, platform: "GOOGLE", hasAdsAccess: true, status: "ACTIVE" },
+      where: { userId, workspaceId, platform: "GOOGLE", hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
       select: { id: true, selectedAdAccountId: true, accountId: true },
     })
     const selectedAdAccountId = googleIntegration?.selectedAdAccountId || googleIntegration?.accountId || null

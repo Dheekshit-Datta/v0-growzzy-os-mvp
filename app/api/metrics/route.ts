@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const [totalUsers, activeIntegrations, campaignsSyncedToday, syncErrorsLastHour, automationsTriggeredToday] = await Promise.all([
       prisma.user.count(),
-      prisma.integration.count({ where: { hasAdsAccess: true, status: "ACTIVE" } }),
+      prisma.integration.count({ where: { hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } } }),
       prisma.campaign.count({ where: { syncedAt: { gte: dayStart } } }),
       prisma.integration.count({
         where: {

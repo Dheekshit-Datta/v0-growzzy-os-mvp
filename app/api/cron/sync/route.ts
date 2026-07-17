@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   const integrations = await prisma.integration.findMany({
     where: {
       hasAdsAccess: true,
-      status: "ACTIVE",
+      status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
       platform: "GOOGLE",
     },
     include: {

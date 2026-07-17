@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const workspaceId = await getRequestWorkspaceId(userId, req)
   const requestedAccountId = req.nextUrl.searchParams.get("adAccountId")
   const integration = await prisma.integration.findFirst({
-    where: { userId, workspaceId, status: "ACTIVE", hasAdsAccess: true, ...(requestedAccountId ? { OR: [{ selectedAdAccountId: requestedAccountId }, { accountId: requestedAccountId }] } : {}) },
+    where: { userId, workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true, ...(requestedAccountId ? { OR: [{ selectedAdAccountId: requestedAccountId }, { accountId: requestedAccountId }] } : {}) },
     select: { selectedAdAccountId: true, accountId: true },
   })
   const adAccountId = integration ? (requestedAccountId || integration.selectedAdAccountId || integration.accountId || null) : null

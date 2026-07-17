@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const integration = await prisma.integration.findFirst({
-      where: { userId, workspaceId, status: "ACTIVE", hasAdsAccess: true },
+      where: { userId, workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
       select: { selectedAdAccountId: true, accountId: true },
     })
     const adAccountId = integration?.selectedAdAccountId || integration?.accountId || null

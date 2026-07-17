@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "name, frequency and sendTo are required" }, { status: 400 })
     }
     const integration = await prisma.integration.findFirst({
-      where: { userId, workspaceId, status: "ACTIVE", hasAdsAccess: true },
+      where: { userId, workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
       select: { selectedAdAccountId: true, accountId: true },
     })
     const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null
@@ -82,7 +82,7 @@ export async function PATCH(req: NextRequest) {
         where: {
           userId,
           workspaceId,
-          status: "ACTIVE",
+          status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
           hasAdsAccess: true,
           OR: [{ selectedAdAccountId: body.adAccountId }, { accountId: body.adAccountId }],
         },

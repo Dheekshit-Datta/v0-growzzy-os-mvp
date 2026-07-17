@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
       id: { in: parsed.data.ids },
       userId,
       workspaceId,
-      integration: { hasAdsAccess: true, status: "ACTIVE" },
+      integration: { hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
     },
     include: {
       integration: { include: { adAccounts: true } },

@@ -26,7 +26,7 @@ function sevenDaysAgo() {
 
 async function loadGoogleCampaigns(userId: string, workspaceId: string) {
   const integration = await prisma.integration.findFirst({
-    where: { userId, workspaceId, platform: "GOOGLE", hasAdsAccess: true, status: "ACTIVE" },
+    where: { userId, workspaceId, platform: "GOOGLE", hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
     select: { id: true, selectedAdAccountId: true, accountId: true },
   })
   const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     const workspaceFilter = workspaceWhere(workspaceId, false)
     const integrations = await prisma.integration.findMany({
-      where: { userId, ...workspaceFilter, hasAdsAccess: true, status: "ACTIVE" },
+      where: { userId, ...workspaceFilter, hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
       select: { platform: true, selectedAdAccountName: true, lastSyncAt: true, selectedAdAccountId: true, accountId: true },
     })
     const selectedAdAccountIds = integrations

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
         userId,
         workspaceId,
         platform: "GOOGLE",
-        status: "ACTIVE",
+        status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
         hasAdsAccess: true,
         OR: [{ selectedAdAccountId: adAccountId }, { accountId: adAccountId }],
       },
