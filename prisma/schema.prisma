@@ -124,6 +124,9 @@ model Workspace {
   currencyCode       String?             @default("USD")
   timezone           String?
   productDescription String?
+  industry           String?
+  toneOfVoice        String?
+  defaultLandingPageUrl String?
   dailyBudgetCeiling Float?
   defaultAutomationMode String @default("ALERT")
   targetCpa          Float?

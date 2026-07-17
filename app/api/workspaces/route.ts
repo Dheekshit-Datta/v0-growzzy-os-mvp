@@ -19,6 +19,10 @@ const UpdateWorkspaceSchema = z.object({
   timezone: z.string().min(1).max(80).optional(),
   dailyBudgetCeiling: z.coerce.number().min(1).max(100000).optional(),
   productDescription: z.string().max(1000).optional(),
+  industry: z.string().max(80).optional(),
+  toneOfVoice: z.string().max(40).optional(),
+  defaultLandingPageUrl: z.string().url().optional().or(z.literal("")),
+  logo: z.string().max(2000000).optional(),
 })
 
 function slugify(value: string) {
@@ -91,6 +95,10 @@ export async function PATCH(req: NextRequest) {
       ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
       ...(data.dailyBudgetCeiling !== undefined ? { dailyBudgetCeiling: data.dailyBudgetCeiling } : {}),
       ...(data.productDescription !== undefined ? { productDescription: data.productDescription || null } : {}),
+      ...(data.industry !== undefined ? { industry: data.industry || null } : {}),
+      ...(data.toneOfVoice !== undefined ? { toneOfVoice: data.toneOfVoice || null } : {}),
+      ...(data.defaultLandingPageUrl !== undefined ? { defaultLandingPageUrl: data.defaultLandingPageUrl || null } : {}),
+      ...(data.logo !== undefined ? { logo: data.logo || null } : {}),
     },
   })
 

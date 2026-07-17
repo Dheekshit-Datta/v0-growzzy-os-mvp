@@ -63,10 +63,54 @@ export default function OnboardingPage() {
     }
   }, [state, mounted])
 
+  // Reflect the REAL Google connection (e.g. after returning from OAuth),
+  // rather than trusting locally-stored optimism.
+  useEffect(() => {
+    if (!mounted) return
+    fetch('/api/integrations/status', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const g = json?.google
+        if (!g?.connected) return
+        setState((s) => ({
+          ...s,
+          currentStep: s.currentStep < 3 ? 3 : s.currentStep,
+          step3: {
+            ...s.step3,
+            googleConnected: true,
+            googleAccountId: g.selectedAdAccountId || g.accountId || '',
+            syncing: false,
+          },
+        }))
+      })
+      .catch(() => {})
+  }, [mounted])
+
   const canContinueStep2 =
     state.step2.businessName.trim() && state.step2.primaryGoal && state.step2.dailyBudget
 
-  const handleContinueStep2 = () => {
+  // Save the workspace details the user typed in step 2 to the database,
+  // then advance. These feed the AI when it writes campaigns later.
+  const handleContinueStep2 = async () => {
+    const s2 = state.step2
+    // currency is stored as a display label like "USD ($)" — the API wants a 3-letter code.
+    const currencyCode = (s2.currency || '').match(/[A-Z]{3}/)?.[0]
+    const goal = (s2.primaryGoal || '').toUpperCase().replace(/[\s-]+/g, '_')
+    const validGoal = ['SALES', 'LEADS', 'TRAFFIC', 'APP_INSTALLS'].includes(goal) ? goal : undefined
+
+    await fetch('/api/workspaces', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: s2.businessName?.trim() || undefined,
+        websiteUrl: s2.websiteUrl?.trim() || '',
+        primaryGoal: validGoal,
+        currencyCode,
+        timezone: s2.timezone || undefined,
+        dailyBudgetCeiling: s2.dailyBudget ? Number(s2.dailyBudget) : undefined,
+        productDescription: s2.productDescription?.trim() || '',
+      }),
+    }).catch(() => {})
     setState((s) => ({ ...s, currentStep: 3 }))
   }
 
@@ -74,23 +118,29 @@ export default function OnboardingPage() {
     setState((s) => ({ ...s, currentStep: 2 }))
   }
 
-  const handleGoogleConnect = async () => {
-    setState((s) => ({ ...s, step3: { ...s.step3, syncing: true } }))
-    // Simulate OAuth flow
-    await new Promise((r) => setTimeout(r, 2000))
-    setState((s) => ({
-      ...s,
-      step3: { ...s.step3, googleConnected: true, googleAccountId: 'google-ads-12345', syncing: false },
-    }))
+  // Real Google OAuth — full page redirect. On return the effect below
+  // detects the live connection.
+  const handleGoogleConnect = () => {
+    window.location.href = '/api/integrations/google/connect'
   }
 
-  const handleCreateCampaign = () => {
-    localStorage.setItem('growzzy_onboarding_complete', 'true')
-    router.push('/campaigns/new')
+  // Persist completion to the database (not localStorage) so the onboarding
+  // gate in the dashboard layout stops redirecting this user.
+  const completeOnboarding = async () => {
+    await fetch('/api/onboarding', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ onboardingCompleted: true, onboardingStep: 3 }),
+    }).catch(() => {})
   }
 
-  const handleSkipConnect = () => {
-    localStorage.setItem('growzzy_onboarding_complete', 'true')
+  const handleCreateCampaign = async () => {
+    await completeOnboarding()
+    router.push('/dashboard/campaigns/new')
+  }
+
+  const handleSkipConnect = async () => {
+    await completeOnboarding()
     router.push('/dashboard')
   }
 

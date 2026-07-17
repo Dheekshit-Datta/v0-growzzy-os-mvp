@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert } from "lucide-react"
+import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Tab = "general" | "integrations" | "notifications" | "danger"
@@ -14,11 +14,23 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "danger",        label: "Danger zone",   icon: ShieldAlert },
 ]
 
-/* ─── Skeuomorphic input ─── */
+type WorkspaceData = {
+  id: string
+  name: string
+  websiteUrl: string | null
+  primaryGoal: string | null
+  currencyCode: string | null
+  timezone: string | null
+  dailyBudgetCeiling: number | null
+  productDescription: string | null
+}
+
+/* ─── Controlled skeuomorphic input ─── */
 function SkuInput({
-  label, helper, type = "text", placeholder, prefix,
+  label, helper, type = "text", placeholder, prefix, value, onChange,
 }: {
   label: string; helper?: string; type?: string; placeholder?: string; prefix?: string
+  value: string; onChange: (v: string) => void
 }) {
   return (
     <div className="space-y-1.5">
@@ -30,6 +42,8 @@ function SkuInput({
         <input
           type={type}
           placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           className={cn("w-full h-9 pr-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input", prefix ? "pl-6" : "pl-3")}
         />
       </div>
@@ -38,15 +52,19 @@ function SkuInput({
   )
 }
 
-function SkuSelect({ label, options }: { label: string; options: string[] }) {
+function SkuSelect({
+  label, options, value, onChange,
+}: { label: string; options: { label: string; value: string }[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1.5">
       <label className="block text-[12.5px] font-semibold text-[#374151]">{label}</label>
       <div className="relative">
         <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
         >
-          {options.map((o) => <option key={o}>{o}</option>)}
+          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
       </div>
@@ -102,15 +120,20 @@ function SectionCard({ title, description, children }: { title: string; descript
   )
 }
 
-function SaveButton({ label = "Save changes" }: { label?: string }) {
+function SaveButton({ label = "Save changes", onSave, saving }: { label?: string; onSave: () => void; saving?: boolean }) {
   const [saved, setSaved] = useState(false)
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+  const handleSave = async () => {
+    await onSave()
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
   return (
     <button
       onClick={handleSave}
-      className="flex items-center gap-1.5 h-9 px-5 text-white text-[13px] font-semibold rounded-[8px] sku-btn-primary transition-all"
+      disabled={saving}
+      className="flex items-center gap-1.5 h-9 px-5 text-white text-[13px] font-semibold rounded-[8px] sku-btn-primary transition-all disabled:opacity-60"
     >
-      {saved ? <><Check size={13} /> Saved!</> : <><Check size={13} /> {label}</>}
+      {saving ? <><Loader2 size={13} className="animate-spin" /> Saving…</> : saved ? <><Check size={13} /> Saved!</> : <><Check size={13} /> {label}</>}
     </button>
   )
 }
@@ -124,40 +147,126 @@ function StatusPill({ status }: { status: "connected" | "disconnected" | "coming
   return <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#B8892B] bg-[#FBF0DA] px-2 py-0.5 rounded-full">Not connected</span>
 }
 
+const GOAL_OPTIONS = [
+  { label: "Select a goal", value: "" },
+  { label: "Sales", value: "SALES" },
+  { label: "Leads", value: "LEADS" },
+  { label: "App installs", value: "APP_INSTALLS" },
+  { label: "Website traffic", value: "TRAFFIC" },
+]
+const CURRENCY_OPTIONS = [
+  { label: "Select currency", value: "" },
+  { label: "USD ($)", value: "USD" },
+  { label: "INR (₹)", value: "INR" },
+  { label: "EUR (€)", value: "EUR" },
+  { label: "GBP (£)", value: "GBP" },
+  { label: "AUD (A$)", value: "AUD" },
+]
+const TIMEZONE_OPTIONS = [
+  { label: "Select timezone", value: "" },
+  { label: "UTC-5 (Eastern)", value: "America/New_York" },
+  { label: "UTC-8 (Pacific)", value: "America/Los_Angeles" },
+  { label: "UTC+5:30 (IST)", value: "Asia/Kolkata" },
+  { label: "UTC+0 (GMT)", value: "Etc/UTC" },
+  { label: "UTC+1 (CET)", value: "Europe/Paris" },
+]
+
 function GeneralTab() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [ws, setWs] = useState<Partial<WorkspaceData>>({})
+
+  useEffect(() => {
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const w = json?.workspaces?.[0]
+        if (w) setWs(w)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const set = (patch: Partial<WorkspaceData>) => setWs((prev) => ({ ...prev, ...patch }))
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await fetch("/api/workspaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: ws.name || undefined,
+          websiteUrl: ws.websiteUrl || "",
+          primaryGoal: ws.primaryGoal || undefined,
+          currencyCode: ws.currencyCode || undefined,
+          timezone: ws.timezone || undefined,
+          dailyBudgetCeiling: ws.dailyBudgetCeiling ?? undefined,
+          productDescription: ws.productDescription || "",
+        }),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <SectionCard title="Workspace" description="Configure your workspace identity and AI context.">
+      <div className="flex items-center justify-center py-10 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
+    </SectionCard>
+  }
+
   return (
     <SectionCard title="Workspace" description="Configure your workspace identity and AI context.">
       <div className="grid grid-cols-2 gap-4">
-        <SkuInput label="Workspace name" placeholder="Your workspace name" />
-        <SkuInput label="Business website" type="url" placeholder="https://yourwebsite.com" />
-        <SkuSelect label="Primary goal" options={["Select a goal", "Sales", "Leads", "App installs", "Website traffic"]} />
-        <SkuSelect label="Currency" options={["Select currency", "USD ($)", "INR (₹)", "EUR (€)", "GBP (£)", "AUD (A$)"]} />
-        <SkuSelect label="Timezone" options={["Select timezone", "UTC-5 (Eastern)", "UTC-8 (Pacific)", "UTC+5:30 (IST)", "UTC+0 (GMT)", "UTC+1 (CET)"]} />
+        <SkuInput label="Workspace name" placeholder="Your workspace name" value={ws.name || ""} onChange={(v) => set({ name: v })} />
+        <SkuInput label="Business website" type="url" placeholder="https://yourwebsite.com" value={ws.websiteUrl || ""} onChange={(v) => set({ websiteUrl: v })} />
+        <SkuSelect label="Primary goal" options={GOAL_OPTIONS} value={ws.primaryGoal || ""} onChange={(v) => set({ primaryGoal: v })} />
+        <SkuSelect label="Currency" options={CURRENCY_OPTIONS} value={ws.currencyCode || ""} onChange={(v) => set({ currencyCode: v })} />
+        <SkuSelect label="Timezone" options={TIMEZONE_OPTIONS} value={ws.timezone || ""} onChange={(v) => set({ timezone: v })} />
         <SkuInput
           label="Daily budget ceiling"
           type="number"
           placeholder="0.00"
           prefix="$"
           helper="AI can never exceed this amount per day — enforced automatically."
+          value={ws.dailyBudgetCeiling != null ? String(ws.dailyBudgetCeiling) : ""}
+          onChange={(v) => set({ dailyBudgetCeiling: v ? Number(v) : null })}
         />
         <div className="col-span-2 space-y-1.5">
           <label className="block text-[12.5px] font-semibold text-[#374151]">Product description</label>
           <textarea
             rows={4}
             placeholder="Describe your product, ideal customer, and what makes you different..."
+            value={ws.productDescription || ""}
+            onChange={(e) => set({ productDescription: e.target.value })}
             className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none resize-none leading-relaxed rounded-[8px] sku-input"
           />
           <p className="text-[11px] text-[#9CA3AF]">Used by the AI to write your campaigns. Be specific.</p>
         </div>
       </div>
       <div className="flex justify-end mt-5">
-        <SaveButton />
+        <SaveButton onSave={save} saving={saving} />
       </div>
     </SectionCard>
   )
 }
 
 function IntegrationsTab() {
+  const [loading, setLoading] = useState(true)
+  const [google, setGoogle] = useState<{ connected: boolean; selectedAdAccountName?: string | null } | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch("/api/integrations/status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => setGoogle(json?.google ?? null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
   return (
     <div className="space-y-5">
       <SectionCard title="Ad Platforms" description="Connect your advertising accounts to pull in live data and launch campaigns.">
@@ -176,14 +285,18 @@ function IntegrationsTab() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-[13.5px] font-semibold text-[#111827]">Google Ads</p>
-                  <StatusPill status="disconnected" />
+                  {loading ? <Loader2 size={12} className="animate-spin text-[#9CA3AF]" /> : <StatusPill status={google?.connected ? "connected" : "disconnected"} />}
                 </div>
-                <p className="text-[12px] text-[#9CA3AF]">Connect to launch campaigns and see live data</p>
+                <p className="text-[12px] text-[#9CA3AF]">
+                  {google?.connected ? (google.selectedAdAccountName || "Connected") : "Connect to launch campaigns and see live data"}
+                </p>
               </div>
             </div>
-            <button className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary">
-              Connect
-            </button>
+            {!google?.connected && (
+              <a href="/api/integrations/google/connect" className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary">
+                Connect
+              </a>
+            )}
           </div>
 
           {/* Meta Ads — disabled */}
@@ -218,9 +331,9 @@ function NotificationsTab() {
         <SkuToggle label="Budget alerts" description="Email if a campaign is on track to hit your daily budget ceiling" defaultChecked />
         <SkuToggle label="Product updates" description="Occasional announcements about new features — off by default" />
       </div>
-      <div className="flex justify-end mt-5 pt-4 border-t border-[#DDE1E7]">
-        <SaveButton label="Save preferences" />
-      </div>
+      <p className="text-[11px] text-[#9CA3AF] mt-4 pt-4 border-t border-[#DDE1E7]">
+        Notification delivery isn&apos;t wired to an email service yet — these preferences don&apos;t send mail today.
+      </p>
     </SectionCard>
   )
 }
@@ -228,8 +341,22 @@ function NotificationsTab() {
 function DangerTab() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [input, setInput] = useState("")
   const CONFIRM_PHRASE = "delete my account"
+
+  const doDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/user/delete-account", { method: "DELETE" })
+      if (res.ok) {
+        setConfirmed(true)
+        setTimeout(() => { window.location.href = "/" }, 1800)
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div
@@ -274,16 +401,16 @@ function DangerTab() {
             />
             <div className="flex gap-2">
               <button
-                onClick={() => { if (input === CONFIRM_PHRASE) setConfirmed(true) }}
-                disabled={input !== CONFIRM_PHRASE}
+                onClick={doDelete}
+                disabled={input !== CONFIRM_PHRASE || deleting}
                 className={cn(
                   "flex items-center gap-1.5 h-9 px-4 text-[12.5px] font-semibold rounded-[8px] transition-colors",
-                  input === CONFIRM_PHRASE
+                  input === CONFIRM_PHRASE && !deleting
                     ? "bg-[#D3564C] text-white hover:bg-[#b84540]"
                     : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                 )}
               >
-                <Trash2 size={13} />
+                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                 Confirm delete
               </button>
               <button
@@ -297,7 +424,7 @@ function DangerTab() {
         )}
         {confirmed && (
           <div className="rounded-[10px] border border-[#2E9E5B]/30 bg-[#E6F4EC] p-4">
-            <p className="text-[12.5px] font-semibold text-[#2E9E5B]">Account deletion scheduled. You will receive a confirmation email.</p>
+            <p className="text-[12.5px] font-semibold text-[#2E9E5B]">Account deleted. Redirecting…</p>
           </div>
         )}
       </div>
