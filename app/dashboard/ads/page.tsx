@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import { Search, Filter, RefreshCw, Plus, Megaphone, ChevronDown, Loader2 } from "lucide-react"
 import Link from "next/link"
@@ -66,6 +67,7 @@ function SkuDropdown({ options, value, onChange }: { options: string[]; value: s
 }
 
 export default function AdsManagerPage() {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [platform, setPlatform] = useState("All platforms")
   const [status, setStatus] = useState("All statuses")
@@ -167,8 +169,12 @@ export default function AdsManagerPage() {
                 visible.map((c) => {
                   const pill = statusPill(c.liveStatus || c.status)
                   return (
-                    <tr key={c.id} className="border-b border-[#F0F2F5] last:border-0 hover:bg-[#F8F9FB] transition-colors">
-                      <td className="px-4 py-3"><input type="checkbox" className="rounded border-[#DDE1E7] w-3.5 h-3.5" /></td>
+                    <tr
+                      key={c.id}
+                      onClick={() => router.push(`/dashboard/campaigns/${c.id}`)}
+                      className="border-b border-[#F0F2F5] last:border-0 hover:bg-[#F8F9FB] transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded border-[#DDE1E7] w-3.5 h-3.5" /></td>
                       <td className="px-4 py-3 text-[13px] font-medium text-[#111827]">{c.name}</td>
                       <td className="px-4 py-3"><span className={cn("inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold", pill.cls)}>{pill.label}</span></td>
                       <td className="px-4 py-3 text-[13px] text-[#374151] tabular">{money(c.spend)}</td>
