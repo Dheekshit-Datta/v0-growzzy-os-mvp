@@ -20,6 +20,7 @@ import {
   Zap,
   Palette,
   Settings,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -41,6 +42,7 @@ const MANAGE_NAV: NavItem[] = [
   { href: "/dashboard/ads",          label: "Ads Manager",    icon: MonitorPlay },
   { href: "/dashboard/analytics",    label: "Analytics",      icon: BarChart3 },
   { href: "/dashboard/optimization", label: "AI Optimization",icon: Zap },
+  { href: "/dashboard/reports",      label: "Reports",        icon: FileText },
   { href: "/dashboard/studio",       label: "Ad Studio",      icon: Palette },
 ]
 

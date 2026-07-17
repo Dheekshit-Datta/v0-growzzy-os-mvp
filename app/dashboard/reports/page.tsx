@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import DashboardLayout from "@/components/dashboard-layout"
-import { Calendar, Download, Eye, FileText, Plus } from "lucide-react"
+import { Shell } from "@/components/dashboard-v2/shell"
+import { Calendar, Download, Eye, FileText, Plus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 type ReportType = "monthly-performance" | "campaign-efficiency" | "roas-analysis"
@@ -229,12 +229,11 @@ export default function ReportsPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+    <Shell title="Reports">
+      <div className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-semibold text-slate-900">Reports</h1>
-            <p className="text-sm text-slate-500">Generate branded client-ready reports from real synced campaign data.</p>
+            <p className="text-[13px] text-slate-500">Generate branded client-ready reports from real synced campaign data.</p>
           </div>
           <button className="btn btn-secondary h-10" onClick={() => setModalOpen(true)}>
             <Calendar className="w-4 h-4 mr-2" />
@@ -373,6 +372,6 @@ export default function ReportsPage() {
           </div>
         </div>
       ) : null}
-    </DashboardLayout>
+    </Shell>
   )
 }
