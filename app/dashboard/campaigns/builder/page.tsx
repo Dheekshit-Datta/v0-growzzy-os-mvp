@@ -58,6 +58,9 @@ export default function CampaignBuilderPage() {
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
+  // Full AI plan JSON kept so edits merge into (not replace) the AI's arrays,
+  // which satisfy Google's min-3-headlines / min-2-descriptions requirements.
+  const [rawPlan, setRawPlan] = useState<any>(null)
 
   // Load a real persisted plan by id, or fall back to legacy base64 ?data=
   useEffect(() => {
@@ -70,6 +73,7 @@ export default function CampaignBuilderPage() {
         .then((json) => {
           const plan = json?.data?.plan
           if (!plan) return
+          setRawPlan(plan)
           const group = Array.isArray(plan.adGroups) && plan.adGroups[0] ? plan.adGroups[0] : {}
           const keywords = [
             ...((group.keywords || []) as any[]).map((k: any) => ({
@@ -127,6 +131,66 @@ export default function CampaignBuilderPage() {
     })
   }
 
+  // Merge the builder's edits back into the AI plan (overwrite index 0, keep the
+  // rest of the AI's headlines/descriptions so Google's minimums stay satisfied),
+  // then persist via PATCH. Returns false if the save failed.
+  const persistEdits = async (): Promise<boolean> => {
+    if (!planId || !rawPlan || !Array.isArray(rawPlan.adGroups) || rawPlan.adGroups.length === 0) {
+      // Nothing to merge into — launch will publish the AI's original plan.
+      return true
+    }
+    const positives = (data.keywords || []).filter((k) => !k.isNegative)
+    const negatives = (data.keywords || []).filter((k) => k.isNegative)
+
+    const adGroups = rawPlan.adGroups.map((g: any, i: number) => {
+      if (i !== 0) {
+        // keep other groups intact but normalize keyword shape for the PATCH schema
+        return {
+          name: g.name || `Ad Group ${i + 1}`,
+          theme: g.theme || '',
+          keywords: (g.keywords || [])
+            .map((k: any) => ({ text: String(k?.text || k || ''), matchType: String(k?.matchType || 'PHRASE').toUpperCase() }))
+            .filter((k: any) => k.text),
+          negativeKeywords: (g.negativeKeywords || []).map((k: any) => String(k?.text || k || '')).filter(Boolean),
+          headlines: (g.headlines || []).map((h: any) => String(h?.text || h || '')).filter(Boolean),
+          descriptions: (g.descriptions || []).map((d: any) => String(d?.text || d || '')).filter(Boolean),
+        }
+      }
+      // group 0 — apply the user's edits
+      const origHeadlines = (g.headlines || []).map((h: any) => String(h?.text || h || '')).filter(Boolean)
+      const origDescriptions = (g.descriptions || []).map((d: any) => String(d?.text || d || '')).filter(Boolean)
+      const headlines = [...origHeadlines]
+      const descriptions = [...origDescriptions]
+      if (data.headline && data.headline.trim()) headlines[0] = data.headline.trim().slice(0, 30)
+      if (data.description && data.description.trim()) descriptions[0] = data.description.trim().slice(0, 90)
+
+      // Use edited keyword list if it still has at least one positive; otherwise keep original.
+      const keywords =
+        positives.length > 0
+          ? positives.map((k) => ({ text: k.keyword.slice(0, 80), matchType: k.type.toUpperCase() }))
+          : (g.keywords || []).map((k: any) => ({ text: String(k?.text || k || ''), matchType: String(k?.matchType || 'PHRASE').toUpperCase() }))
+
+      return {
+        name: g.name || 'Core Campaign',
+        theme: g.theme || '',
+        keywords,
+        negativeKeywords: negatives.map((k) => k.keyword.slice(0, 80)),
+        headlines,
+        descriptions,
+      }
+    })
+
+    const res = await fetch(`/api/ai/campaign-plan/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dailyBudget: data.dailyBudget && data.dailyBudget > 0 ? data.dailyBudget : undefined,
+        adGroups,
+      }),
+    })
+    return res.ok
+  }
+
   const handlePublish = async () => {
     if (launching) return
     if (!planId) {
@@ -136,6 +200,11 @@ export default function CampaignBuilderPage() {
     setLaunching(true)
     setLaunchError('')
     try {
+      // 1) save the user's edits so the launch publishes what they see
+      const saved = await persistEdits()
+      if (!saved) throw new Error("Couldn't save your edits. Please review the fields and try again.")
+
+      // 2) launch the (now-updated) persisted plan
       const res = await fetch(`/api/ai/campaign-plan/${planId}/launch`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok || !json?.ok) {
