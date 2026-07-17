@@ -115,15 +115,6 @@ export async function GET(req: NextRequest) {
           _count: { select: { keywords: true, ads: true } },
         },
       },
-      adSets: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          budgetAmount: true,
-          _count: { select: { ads: true } },
-        },
-      },
       metricsDaily: {
         orderBy: { metricDate: "desc" },
         take: 14,
@@ -236,7 +227,6 @@ export async function GET(req: NextRequest) {
       verifiedAt: campaign.verifiedAt,
       syncedAt: campaign.syncedAt,
       adGroups: campaign.adGroups,
-      adSets: campaign.adSets,
       latestChanges: campaign.optimizationLogs,
       metricsDaily: campaign.metricsDaily.reverse(),
       preflight: {

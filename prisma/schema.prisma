@@ -25,11 +25,6 @@ enum IntegrationStatus {
   RECONNECT_REQUIRED
 }
 
-enum AlertSeverity {
-  CRITICAL
-  WARNING
-  INFO
-}
 
 model User {
   id                     String              @id @default(cuid())
@@ -56,7 +51,6 @@ model User {
   sessions               Session[]
   workspaces             WorkspaceMember[]
   integrations           Integration[]
-  alerts                 Alert[]
   notifications          Notification[]
   scheduledReports       ScheduledReport[]
   optimizationLogs       OptimizationLog[]
@@ -73,7 +67,6 @@ model User {
   settings               UserSettings?
   betaFeedback           BetaFeedback[]
   ownedWorkspaces        Workspace[]         @relation("WorkspaceOwner")
-  adSets                 AdSet[]
 }
 
 model Session {
@@ -139,7 +132,6 @@ model Workspace {
   integrations       Integration[]
   adAccounts         AdAccount[]
   campaigns          Campaign[]
-  adSets             AdSet[]
   leads              Lead[]
   reports            Report[]
   generatedCreatives GeneratedCreative[]
@@ -294,8 +286,8 @@ model Campaign {
   userId           String?
   platform         IntegrationPlatform
   externalId       String
-  adAccountId      String?             @map("adAccountDbId")
-  adAccountExternalId String?          @map("adAccountId")
+  adAccountId         String?
+  adAccountExternalId String?
   name             String
   status           String
   objective        String?
@@ -350,8 +342,6 @@ model Campaign {
   metricsDaily     CampaignMetricDaily[]
   creatives        Creative[]
   adGroups         AdGroup[]
-  adSets           AdSet[]
-  alerts           Alert[]
   optimizationLogs OptimizationLog[]
   signals          Signal[]
   optimizationActions OptimizationAction[]
@@ -364,25 +354,6 @@ model Campaign {
   @@index([userId])
 }
 
-model Alert {
-  id          String        @id @default(cuid())
-  userId      String
-  platform    String
-  metric      String
-  value       Float
-  threshold   Float
-  severity    AlertSeverity
-  detectedAt  DateTime      @default(now())
-  description String
-  campaignId  String?
-  createdAt   DateTime      @default(now())
-
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-
-  @@index([userId, detectedAt])
-  @@index([platform, metric, detectedAt])
-}
 
 model Notification {
   id        String   @id @default(cuid())
@@ -398,15 +369,6 @@ model Notification {
   @@index([userId, isRead, createdAt])
 }
 
-model BetaWaitlist {
-  id        String   @id @default(cuid())
-  email     String
-  platform  String
-  createdAt DateTime @default(now())
-
-  @@unique([email, platform])
-  @@index([platform, createdAt])
-}
 
 model BetaFeedback {
   id        String   @id @default(cuid())
@@ -573,34 +535,6 @@ model AdGroup {
   @@index([userId])
 }
 
-model AdSet {
-  id           String    @id @default(cuid())
-  workspaceId  String?
-  userId       String
-  campaignId   String
-  externalId   String?
-  name         String
-  status       String    @default("ENABLED")
-  objective    String?
-  targeting    Json?
-  placements   Json?
-  budgetAmount Float?
-  budgetType   String?
-  startDate    DateTime?
-  endDate      DateTime?
-  isLive       Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  campaign  Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ads       Ad[]
-
-  @@index([workspaceId])
-  @@index([campaignId])
-  @@index([userId])
-}
 
 model Keyword {
   id           String   @id @default(cuid())
@@ -626,7 +560,6 @@ model Ad {
   id           String   @id @default(cuid())
   userId       String
   adGroupId    String?
-  adSetId      String?
   externalId   String?
   headlines    Json
   descriptions Json
@@ -641,11 +574,9 @@ model Ad {
   updatedAt    DateTime @updatedAt
 
   adGroup AdGroup? @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
-  adSet   AdSet?   @relation(fields: [adSetId], references: [id], onDelete: Cascade)
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([adGroupId])
-  @@index([adSetId])
   @@index([userId])
 }
 
@@ -729,8 +660,8 @@ model DailyBrief {
 model CampaignPlan {
   id                 String   @id @default(cuid())
   workspaceId        String?
-  adAccountId        String?  @map("adAccountDbId")
-  adAccountExternalId String? @map("adAccountId")
+  adAccountId         String?
+  adAccountExternalId String?
   userId             String
   platform           String   @default("GOOGLE")
   plan               Json

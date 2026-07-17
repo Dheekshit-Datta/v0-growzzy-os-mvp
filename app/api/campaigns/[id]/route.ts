@@ -21,7 +21,6 @@ export async function GET(request: NextRequest, { params }: Params) {
         integration: { select: { id: true, platform: true, accountName: true, selectedAdAccountName: true } },
         metricsDaily: { orderBy: { metricDate: "asc" }, take: 90 },
         adGroups: { include: { keywords: true, ads: true } },
-        adSets: { include: { ads: true } },
         creatives: true,
       },
     })

@@ -76,13 +76,9 @@ export async function GET(request: NextRequest) {
                     },
                     orderBy: { createdAt: 'desc' },
                 },
-                adSets: {
-                    include: { _count: { select: { ads: true } } },
-                    orderBy: { createdAt: 'desc' },
-                },
                 creatives: { select: { id: true, title: true } },
                 workspace: { select: { id: true, name: true, slug: true } },
-                _count: { select: { creatives: true, adGroups: true, adSets: true } },
+                _count: { select: { creatives: true, adGroups: true } },
             },
             orderBy: { createdAt: 'desc' },
         })
