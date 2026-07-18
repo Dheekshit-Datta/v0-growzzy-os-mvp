@@ -299,6 +299,61 @@
     background: var(--status-neutral-bg);
     color: var(--status-neutral-text);
   }
+
+  /* Dashboard v2 "skeuomorphic" surfaces — used across Settings, Ads Manager,
+     Optimization, Builder, Onboarding, TopBar, Sidebar. Previously referenced
+     by className but never defined anywhere, so inputs/cards/buttons using
+     them rendered with no background/border/shadow at all. */
+  .sku-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fb 100%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+
+  .sku-inset {
+    background: linear-gradient(145deg, #f4f5f7 0%, #eceef1 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) inset;
+  }
+
+  .sku-input {
+    background: #F6F7F9;
+    border: 1px solid #E9EBEF;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .sku-input:focus {
+    border-color: #1F57F5;
+    box-shadow: 0 0 0 3px rgba(31, 87, 245, 0.1);
+  }
+
+  .sku-btn {
+    background: #ffffff;
+    border: 1px solid #E9EBEF;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+
+  .sku-btn:hover {
+    border-color: #D1D5DB;
+    background: #F8F9FB;
+  }
+
+  .sku-btn-primary {
+    background: linear-gradient(180deg, #2d65f8 0%, #1a4ee8 100%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset, 0 1px 3px rgba(31, 87, 245, 0.3);
+    transition: filter 0.15s;
+  }
+
+  .sku-btn-primary:hover {
+    filter: brightness(1.05);
+  }
+
+  .sku-btn-primary:disabled {
+    background: #E9EBEF;
+    box-shadow: none;
+  }
+
+  .sku-sidebar {
+    background: linear-gradient(180deg, #f8f9fb 0%, #f3f5f7 100%);
+  }
 }
 
 @layer utilities {

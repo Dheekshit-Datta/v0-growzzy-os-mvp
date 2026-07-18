@@ -106,7 +106,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className="flex items-center justify-between px-3.5 py-3 border-b border-[#DDE1E7]">
         <div className="flex items-center gap-2.5 min-w-0">
           <Image
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/output-onlinepngtools-removebg-preview-95GfoqyAofAHyCJ7WBGJR0U3Kb9z35.png"
+            src="/growzzy-logo.png"
             alt="Growzzy OS"
             width={28}
             height={28}

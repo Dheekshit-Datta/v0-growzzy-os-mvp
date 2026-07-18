@@ -42,26 +42,43 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [state, setState] = useState<OnboardingState>(DEFAULT_STATE)
   const [mounted, setMounted] = useState(false)
+  const [storageKey, setStorageKey] = useState('growzzy_onboarding')
 
-  // Load persisted state on mount
+  // localStorage isn't scoped per-user, so it's only trusted once we know
+  // which account is actually signed in — otherwise switching accounts on the
+  // same browser leaks the previous user's onboarding progress/step1 identity.
   useEffect(() => {
-    const saved = localStorage.getItem('growzzy_onboarding')
-    if (saved) {
-      try {
-        setState(JSON.parse(saved))
-      } catch {
-        setState(DEFAULT_STATE)
-      }
-    }
-    setMounted(true)
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((session) => {
+        const name = session?.user?.name
+        const email = session?.user?.email
+        const key = email ? `growzzy_onboarding_${email}` : 'growzzy_onboarding'
+        setStorageKey(key)
+        const saved = localStorage.getItem(key)
+        let restored: OnboardingState | null = null
+        if (saved) {
+          try {
+            restored = JSON.parse(saved)
+          } catch {
+            restored = null
+          }
+        }
+        setState((s) => ({
+          ...(restored || s),
+          step1: { name: name || s.step1.name, email: email || s.step1.email },
+        }))
+      })
+      .catch(() => {})
+      .finally(() => setMounted(true))
   }, [])
 
   // Persist state changes
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem('growzzy_onboarding', JSON.stringify(state))
+      localStorage.setItem(storageKey, JSON.stringify(state))
     }
-  }, [state, mounted])
+  }, [state, mounted, storageKey])
 
   // Reflect the REAL Google connection (e.g. after returning from OAuth),
   // rather than trusting locally-stored optimism.
@@ -88,6 +105,8 @@ export default function OnboardingPage() {
 
   const canContinueStep2 =
     state.step2.businessName.trim() && state.step2.primaryGoal && state.step2.dailyBudget
+
+  const currencySymbol = (state.step2.currency || '').match(/\(([^)]+)\)/)?.[1] || '$'
 
   // Save the workspace details the user typed in step 2 to the database,
   // then advance. These feed the AI when it writes campaigns later.
@@ -153,7 +172,7 @@ export default function OnboardingPage() {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Image
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/output-onlinepngtools-removebg-preview-95GfoqyAofAHyCJ7WBGJR0U3Kb9z35.png"
+              src="/growzzy-logo.png"
               alt="Growzzy"
               width={32}
               height={32}
@@ -303,7 +322,7 @@ export default function OnboardingPage() {
                 <div className="space-y-1.5">
                   <label className="block text-[12.5px] font-semibold text-[#374151]">Daily budget ceiling *</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B7280] select-none">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B7280] select-none">{currencySymbol}</span>
                     <input
                       type="number"
                       placeholder="0.00"
