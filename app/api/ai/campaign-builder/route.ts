@@ -160,6 +160,14 @@ Return ONLY JSON:
       adAccountExternalId: adAccount.externalId,
       platform: "GOOGLE",
       plan,
+      briefInput: {
+        offer: input.offer,
+        targetCustomer: input.targetCustomer,
+        budget: input.budget,
+        location: input.location,
+        goal: input.goal,
+        landingPageUrl: input.landingPageUrl || undefined,
+      },
       status: "DRAFT",
     },
   })

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import {
   Sparkles, Mic, Plus, CheckCircle2, Circle, ArrowRight,
@@ -153,6 +153,7 @@ export default function NewCampaignPage() {
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
 
   const router = useRouter()
+  const searchParams = useSearchParams()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -162,6 +163,23 @@ export default function NewCampaignPage() {
     }
     setDetected(s)
   }, [prompt])
+
+  useEffect(() => {
+    const reuseId = searchParams.get("reuse")
+    if (!reuseId) return
+    fetch(`/api/ai/campaign-plan/${reuseId}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const brief = json?.data?.briefInput
+        if (!brief) return
+        if (brief.offer) setPrompt(brief.offer)
+        if (brief.budget) setBudget(brief.budget)
+        if (brief.location) setLocation(brief.location)
+        if (brief.goal) setGoal(brief.goal)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     fetch("/api/integrations/status", { cache: "no-store" })

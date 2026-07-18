@@ -1,0 +1,41 @@
+import { NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
+import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { resolveUserId } from "@/lib/resolve-user"
+import { getRequestWorkspaceId } from "@/lib/workspace"
+
+export const dynamic = "force-dynamic"
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  const userId = await resolveUserId(session.user.id)
+  const workspaceId = await getRequestWorkspaceId(userId, req)
+
+  const plans = await prisma.campaignPlan.findMany({
+    where: { userId, workspaceId, briefInput: { not: Prisma.JsonNull } },
+    select: {
+      id: true,
+      status: true,
+      plan: true,
+      briefInput: true,
+      createdAt: true,
+      launchedCampaignId: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    plans: plans.map((p) => ({
+      id: p.id,
+      status: p.status,
+      campaignName: (p.plan as any)?.campaignName || "Untitled campaign",
+      brief: p.briefInput,
+      createdAt: p.createdAt,
+      launched: !!p.launchedCampaignId,
+    })),
+  })
+}

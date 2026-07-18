@@ -665,6 +665,7 @@ model CampaignPlan {
   userId             String
   platform           String   @default("GOOGLE")
   plan               Json
+  briefInput         Json?
   status             String   @default("DRAFT")
   launchedCampaignId String?
   publishFingerprint String?  @unique
