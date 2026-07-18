@@ -23,6 +23,7 @@ const UpdateWorkspaceSchema = z.object({
   toneOfVoice: z.string().max(40).optional(),
   defaultLandingPageUrl: z.string().url().optional().or(z.literal("")),
   logo: z.string().max(2000000).optional(),
+  defaultAutomationMode: z.enum(["ALERT", "APPROVAL", "FULL"]).optional(),
 })
 
 function slugify(value: string) {
@@ -99,6 +100,7 @@ export async function PATCH(req: NextRequest) {
       ...(data.toneOfVoice !== undefined ? { toneOfVoice: data.toneOfVoice || null } : {}),
       ...(data.defaultLandingPageUrl !== undefined ? { defaultLandingPageUrl: data.defaultLandingPageUrl || null } : {}),
       ...(data.logo !== undefined ? { logo: data.logo || null } : {}),
+      ...(data.defaultAutomationMode !== undefined ? { defaultAutomationMode: data.defaultAutomationMode } : {}),
     },
   })
 
