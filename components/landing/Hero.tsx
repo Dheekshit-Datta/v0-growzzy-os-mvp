@@ -14,15 +14,15 @@ export function HeroSection() {
   return (
     <section
       id="home"
-      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-black"
+      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[rgb(10,10,10)]"
     >
       {/* Background video */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="hero-zoom-out h-full w-full">
           <FadingVideo
             src={VIDEO_SRC}
-            className="absolute left-1/2 top-0 z-0 -translate-x-1/2 object-cover object-top"
-            style={{ width: '120%', height: '120%' }}
+            className="absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2 object-cover object-center"
+            style={{ width: '100%', height: '100%' }}
           />
         </div>
       </div>
@@ -36,7 +36,7 @@ export function HeroSection() {
           transition={{ duration: 0.7, delay: 0.4, ease: easeOut }}
           className="inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 liquid-glass-dark"
         >
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[rgb(10,10,10)]">
             New
           </span>
           <span className="text-sm text-white/90">

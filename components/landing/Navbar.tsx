@@ -87,7 +87,7 @@ export function Navbar() {
           </Link>
           <Link
             href="/auth"
-            className="ml-1 inline-flex items-center gap-1 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition-transform hover:scale-[1.02]"
+            className="ml-1 inline-flex items-center gap-1 rounded-full bg-white px-5 py-2 text-sm font-medium text-[rgb(10,10,10)] transition-transform hover:scale-[1.02]"
           >
             Launch Free
             <ArrowUpRight className="h-4 w-4" />
@@ -100,7 +100,7 @@ export function Navbar() {
         {/* Mobile CTA */}
         <Link
           href="/auth"
-          className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-2 text-sm font-medium text-black lg:hidden"
+          className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-2 text-sm font-medium text-[rgb(10,10,10)] lg:hidden"
         >
           Launch Free
           <ArrowUpRight className="h-4 w-4" />

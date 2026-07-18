@@ -28,7 +28,7 @@ export function FinalCtaSection() {
         </p>
         <a
           href="/auth"
-          className="mt-10 inline-flex items-center gap-2 rounded-full bg-neutral-900 px-10 py-4 text-base font-medium text-white transition-colors hover:bg-neutral-800"
+          className="mt-10 inline-flex items-center gap-2 rounded-full bg-[rgb(10,10,10)] px-10 py-4 text-base font-medium text-white transition-colors hover:bg-neutral-800"
         >
           Start for free
           <ArrowUpRight className="h-5 w-5" />
