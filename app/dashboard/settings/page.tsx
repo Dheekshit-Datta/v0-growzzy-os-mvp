@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -293,7 +294,7 @@ function IntegrationsTab() {
               </div>
             </div>
             {!google?.connected && (
-              <a href="/api/integrations/google/connect" className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary">
+              <a href={`/api/integrations/google/connect?returnTo=${encodeURIComponent('/dashboard/settings?tab=integrations')}`} className="flex items-center gap-1.5 h-8 px-4 text-white text-[12.5px] font-semibold rounded-[8px] sku-btn-primary">
                 Connect
               </a>
             )}
@@ -469,8 +470,19 @@ function DangerTab() {
   )
 }
 
+const VALID_TABS: Tab[] = ["general", "integrations", "notifications", "danger"]
+
 export default function SettingsPage() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>("general")
+
+  useEffect(() => {
+    const requested = searchParams.get("tab")
+    if (requested && (VALID_TABS as string[]).includes(requested)) {
+      setActiveTab(requested as Tab)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const CONTENT: Record<Tab, React.ReactNode> = {
     general:       <GeneralTab />,

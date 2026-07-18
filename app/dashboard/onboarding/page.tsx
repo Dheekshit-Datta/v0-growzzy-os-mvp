@@ -140,7 +140,7 @@ export default function OnboardingPage() {
   // Real Google OAuth — full page redirect. On return the effect below
   // detects the live connection.
   const handleGoogleConnect = () => {
-    window.location.href = '/api/integrations/google/connect'
+    window.location.href = '/api/integrations/google/connect?returnTo=/dashboard/onboarding'
   }
 
   // Persist completion to the database (not localStorage) so the onboarding

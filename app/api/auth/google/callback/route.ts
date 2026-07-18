@@ -21,7 +21,19 @@ function resolveAppUrlFromRequest(request: Request) {
 function redirectWithClearedState(url: string) {
   const response = NextResponse.redirect(url)
   response.cookies.delete(getStateCookieName("google"))
+  response.cookies.delete("oauth_return_to")
   return response
+}
+
+function resolveReturnTo(request: Request, appUrl: string, params: string) {
+  const cookieHeader = request.headers.get("cookie") || ""
+  const match = cookieHeader.split(";").map((c) => c.trim()).find((c) => c.startsWith("oauth_return_to="))
+  const returnTo = match ? decodeURIComponent(match.slice("oauth_return_to=".length)) : null
+  if (returnTo && returnTo.startsWith("/")) {
+    const separator = returnTo.includes("?") ? "&" : "?"
+    return `${appUrl}${returnTo}${separator}${params}`
+  }
+  return `${appUrl}/dashboard/settings?tab=integrations&${params}`
 }
 
 export async function GET(request: Request) {
@@ -32,22 +44,22 @@ export async function GET(request: Request) {
   const appUrl = resolveAppUrlFromRequest(request)
 
   if (!(await verifyState("google", state))) {
-    return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=google_invalid_state`)
+    return redirectWithClearedState(resolveReturnTo(request, appUrl, "error=google_invalid_state"))
   }
 
   if (error) {
     log("warn", "google/oauth/callback", "OAuth provider returned an error", { error })
-    return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=google_auth_failed`)
+    return redirectWithClearedState(resolveReturnTo(request, appUrl, "error=google_auth_failed"))
   }
 
   if (!code) {
-    return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=google_missing_code`)
+    return redirectWithClearedState(resolveReturnTo(request, appUrl, "error=google_missing_code"))
   }
 
   try {
     const session = await auth()
     if (!session?.user?.id) {
-      return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=unauthorized`)
+      return redirectWithClearedState(resolveReturnTo(request, appUrl, "error=unauthorized"))
     }
 
     const userId = await resolveUserId(session.user.id)
@@ -96,7 +108,7 @@ export async function GET(request: Request) {
 
     if (detection.discoveryState === "API_ERROR") {
       return redirectWithClearedState(
-        `${appUrl}/dashboard/settings?tab=applications&connected=google&status=reconnect_required&error=google_discovery_failed`
+        resolveReturnTo(request, appUrl, "connected=google&status=reconnect_required&error=google_discovery_failed")
       )
     }
 
@@ -124,16 +136,12 @@ export async function GET(request: Request) {
         }
       }
 
-      return redirectWithClearedState(
-        `${appUrl}/dashboard/settings?tab=applications&connected=google&status=success`
-      )
+      return redirectWithClearedState(resolveReturnTo(request, appUrl, "connected=google&status=success"))
     }
 
-    return redirectWithClearedState(
-      `${appUrl}/dashboard/settings?tab=applications&connected=google&status=no_ads_account`
-    )
+    return redirectWithClearedState(resolveReturnTo(request, appUrl, "connected=google&status=no_ads_account"))
   } catch (err: any) {
     log("error", "google/oauth/callback", "Callback failed", { message: err?.message })
-    return redirectWithClearedState(`${appUrl}/dashboard/settings?tab=applications&error=server_error`)
+    return redirectWithClearedState(resolveReturnTo(request, appUrl, "error=server_error"))
   }
 }
