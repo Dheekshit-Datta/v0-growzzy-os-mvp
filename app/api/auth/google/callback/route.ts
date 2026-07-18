@@ -113,6 +113,15 @@ export async function GET(request: Request) {
     }
 
     if (detection.hasAdsAccess) {
+      // A real connected ad account is itself sufficient evidence the user
+      // is past onboarding, regardless of whether they go on to click the
+      // "finish" button on the onboarding page - don't leave them stuck
+      // re-seeing onboarding on every future login if they don't.
+      await prisma.user.updateMany({
+        where: { id: userId, onboardingCompleted: false },
+        data: { onboardingCompleted: true, onboardingStep: 3 },
+      })
+
       const primaryAccount = await prisma.adAccount.findFirst({
         where: { userId, workspaceId, platform: "GOOGLE", isPrimary: true },
         include: { integration: true },

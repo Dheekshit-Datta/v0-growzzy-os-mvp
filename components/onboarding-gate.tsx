@@ -6,10 +6,15 @@ import { usePathname, useRouter } from "next/navigation"
 /**
  * Sends users who have not finished onboarding to /dashboard/onboarding.
  *
- * Deliberately narrow, unlike the old OnboardingEnforcer:
- *  - keys off User.onboardingCompleted ONLY (never campaign count / integration state)
- *  - never blocks or hides any page while it checks
- *  - runs one check per mount and gets out of the way
+ * Trusts the API's `shouldShowOnboarding` (onboardingCompleted OR a real
+ * connected ad account) rather than onboardingCompleted alone. The only way
+ * to mark onboardingCompleted=true is clicking one of two specific buttons
+ * at the very end of onboarding step 3 - if a user connects a real ad
+ * account but never reaches/clicks that button (e.g. got confused by an
+ * OAuth redirect hiccup, closed the tab, navigated away), onboardingCompleted
+ * stays false forever and this gate would otherwise bounce them back to
+ * onboarding on every single future login, indefinitely. Having a real
+ * connected integration is itself sufficient evidence they're past onboarding.
  */
 export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -29,7 +34,7 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return
-        if (data.onboardingCompleted === false) {
+        if (data.shouldShowOnboarding) {
           router.replace("/dashboard/onboarding")
         }
       })

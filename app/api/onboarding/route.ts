@@ -22,7 +22,7 @@ export async function GET() {
           userId,
           workspaceId,
           selectedAdAccountId: { not: null },
-          status: { in: ["ACTIVE", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING"] },
+          status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
         },
       }),
     ])
