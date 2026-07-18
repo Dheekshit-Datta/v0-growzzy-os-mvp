@@ -72,8 +72,8 @@ function SkuSelect({
   )
 }
 
-function SkuToggle({ label, description, defaultChecked }: { label: string; description: string; defaultChecked?: boolean }) {
-  const [on, setOn] = useState(defaultChecked ?? false)
+function SkuToggle({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
+  const on = checked
   return (
     <div className="flex items-start justify-between gap-4 py-3.5 border-b border-[#DDE1E7] last:border-0">
       <div>
@@ -83,7 +83,7 @@ function SkuToggle({ label, description, defaultChecked }: { label: string; desc
       <button
         role="switch"
         aria-checked={on}
-        onClick={() => setOn(!on)}
+        onClick={() => onChange(!on)}
         className="relative shrink-0 mt-0.5 rounded-full transition-all duration-200"
         style={{
           width: 40, height: 22,
@@ -322,17 +322,54 @@ function IntegrationsTab() {
   )
 }
 
+const NOTIFICATION_DEFAULTS = {
+  weeklyDigest: true,
+  optimizationAlerts: true,
+  budgetAlerts: true,
+  productUpdates: false,
+}
+type NotificationPrefs = typeof NOTIFICATION_DEFAULTS
+
 function NotificationsTab() {
+  const [loading, setLoading] = useState(true)
+  const [prefs, setPrefs] = useState<NotificationPrefs>(NOTIFICATION_DEFAULTS)
+
+  useEffect(() => {
+    fetch("/api/user/settings", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const saved = json?.settings?.notificationPrefs
+        if (saved && typeof saved === "object") setPrefs({ ...NOTIFICATION_DEFAULTS, ...saved })
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const update = (patch: Partial<NotificationPrefs>) => {
+    const next = { ...prefs, ...patch }
+    setPrefs(next)
+    fetch("/api/user/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationPrefs: next }),
+    }).catch(() => {})
+  }
+
+  if (loading) {
+    return <SectionCard title="Email notifications" description="Choose what Growzzy emails you about.">
+      <div className="flex items-center justify-center py-10 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
+    </SectionCard>
+  }
+
   return (
     <SectionCard title="Email notifications" description="Choose what Growzzy emails you about.">
       <div>
-        <SkuToggle label="Weekly performance digest" description="Email summary of spend, results, and AI actions every Monday" defaultChecked />
-        <SkuToggle label="Optimization alerts" description="Email when AI flags something that needs your attention" defaultChecked />
-        <SkuToggle label="Budget alerts" description="Email if a campaign is on track to hit your daily budget ceiling" defaultChecked />
-        <SkuToggle label="Product updates" description="Occasional announcements about new features — off by default" />
+        <SkuToggle label="Weekly performance digest" description="Email summary of spend, results, and AI actions every Monday" checked={prefs.weeklyDigest} onChange={(v) => update({ weeklyDigest: v })} />
+        <SkuToggle label="Optimization alerts" description="Email when AI flags something that needs your attention" checked={prefs.optimizationAlerts} onChange={(v) => update({ optimizationAlerts: v })} />
+        <SkuToggle label="Budget alerts" description="Email if a campaign is on track to hit your daily budget ceiling" checked={prefs.budgetAlerts} onChange={(v) => update({ budgetAlerts: v })} />
+        <SkuToggle label="Product updates" description="Occasional announcements about new features — off by default" checked={prefs.productUpdates} onChange={(v) => update({ productUpdates: v })} />
       </div>
       <p className="text-[11px] text-[#9CA3AF] mt-4 pt-4 border-t border-[#DDE1E7]">
-        Notification delivery isn&apos;t wired to an email service yet — these preferences don&apos;t send mail today.
+        These preferences are saved to your account. Actual email delivery isn&apos;t wired to a mail service yet, so no emails send today — but your choices are remembered.
       </p>
     </SectionCard>
   )

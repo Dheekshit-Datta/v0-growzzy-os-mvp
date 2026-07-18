@@ -764,6 +764,7 @@ model UserSettings {
   riskLevel  String   @default("BALANCED")
   targetRoas Float?
   maxCpa     Float?
+  notificationPrefs Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

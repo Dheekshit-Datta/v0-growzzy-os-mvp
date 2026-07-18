@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -56,7 +56,14 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const [promptsExpanded, setPromptsExpanded] = useState(true)
-  const [progress] = useState(0)
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    fetch("/api/onboarding-progress", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
+      .catch(() => {})
+  }, [])
 
   const isActive = (href: string) => {
     if (href === "/dashboard/campaigns/new") return pathname === "/dashboard/campaigns/new"
