@@ -32,11 +32,21 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, req)
-    const settings = await prisma.userSettings.upsert({
-      where: { userId },
-      update: {},
-      create: { userId, primaryKpi: "ROAS", riskLevel: "BALANCED" },
-    })
+    let settings = await prisma.userSettings.findUnique({ where: { userId } })
+    if (!settings) {
+      try {
+        settings = await prisma.userSettings.create({ data: { userId, primaryKpi: "ROAS", riskLevel: "BALANCED" } })
+      } catch (error: any) {
+        if (error?.code === "P2002") {
+          settings = await prisma.userSettings.findUnique({ where: { userId } })
+        } else {
+          throw error
+        }
+      }
+    }
+    if (!settings) {
+      return NextResponse.json({ success: false, error: "Failed to load audit settings" }, { status: 500 })
+    }
     const googleIntegration = await prisma.integration.findFirst({
       where: { userId, workspaceId, platform: "GOOGLE", hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
       select: { id: true, selectedAdAccountId: true, accountId: true },

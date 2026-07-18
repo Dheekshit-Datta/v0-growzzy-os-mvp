@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import {
-  Sparkles, Mic, Plus, CheckCircle2, Circle, ArrowRight,
+  Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
   Download, Copy, Wand2, Check, ExternalLink, Loader2,
 } from "lucide-react"
@@ -401,14 +401,6 @@ export default function NewCampaignPage() {
                         </span>
                       )
                     })}
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <button className="w-8 h-8 flex items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn" aria-label="Attach file">
-                      <Plus size={14} />
-                    </button>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn" aria-label="Voice input">
-                      <Mic size={14} />
-                    </button>
                   </div>
                 </div>
               </div>

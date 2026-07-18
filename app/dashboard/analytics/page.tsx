@@ -24,26 +24,78 @@ type Overview = {
   }
   chartData: { date: string; spend: number; revenue: number }[]
   topCampaigns: { id: string; name: string; platform: string; status: string; spend: number; revenue: number; roas: number }[]
+  platformBreakdown: { name: string; spend: number; revenue: number; roas: number; campaigns: number; percentOfSpend: number }[]
 }
+
+const DAY_OPTIONS = [
+  { label: "Last 7 days", value: 7 },
+  { label: "Last 30 days", value: 30 },
+  { label: "Last 90 days", value: 90 },
+]
 
 function money(n: number) {
   return "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function Dropdown({
+  label, options, value, onChange,
+}: { label: string; options: { label: string; value: string }[]; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors"
+      >
+        {label} <ChevronDown size={13} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 w-[180px] bg-white border border-[#E9EBEF] rounded-[8px] shadow-lg z-20 overflow-hidden">
+            {options.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false) }}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-[12.5px] hover:bg-[#F6F7F9] transition-colors",
+                  o.value === value ? "text-[#1F57F5] font-semibold" : "text-[#374151]"
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<Overview | null>(null)
   const [tab, setTab] = useState<"campaign" | "keyword" | "device">("campaign")
+  const [days, setDays] = useState(30)
+  const [platform, setPlatform] = useState("all")
+  const [metric, setMetric] = useState<"spend" | "revenue">("spend")
 
   useEffect(() => {
-    fetch("/api/analytics/overview?days=30", { cache: "no-store" })
+    setLoading(true)
+    fetch(`/api/analytics/overview?days=${days}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => setData(json?.data ?? null))
       .finally(() => setLoading(false))
-  }, [])
+  }, [days])
 
   const kpis = data?.kpis
   const hasData = !!data && data.kpis.connectedPlatforms > 0
+
+  const platformOptions = [
+    { label: "All platforms", value: "all" },
+    ...(data?.platformBreakdown ?? []).map((p) => ({ label: p.name, value: p.name })),
+  ]
+  const filteredCampaigns = (data?.topCampaigns ?? []).filter((c) => platform === "all" || c.platform === platform)
 
   const kpiCards = [
     { label: "Total Spend", value: kpis ? money(kpis.totalSpend) : "$0" },
@@ -57,15 +109,18 @@ export default function AnalyticsPage() {
       <div className="p-6 space-y-5">
         {/* Filters */}
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors">
-            Last 30 days <ChevronDown size={13} />
-          </button>
-          <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors">
-            All campaigns <ChevronDown size={13} />
-          </button>
-          <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors">
-            All platforms <ChevronDown size={13} />
-          </button>
+          <Dropdown
+            label={DAY_OPTIONS.find((d) => d.value === days)?.label || "Last 30 days"}
+            options={DAY_OPTIONS.map((d) => ({ label: d.label, value: String(d.value) }))}
+            value={String(days)}
+            onChange={(v) => setDays(Number(v))}
+          />
+          <Dropdown
+            label={platform === "all" ? "All platforms" : platform}
+            options={platformOptions}
+            value={platform}
+            onChange={setPlatform}
+          />
         </div>
 
         {loading ? (
@@ -89,9 +144,12 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between mb-4">
                 <p className="text-[14px] font-semibold text-[#111827]">Performance over time</p>
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-1 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12px] text-[#374151] hover:border-[#D1D5DB] transition-colors">
-                    Spend <ChevronDown size={12} />
-                  </button>
+                  <Dropdown
+                    label={metric === "spend" ? "Spend" : "Revenue"}
+                    options={[{ label: "Spend", value: "spend" }, { label: "Revenue", value: "revenue" }]}
+                    value={metric}
+                    onChange={(v) => setMetric(v as "spend" | "revenue")}
+                  />
                 </div>
               </div>
               <div className="h-[240px]">
@@ -101,7 +159,7 @@ export default function AnalyticsPage() {
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background: "white", border: "1px solid #E9EBEF", borderRadius: 10, fontSize: 12 }} />
-                    <Line type="monotone" dataKey="spend" stroke="#1F57F5" strokeWidth={2} dot={false} name="Spend ($)" />
+                    <Line type="monotone" dataKey={metric} stroke="#1F57F5" strokeWidth={2} dot={false} name={metric === "spend" ? "Spend ($)" : "Revenue ($)"} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -130,9 +188,9 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {tab === "campaign" && hasData && (data?.topCampaigns.length ?? 0) > 0 ? (
+              {tab === "campaign" && hasData && filteredCampaigns.length > 0 ? (
                 <div className="divide-y divide-[#F0F2F5]">
-                  {data!.topCampaigns.map((c) => (
+                  {filteredCampaigns.map((c) => (
                     <div key={c.id} className="flex items-center justify-between px-5 py-3">
                       <div>
                         <p className="text-[13px] font-medium text-[#111827]">{c.name}</p>

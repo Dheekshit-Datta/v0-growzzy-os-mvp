@@ -156,10 +156,10 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             {loading && <Loader2 size={14} className="animate-spin text-[#9CA3AF]" />}
-            <button className="flex items-center gap-1.5 h-8 px-3 text-[12.5px] font-semibold text-[#374151] rounded-[8px] sku-btn">
+            <Link href="/dashboard/reports" className="flex items-center gap-1.5 h-8 px-3 text-[12.5px] font-semibold text-[#374151] rounded-[8px] sku-btn">
               <Download size={13} />
               Export
-            </button>
+            </Link>
           </div>
         </div>
 
