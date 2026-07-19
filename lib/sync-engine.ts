@@ -142,6 +142,7 @@ export async function syncGoogleAdsCampaigns(
     const rows = Array.isArray(streamData) ? streamData.flatMap((chunk: any) => chunk.results ?? []) : []
     const errors: string[] = []
     let syncedCampaigns = 0
+    const localCampaignIdByExternalId = new Map<string, string>()
 
     for (const row of rows) {
       const campaign = row.campaign || {}
@@ -161,7 +162,7 @@ export async function syncGoogleAdsCampaigns(
 
         const derived = deriveMetrics({ spend, clicks, impressions, conversions, revenue })
 
-        await prisma.campaign.upsert({
+        const upserted = await prisma.campaign.upsert({
           where: {
             integrationId_externalId: {
               integrationId,
@@ -223,9 +224,87 @@ export async function syncGoogleAdsCampaigns(
             liveError: null,
           },
         })
+        localCampaignIdByExternalId.set(String(campaign.id), upserted.id)
         syncedCampaigns += 1
       } catch (error: any) {
         errors.push(`Campaign ${campaign.id || "unknown"}: ${error?.message || "Unknown error"}`)
+      }
+    }
+
+    // Per-day breakdown for trend detection (lib/ai-recommendation-engine.ts) -
+    // the query above is an aggregate over LAST_30_DAYS with one row per
+    // campaign, which can't show whether a campaign is trending up or down.
+    // Separate query segmented by date, only for campaigns that synced above.
+    if (localCampaignIdByExternalId.size > 0) {
+      try {
+        const dailyQuery = `
+          SELECT
+            campaign.id,
+            segments.date,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.conversions_value
+          FROM campaign
+          WHERE segments.date DURING LAST_14_DAYS
+            AND campaign.status != 'REMOVED'
+        `
+        const dailyStreamData = await GoogleAdsService.searchStream<any>({
+          accessToken: resolvedAccessToken,
+          customerId: externalAccountId,
+          query: dailyQuery,
+          loginCustomerId: preferredLoginCustomerId,
+        })
+        const dailyRows = Array.isArray(dailyStreamData) ? dailyStreamData.flatMap((chunk: any) => chunk.results ?? []) : []
+
+        for (const row of dailyRows) {
+          const externalCampaignId = String(row.campaign?.id || "")
+          const localCampaignId = localCampaignIdByExternalId.get(externalCampaignId)
+          const dateStr = row.segments?.date
+          if (!localCampaignId || !dateStr) continue
+
+          const metricDate = new Date(`${dateStr}T00:00:00.000Z`)
+          const metrics = row.metrics || {}
+          const spend = metrics.costMicros ? Number(metrics.costMicros) / 1_000_000 : 0
+          const clicks = Number(metrics.clicks ?? 0)
+          const impressions = Number(metrics.impressions ?? 0)
+          const conversions = Number(metrics.conversions ?? 0)
+          const revenue = Number(metrics.conversionsValue ?? 0)
+          const derived = deriveMetrics({ spend, clicks, impressions, conversions, revenue })
+
+          await prisma.campaignMetricDaily.upsert({
+            where: { campaignId_metricDate: { campaignId: localCampaignId, metricDate } },
+            create: {
+              campaignId: localCampaignId,
+              platform: "GOOGLE",
+              metricDate,
+              impressions,
+              clicks,
+              spend,
+              conversions,
+              revenue,
+              ctr: derived.ctr,
+              cpa: derived.cpa,
+              roas: derived.roas,
+            },
+            update: {
+              impressions,
+              clicks,
+              spend,
+              conversions,
+              revenue,
+              ctr: derived.ctr,
+              cpa: derived.cpa,
+              roas: derived.roas,
+            },
+          })
+        }
+      } catch (dailyError: any) {
+        // Non-fatal - the aggregate campaign sync above already succeeded and
+        // is what the rest of the app depends on; trend detection just won't
+        // have fresh data until the next successful sync.
+        log("warn", "sync/google", "Daily metric sync failed", { userId, adAccountDbId, message: dailyError?.message })
       }
     }
 
