@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import {
   ChevronDown,
   ChevronRight,
@@ -55,13 +56,27 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const [promptsExpanded, setPromptsExpanded] = useState(true)
   const [progress, setProgress] = useState(0)
+  const [workspaceName, setWorkspaceName] = useState("Growzzy Workspace")
 
   useEffect(() => {
     fetch("/api/onboarding-progress", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const workspaces = json?.workspaces ?? []
+        const activeId = window.localStorage.getItem("growzzy_active_workspace_id")
+        const active = workspaces.find((workspace: { id: string }) => workspace.id === activeId) || workspaces[0]
+        if (active?.name) setWorkspaceName(active.name)
+      })
       .catch(() => {})
   }, [])
 
@@ -240,13 +255,13 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
             style={{ background: "#1F57F5" }}
           >
-            ?
+            {(session?.user?.name || session?.user?.email || "G").charAt(0).toUpperCase()}
           </span>
           {!collapsed && (
             <>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-[12px] font-semibold text-[#111827] truncate leading-tight">Your Account</p>
-                <p className="text-[10.5px] text-[#9CA3AF] truncate leading-tight">My Workspace</p>
+                <p className="text-[12px] font-semibold text-[#111827] truncate leading-tight">{session?.user?.name || session?.user?.email || "Growzzy user"}</p>
+                <p className="text-[10.5px] text-[#9CA3AF] truncate leading-tight">{workspaceName}</p>
               </div>
               <ChevronDown size={12} className="text-[#9CA3AF] shrink-0" />
             </>

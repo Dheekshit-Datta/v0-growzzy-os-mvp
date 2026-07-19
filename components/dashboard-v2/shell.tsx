@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Sidebar } from "./sidebar"
 import { TopBar } from "./top-bar"
+import { BetaFeedbackWidget } from "@/components/BetaFeedbackWidget"
 
 interface ShellProps {
   children: React.ReactNode
@@ -21,6 +22,7 @@ export function Shell({ children, title }: ShellProps) {
           {children}
         </main>
       </div>
+      <BetaFeedbackWidget />
     </div>
   )
 }
