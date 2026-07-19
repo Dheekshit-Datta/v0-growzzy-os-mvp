@@ -12,6 +12,7 @@ export interface AIRecommendation {
   estimatedImprovement: string
   confidence: number
   riskLevel: "LOW" | "MEDIUM" | "HIGH"
+  currentBudget: number | null
   metrics: {
     spend: number
     clicks: number
@@ -21,6 +22,18 @@ export interface AIRecommendation {
     roas: number
     cpa: number
   }
+}
+
+// Maps engine actions to real Google Ads mutation types the launch/apply
+// pipeline already knows how to execute (see lib/services/google-publish.ts
+// and app/api/ai/apply-optimization). "improve_ctr" has no direct platform
+// mutation - Google Ads has no single-click "tighten targeting" action - so
+// it stays advisory-only (dismissable, not applyable).
+const ACTION_TYPE_MAP: Record<AIRecommendation["action"], string | null> = {
+  pause: "PAUSE",
+  increase_budget: "BUDGET_INCREASE",
+  refresh_creative: "CREATIVE_REFRESH",
+  improve_ctr: null,
 }
 
 function safeMetric(value: number | null | undefined) {
@@ -55,6 +68,8 @@ export async function generateAIRecommendations(input: {
       ctr: true,
       cpa: true,
       roas: true,
+      budgetAmount: true,
+      dailyBudget: true,
     },
     orderBy: { spend: "desc" },
     take: 30,
@@ -72,6 +87,7 @@ export async function generateAIRecommendations(input: {
     const ctr = safeMetric(campaign.ctr || (impressions > 0 ? (clicks / impressions) * 100 : 0))
     const roas = safeMetric(campaign.roas || (spend > 0 ? safeMetric(campaign.revenue || campaign.totalRevenue) / spend : 0))
     const cpa = safeMetric(campaign.cpa || (conversions > 0 ? spend / conversions : 0))
+    const currentBudget = campaign.dailyBudget ?? campaign.budgetAmount ?? null
 
     if (spend >= 100 && conversions === 0) {
       recommendations.push({
@@ -85,6 +101,7 @@ export async function generateAIRecommendations(input: {
         estimatedImprovement: `Prevent ~$${spend.toFixed(0)} further waste this cycle`,
         confidence: 92,
         riskLevel: "LOW",
+        currentBudget,
         metrics: { spend, clicks, impressions, conversions, ctr, roas, cpa },
       })
       continue
@@ -102,6 +119,7 @@ export async function generateAIRecommendations(input: {
         estimatedImprovement: "Potential +15-25% revenue growth",
         confidence: 84,
         riskLevel: "MEDIUM",
+        currentBudget,
         metrics: { spend, clicks, impressions, conversions, ctr, roas, cpa },
       })
       continue
@@ -119,6 +137,7 @@ export async function generateAIRecommendations(input: {
         estimatedImprovement: "Potential +10-20% CTR lift",
         confidence: 78,
         riskLevel: "LOW",
+        currentBudget,
         metrics: { spend, clicks, impressions, conversions, ctr, roas, cpa },
       })
       continue
@@ -136,6 +155,7 @@ export async function generateAIRecommendations(input: {
         estimatedImprovement: "Potential +8-15% efficiency",
         confidence: 72,
         riskLevel: "MEDIUM",
+        currentBudget,
         metrics: { spend, clicks, impressions, conversions, ctr, roas, cpa },
       })
     }
@@ -144,6 +164,57 @@ export async function generateAIRecommendations(input: {
   return recommendations.slice(0, 12)
 }
 
-export async function applyAIRecommendation() {
-  throw new Error("Use /api/ai/recommendations/preview then /apply for safe platform-first actions.")
+// Generates recommendations and persists them as real OptimizationSuggestion
+// rows so the Recommendations tab and Apply flow have something to read.
+// Called after a successful sync (lib/sync-engine.ts) and from the manual
+// "Refresh recommendations" button (POST /api/ai/recommendations/generate).
+export async function generateAndPersistRecommendations(input: {
+  userId: string
+  workspaceId: string
+  adAccountId?: string | null
+}) {
+  const recommendations = await generateAIRecommendations(input)
+  if (!recommendations.length) return []
+
+  const campaignIds = recommendations.map((r) => r.campaignId)
+
+  // Clear this account's own stale, un-actioned suggestions for these
+  // campaigns before writing fresh ones, so re-running generation doesn't
+  // pile up duplicates every sync. Applied/dismissed suggestions are left
+  // alone - they're history, not live recommendations.
+  await prisma.optimizationSuggestion.deleteMany({
+    where: {
+      workspaceId: input.workspaceId,
+      campaignId: { in: campaignIds },
+      applied: false,
+      dismissed: false,
+    },
+  })
+
+  const created = await prisma.$transaction(
+    recommendations.map((r) =>
+      prisma.optimizationSuggestion.create({
+        data: {
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          campaignId: r.campaignId,
+          actionType: ACTION_TYPE_MAP[r.action],
+          recommendedValue:
+            r.action === "increase_budget" && r.currentBudget
+              ? String(Math.round(r.currentBudget * 1.2 * 100) / 100)
+              : null,
+          sourceEntityId: r.campaignId,
+          sourceType: "Campaign",
+          insightType: r.action,
+          title: r.title,
+          message: r.description,
+          confidence: r.confidence,
+          projectedImpact: { estimatedImprovement: r.estimatedImprovement, impact: r.impact },
+          evidence: r.metrics,
+        },
+      })
+    )
+  )
+
+  return created
 }

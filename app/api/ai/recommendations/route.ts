@@ -35,6 +35,12 @@ export async function GET(req: NextRequest) {
         prisma.accountHealthScore.findFirst({ where: { userId } }),
     ])
 
+    const campaignIds = [...new Set(suggestions.map((s) => s.campaignId).filter(Boolean))] as string[]
+    const campaigns = campaignIds.length
+        ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } })
+        : []
+    const campaignNameById = new Map(campaigns.map((c) => [c.id, c.name]))
+
     // Estimate total impact
     const totalImpact = suggestions.reduce((sum, s) => {
         const impact = (s.projectedImpact as any)?.estimatedDeltaRevenue ?? 0
@@ -43,9 +49,30 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
         success: true,
-        suggestions,
+        suggestions: suggestions.map((s) => ({ ...s, campaignName: s.campaignId ? campaignNameById.get(s.campaignId) || null : null })),
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
         healthScore: healthScore ?? null,
         totalEstimatedImpact: parseFloat(totalImpact.toFixed(2)),
     })
+}
+
+export async function PATCH(req: NextRequest) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
+    const body = await req.json().catch(() => ({}))
+    const suggestionId = typeof body?.suggestionId === "string" ? body.suggestionId : null
+    if (!suggestionId) return NextResponse.json({ error: "suggestionId is required" }, { status: 400 })
+
+    const existing = await prisma.optimizationSuggestion.findFirst({ where: { id: suggestionId, workspaceId } })
+    if (!existing) return NextResponse.json({ error: "Suggestion not found" }, { status: 404 })
+
+    const suggestion = await prisma.optimizationSuggestion.update({
+        where: { id: suggestionId },
+        data: { dismissed: body.dismissed !== false },
+    })
+    return NextResponse.json({ ok: true, suggestion })
 }

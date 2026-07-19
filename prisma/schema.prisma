@@ -823,6 +823,10 @@ model AccountHealthScore {
 model OptimizationSuggestion {
   id              String   @id @default(cuid())
   workspaceId     String
+  userId          String?
+  campaignId      String?
+  actionType      String?
+  recommendedValue String?
   sourceEntityId  String?
   sourceType      String?
   insightType     String
@@ -838,6 +842,7 @@ model OptimizationSuggestion {
 
   @@index([workspaceId])
   @@index([workspaceId, applied])
+  @@index([userId])
 }
 
 model AutomationRule {

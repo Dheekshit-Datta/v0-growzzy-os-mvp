@@ -142,6 +142,15 @@ export async function POST(req: NextRequest) {
 
     if (apiError) return NextResponse.json({ error: apiError, correlationId, code: classifyActionError(apiError) }, { status: 500 })
 
+    // recommendationId is the OptimizationSuggestion id when the apply came
+    // from the Recommendations tab - mark it applied so it stops showing as
+    // a live suggestion. Not every caller of this route originates from a
+    // suggestion, so a missing row here is expected and not an error.
+    await prisma.optimizationSuggestion.updateMany({
+      where: { id: recommendationId, workspaceId },
+      data: { applied: true },
+    })
+
     await recordActivity({
       userId,
       workspaceId,

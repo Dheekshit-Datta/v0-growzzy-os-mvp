@@ -4,6 +4,7 @@ import { GoogleAdsService } from "@/services/integrations/google"
 import { refreshGoogleAccessToken } from "@/lib/ads-detection"
 import { log } from "@/lib/logger"
 import { encryptedIntegrationTokens, getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
+import { generateAndPersistRecommendations } from "@/lib/ai-recommendation-engine"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -247,6 +248,12 @@ export async function syncGoogleAdsCampaigns(
 
     if (errors.length) {
       log("warn", "sync/google", "Google sync completed with row-level errors", { userId, adAccountDbId, errorCount: errors.length })
+    }
+
+    if (workspaceId && syncedCampaigns > 0) {
+      generateAndPersistRecommendations({ userId, workspaceId }).catch((recError: any) =>
+        log("error", "sync/google", "Recommendation generation after sync failed", { message: recError?.message })
+      )
     }
 
     return syncedCampaigns

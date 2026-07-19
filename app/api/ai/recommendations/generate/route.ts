@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
-import { generateAIRecommendations } from "@/lib/ai-recommendation-engine"
+import { generateAndPersistRecommendations } from "@/lib/ai-recommendation-engine"
 
 export async function POST(request: NextRequest) {
   const session = await auth()
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const adAccountId = typeof body?.adAccountId === "string" ? body.adAccountId : null
 
-  const recommendations = await generateAIRecommendations({
+  const recommendations = await generateAndPersistRecommendations({
     userId,
     workspaceId,
     adAccountId,

@@ -2,21 +2,22 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { Zap, Bell, CheckSquare, Cpu, Loader2 } from "lucide-react"
+import { Zap, Bell, CheckSquare, Cpu, Loader2, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type OTab = "recommendations" | "log" | "autopilot"
 
 type Suggestion = {
   id: string
-  title?: string
-  summary?: string
-  description?: string
-  rationale?: string
-  severity?: string
-  priority?: string
-  campaignName?: string
-  applied?: boolean
+  title: string
+  message: string
+  insightType: string
+  confidence: number
+  campaignId: string | null
+  campaignName?: string | null
+  actionType: string | null
+  recommendedValue: string | null
+  applied: boolean
 }
 
 type LogEntry = {
@@ -57,6 +58,8 @@ export default function OptimizationPage() {
   const [loading, setLoading] = useState(true)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   const [logLoading, setLogLoading] = useState(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -125,26 +128,91 @@ export default function OptimizationPage() {
     }
   }
 
-  const act = async (id: string, action: "apply" | "dismiss") => {
+  const dismiss = async (id: string) => {
     setBusyId(id)
+    setActionError(null)
     try {
-      const url = action === "apply" ? "/api/ai/recommendations/apply" : `/api/ai/recommendations`
-      await fetch(url, {
-        method: action === "apply" ? "POST" : "PATCH",
+      await fetch("/api/ai/recommendations", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ suggestionId: id, dismissed: action === "dismiss" }),
-      }).catch(() => {})
+        body: JSON.stringify({ suggestionId: id, dismissed: true }),
+      })
       setSuggestions((prev) => prev.filter((s) => s.id !== id))
+    } catch {
+      setActionError("Couldn't dismiss this suggestion. Try again.")
     } finally {
       setBusyId(null)
     }
   }
 
-  const sevPill = (s?: string) => {
-    const v = (s || "").toUpperCase()
-    if (v.includes("CRIT") || v.includes("HIGH")) return "bg-[#FBE7E5] text-[#D3564C]"
-    if (v.includes("MED")) return "bg-[#FBF0DA] text-[#B8892B]"
-    return "bg-[#E7EFFB] text-[#4B79C7]"
+  // Real preview -> apply pipeline: preview creates a PENDING_APPROVAL
+  // OptimizationLog row (so nothing hits Google Ads without an explicit
+  // approval step), apply then executes it and marks this suggestion applied.
+  const apply = async (s: Suggestion) => {
+    if (!s.actionType || !s.campaignId) return
+    setBusyId(s.id)
+    setActionError(null)
+    try {
+      const previewRes = await fetch("/api/ai/apply-optimization/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recommendationId: s.id,
+          type: s.actionType,
+          campaignId: s.campaignId,
+          recommendedValue: s.recommendedValue,
+          confidence: s.confidence,
+          source: "AI_ADVISOR",
+        }),
+      })
+      const previewJson = await previewRes.json()
+      if (!previewRes.ok || !previewJson?.ok) throw new Error(previewJson?.error || "Couldn't prepare this change.")
+
+      const applyRes = await fetch("/api/ai/apply-optimization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recommendationId: s.id,
+          type: s.actionType,
+          campaignId: s.campaignId,
+          recommendedValue: s.recommendedValue,
+          previewId: previewJson.preview.id,
+        }),
+      })
+      const applyJson = await applyRes.json()
+      if (!applyRes.ok || !applyJson?.ok) throw new Error(applyJson?.error || "Failed to apply this change.")
+
+      setSuggestions((prev) => prev.filter((item) => item.id !== s.id))
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to apply this change.")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const refresh = async () => {
+    setRefreshing(true)
+    setActionError(null)
+    try {
+      const res = await fetch("/api/ai/recommendations/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      const json = await res.json()
+      if (!res.ok && json?.code !== "NO_VERIFIED_CAMPAIGN_DATA") throw new Error(json?.error || "Failed to refresh recommendations.")
+      await load()
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to refresh recommendations.")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const insightLabel = (insightType: string) => {
+    switch (insightType) {
+      case "pause": return "Pause"
+      case "increase_budget": return "Scale budget"
+      case "refresh_creative": return "Refresh creative"
+      case "improve_ctr": return "Targeting insight"
+      default: return insightType
+    }
   }
 
   return (
@@ -177,56 +245,79 @@ export default function OptimizationPage() {
 
           <div className="p-5">
             {activeTab === "recommendations" && (
-              loading ? (
-                <div className="flex items-center justify-center py-16 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
-              ) : suggestions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-12 h-12 bg-[#F6F7F9] rounded-full flex items-center justify-center mb-4">
-                    <Zap size={20} className="text-[#D1D5DB]" />
-                  </div>
-                  <p className="text-[14px] font-semibold text-[#374151]">No recommendations yet</p>
-                  <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-[300px]">
-                    Once your campaigns are live, AI will flag issues and opportunities here with plain-English suggestions.
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11.5px] text-[#9CA3AF]">Generated from your synced campaign performance data.</p>
+                  <button
+                    onClick={refresh}
+                    disabled={refreshing}
+                    className="flex items-center gap-1.5 h-7 px-3 text-[11.5px] font-semibold text-[#374151] rounded-[7px] sku-btn disabled:opacity-60"
+                  >
+                    <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+                    {refreshing ? "Refreshing…" : "Refresh recommendations"}
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {suggestions.map((s) => (
-                    <div key={s.id} className="rounded-[12px] border border-[#E9EBEF] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {(s.severity || s.priority) && (
-                              <span className={cn("inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold uppercase", sevPill(s.severity || s.priority))}>
-                                {s.severity || s.priority}
+
+                {actionError && (
+                  <div className="p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
+                    <p className="text-[12px] font-medium text-[#D3564C]">{actionError}</p>
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="flex items-center justify-center py-16 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
+                ) : suggestions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-12 h-12 bg-[#F6F7F9] rounded-full flex items-center justify-center mb-4">
+                      <Zap size={20} className="text-[#D1D5DB]" />
+                    </div>
+                    <p className="text-[14px] font-semibold text-[#374151]">No recommendations yet</p>
+                    <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-[300px]">
+                      Once your campaigns are live and synced, AI will flag issues and opportunities here with plain-English suggestions.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {suggestions.map((s) => (
+                      <div key={s.id} className="rounded-[12px] border border-[#E9EBEF] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold uppercase bg-[#E7EFFB] text-[#4B79C7]">
+                                {insightLabel(s.insightType)}
                               </span>
-                            )}
-                            {s.campaignName && <span className="text-[11px] text-[#9CA3AF] truncate">{s.campaignName}</span>}
+                              <span className="text-[10.5px] text-[#9CA3AF]">{Math.round(s.confidence)}% confidence</span>
+                              {s.campaignName && <span className="text-[11px] text-[#9CA3AF] truncate">· {s.campaignName}</span>}
+                            </div>
+                            <p className="text-[13px] font-semibold text-[#111827]">{s.title}</p>
+                            <p className="text-[12px] text-[#6B7280] mt-1 leading-relaxed">{s.message}</p>
                           </div>
-                          <p className="text-[13px] font-semibold text-[#111827]">{s.title || s.summary || "Optimization opportunity"}</p>
-                          <p className="text-[12px] text-[#6B7280] mt-1 leading-relaxed">{s.description || s.rationale || ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => act(s.id, "apply")}
-                            disabled={busyId === s.id}
-                            className="h-7 px-3 text-white text-[11.5px] font-semibold rounded-[7px] sku-btn-primary disabled:opacity-60"
-                          >
-                            {busyId === s.id ? "…" : "Apply"}
-                          </button>
-                          <button
-                            onClick={() => act(s.id, "dismiss")}
-                            disabled={busyId === s.id}
-                            className="h-7 px-3 text-[#6B7280] text-[11.5px] font-semibold rounded-[7px] sku-btn disabled:opacity-60"
-                          >
-                            Dismiss
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {s.actionType ? (
+                              <button
+                                onClick={() => apply(s)}
+                                disabled={busyId === s.id}
+                                className="h-7 px-3 text-white text-[11.5px] font-semibold rounded-[7px] sku-btn-primary disabled:opacity-60"
+                              >
+                                {busyId === s.id ? "…" : "Apply"}
+                              </button>
+                            ) : (
+                              <span className="text-[10.5px] text-[#9CA3AF] italic px-1">Advisory only</span>
+                            )}
+                            <button
+                              onClick={() => dismiss(s.id)}
+                              disabled={busyId === s.id}
+                              className="h-7 px-3 text-[#6B7280] text-[11.5px] font-semibold rounded-[7px] sku-btn disabled:opacity-60"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === "log" && (
