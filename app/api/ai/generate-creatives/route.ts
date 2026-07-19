@@ -7,6 +7,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { scoreCreativeVariation } from "@/lib/marketing-logic"
 import { recordActivity } from "@/lib/activity-log"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -39,7 +40,7 @@ const CreativeBriefSchema = z.object({
   generateImages: z.boolean().optional(),
 })
 
-function buildImagePrompt(input: z.infer<typeof CreativeBriefSchema>, variation: any) {
+function buildImagePrompt(input: z.infer<typeof CreativeBriefSchema>, variation: any, businessContext: string) {
   return `Create a high-converting digital ad image for ${input.platform || "Google Display"}.
 Brand: ${input.businessName || input.brandName || "User brand"}
 Product/service: ${input.productName || input.productDescription || "Not provided"}
@@ -47,10 +48,11 @@ Audience: ${input.targetPersona || input.targetAudience || "Not provided"}
 Key message: ${variation.headline || input.valueProp || "Not provided"}
 Ad objective: ${input.objective || "Conversions"}
 Visual style: ${input.visualStyle || input.brandTone || input.tone || "Professional"}
-Requirements: premium SaaS ad quality, clear focal point, minimal embedded text, no watermarks, leave bottom area usable for copy overlay.`
+Requirements: premium SaaS ad quality, clear focal point, minimal embedded text, no watermarks, leave bottom area usable for copy overlay.
+${businessContext}`
 }
 
-async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, variations: any[]) {
+async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, variations: any[], businessContext: string) {
   if (!process.env.OPENAI_API_KEY || input.generateImages === false) return { urls: [] as string[], error: null as string | null }
   try {
     const targets = variations.slice(0, Math.min(3, variations.length))
@@ -58,7 +60,7 @@ async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, var
       targets.map((variation, index) =>
         openai.images.generate({
           model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-          prompt: `${buildImagePrompt(input, variation)}\nVariation ${index + 1}: ${index === 0 ? "primary composition" : index === 1 ? "different layout" : "different color treatment"}.`,
+          prompt: `${buildImagePrompt(input, variation, businessContext)}\nVariation ${index + 1}: ${index === 0 ? "primary composition" : index === 1 ? "different layout" : "different color treatment"}.`,
           size: "1024x1024",
           ...(process.env.OPENAI_IMAGE_MODEL === "dall-e-3" ? { quality: "hd", style: "natural" } : {}),
         })
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
     const input = CreativeBriefSchema.parse(await request.json())
     const workspaceId = await getRequestWorkspaceId(userId, request as any)
     const requestedCount = input.variations || 3
+    const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
     const campaign = input.campaignId
       ? await prisma.campaign.findFirst({
@@ -147,7 +150,7 @@ Offer: ${input.offer || "Not provided"}
 Social proof: ${input.socialProof || "Not provided"}
 CTA: ${input.cta || "Book Free Demo"}
 Audience: ${input.targetPersona || input.targetAudience || "Not provided"}
-Location: ${input.location || "Not provided"}`
+Location: ${input.location || "Not provided"}${businessContext}`
 
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_CREATIVE_MODEL || "gpt-4o",
@@ -181,7 +184,7 @@ Location: ${input.location || "Not provided"}`
       return { ...variation, ...score }
     })
 
-    const imageResult = await generateImageUrls(input, scored)
+    const imageResult = await generateImageUrls(input, scored, businessContext)
 
     const creative = await prisma.generatedCreative.create({
       data: {

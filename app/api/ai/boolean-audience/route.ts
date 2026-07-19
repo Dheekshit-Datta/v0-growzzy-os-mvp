@@ -4,6 +4,8 @@ import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimit } from "@/lib/rate-limit"
+import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -20,6 +22,8 @@ export async function POST(req: NextRequest) {
   if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many requests — wait a moment" }, { status: 429 })
 
   const input = BooleanAudienceSchema.parse(await req.json())
+  const workspaceId = await getRequestWorkspaceId(userId, req)
+  const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: "Boolean audience search is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
@@ -41,7 +45,7 @@ Rules:
 - Never fabricate demographic reach numbers or platform capabilities Google Ads doesn't have
 Return ONLY JSON: {"interpretation": "one paragraph explaining how the boolean query maps to Google Search intent", "keywords": [{"text": "...", "matchType": "BROAD|PHRASE|EXACT", "rationale": "..."}], "negativeKeywords": ["..."]}`,
       },
-      { role: "user", content: input.query },
+      { role: "user", content: `${input.query}${businessContext}` },
     ],
   })
 

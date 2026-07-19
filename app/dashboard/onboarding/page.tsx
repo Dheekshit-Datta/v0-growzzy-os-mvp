@@ -1,487 +1,150 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image'
-import { Check, ChevronRight, ChevronLeft, Loader2, Clock } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useEffect, useState } from "react"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { Check, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { ConversationalWorkspace, type WorkspaceAnswers } from "@/components/onboarding/conversational-workspace"
 
-type Step = 1 | 2 | 3
-
-interface OnboardingState {
+type Step = 2 | 3
+type OnboardingState = {
   currentStep: Step
-  step1: { name: string; email: string }
-  step2: {
-    businessName: string
-    websiteUrl: string
-    primaryGoal: string
-    currency: string
-    timezone: string
-    dailyBudget: string
-    productDescription: string
-  }
-  step3: { googleConnected: boolean; googleAccountId: string; metaConnected: boolean; syncing: boolean }
+  identity: { name: string; email: string }
+  workspace: WorkspaceAnswers
+  google: { connected: boolean; accountId: string }
 }
 
 const DEFAULT_STATE: OnboardingState = {
   currentStep: 2,
-  step1: { name: 'Your Name', email: 'you@example.com' },
-  step2: {
-    businessName: '',
-    websiteUrl: '',
-    primaryGoal: '',
-    currency: 'USD ($)',
-    timezone: '',
-    dailyBudget: '',
-    productDescription: '',
+  identity: { name: "Growzzy user", email: "" },
+  workspace: {
+    businessName: "",
+    websiteUrl: "",
+    productDescription: "",
+    idealCustomer: "",
+    differentiator: "",
+    marketingHistory: "",
+    tone: "Professional",
+    primaryGoal: "LEADS",
+    currency: "USD",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC",
+    dailyBudget: "10",
   },
-  step3: { googleConnected: false, googleAccountId: '', metaConnected: false, syncing: false },
+  google: { connected: false, accountId: "" },
 }
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const [state, setState] = useState<OnboardingState>(DEFAULT_STATE)
+  const [state, setState] = useState(DEFAULT_STATE)
   const [mounted, setMounted] = useState(false)
-  const [storageKey, setStorageKey] = useState('growzzy_onboarding')
+  const [storageKey, setStorageKey] = useState("growzzy_onboarding")
 
-  // localStorage isn't scoped per-user, so it's only trusted once we know
-  // which account is actually signed in — otherwise switching accounts on the
-  // same browser leaks the previous user's onboarding progress/step1 identity.
   useEffect(() => {
-    fetch('/api/auth/session', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((session) => {
-        const name = session?.user?.name
-        const email = session?.user?.email
-        const key = email ? `growzzy_onboarding_${email}` : 'growzzy_onboarding'
-        setStorageKey(key)
-        const saved = localStorage.getItem(key)
-        let restored: OnboardingState | null = null
-        if (saved) {
-          try {
-            restored = JSON.parse(saved)
-          } catch {
-            restored = null
-          }
-        }
-        setState((s) => ({
-          ...(restored || s),
-          step1: { name: name || s.step1.name, email: email || s.step1.email },
-        }))
-      })
-      .catch(() => {})
-      .finally(() => setMounted(true))
+    Promise.all([
+      fetch("/api/auth/me", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/integrations/status", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+    ]).then(([profile, integrations]) => {
+      const user = profile?.user
+      const key = user?.email ? `growzzy_onboarding_${user.email}` : "growzzy_onboarding"
+      setStorageKey(key)
+      let restored: OnboardingState | null = null
+      try { restored = JSON.parse(localStorage.getItem(key) || "null") } catch {}
+      const google = integrations?.google
+      setState((current) => ({
+        ...current,
+        ...(restored || {}),
+        currentStep: google?.connected ? 3 : (restored?.currentStep || 2),
+        identity: { name: user?.name || user?.email || current.identity.name, email: user?.email || "" },
+        workspace: { ...current.workspace, ...(restored?.workspace || {}) },
+        google: { connected: Boolean(google?.connected), accountId: google?.selectedAdAccountId || google?.accountId || "" },
+      }))
+    }).finally(() => setMounted(true))
   }, [])
 
-  // Persist state changes
   useEffect(() => {
-    if (mounted) {
-      localStorage.setItem(storageKey, JSON.stringify(state))
-    }
-  }, [state, mounted, storageKey])
+    if (mounted) localStorage.setItem(storageKey, JSON.stringify(state))
+  }, [mounted, state, storageKey])
 
-  // Reflect the REAL Google connection (e.g. after returning from OAuth),
-  // rather than trusting locally-stored optimism.
-  useEffect(() => {
-    if (!mounted) return
-    fetch('/api/integrations/status', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        const g = json?.google
-        if (!g?.connected) return
-        setState((s) => ({
-          ...s,
-          currentStep: s.currentStep < 3 ? 3 : s.currentStep,
-          step3: {
-            ...s.step3,
-            googleConnected: true,
-            googleAccountId: g.selectedAdAccountId || g.accountId || '',
-            syncing: false,
-          },
-        }))
-      })
-      .catch(() => {})
-  }, [mounted])
-
-  const canContinueStep2 =
-    state.step2.businessName.trim() && state.step2.primaryGoal && state.step2.dailyBudget
-
-  const currencySymbol = (state.step2.currency || '').match(/\(([^)]+)\)/)?.[1] || '$'
-
-  // Save the workspace details the user typed in step 2 to the database,
-  // then advance. These feed the AI when it writes campaigns later.
-  const handleContinueStep2 = async () => {
-    const s2 = state.step2
-    // currency is stored as a display label like "USD ($)" — the API wants a 3-letter code.
-    const currencyCode = (s2.currency || '').match(/[A-Z]{3}/)?.[0]
-    const goal = (s2.primaryGoal || '').toUpperCase().replace(/[\s-]+/g, '_')
-    const validGoal = ['SALES', 'LEADS', 'TRAFFIC', 'APP_INSTALLS'].includes(goal) ? goal : undefined
-
-    await fetch('/api/workspaces', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+  const saveWorkspace = async (summary: string) => {
+    const w = state.workspace
+    const res = await fetch("/api/workspaces", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: s2.businessName?.trim() || undefined,
-        websiteUrl: s2.websiteUrl?.trim() || '',
-        primaryGoal: validGoal,
-        currencyCode,
-        timezone: s2.timezone || undefined,
-        dailyBudgetCeiling: s2.dailyBudget ? Number(s2.dailyBudget) : undefined,
-        productDescription: s2.productDescription?.trim() || '',
+        name: w.businessName.trim(),
+        websiteUrl: w.websiteUrl.trim(),
+        primaryGoal: w.primaryGoal,
+        currencyCode: w.currency,
+        timezone: w.timezone,
+        dailyBudgetCeiling: Number(w.dailyBudget),
+        productDescription: summary,
+        toneOfVoice: w.tone,
       }),
-    }).catch(() => {})
-    setState((s) => ({ ...s, currentStep: 3 }))
+    })
+    if (!res.ok) throw new Error("Could not save workspace context")
+    await fetch("/api/onboarding", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ onboardingStep: 2 }) })
+    setState((s) => ({ ...s, currentStep: 3, workspace: { ...s.workspace, productDescription: summary } }))
+    window.dispatchEvent(new Event("growzzy:workspace-updated"))
   }
 
-  const handleBackStep3 = () => {
-    setState((s) => ({ ...s, currentStep: 2 }))
-  }
-
-  // Real Google OAuth — full page redirect. On return the effect below
-  // detects the live connection.
-  const handleGoogleConnect = () => {
-    window.location.href = '/api/integrations/google/connect?returnTo=/dashboard/onboarding'
-  }
-
-  // Persist completion to the database (not localStorage) so the onboarding
-  // gate in the dashboard layout stops redirecting this user.
-  const completeOnboarding = async () => {
-    await fetch('/api/onboarding', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+  const complete = async (destination: string) => {
+    await fetch("/api/onboarding", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ onboardingCompleted: true, onboardingStep: 3 }),
-    }).catch(() => {})
-  }
-
-  const handleCreateCampaign = async () => {
-    await completeOnboarding()
-    router.push('/dashboard/campaigns/new')
-  }
-
-  const handleSkipConnect = async () => {
-    await completeOnboarding()
-    router.push('/dashboard')
+    })
+    localStorage.removeItem(storageKey)
+    router.push(destination)
   }
 
   if (!mounted) return null
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F6F7F9' }}>
-      <div className="w-full max-w-[640px]">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Image
-              src="/growzzy-logo.png"
-              alt="Growzzy"
-              width={32}
-              height={32}
-            />
-            <p className="text-[20px] font-bold text-[#111827]">Growzzy OS</p>
-          </div>
-          <p className="text-[13px] text-[#6B7280]">Set up your account in just 3 steps</p>
+    <div className="min-h-screen bg-[#F6F7F9] px-4 py-8">
+      <div className="mx-auto w-full max-w-[720px]">
+        <div className="mb-8 text-center">
+          <div className="mb-3 flex items-center justify-center gap-2"><Image src="/growzzy-logo.png" alt="Growzzy" width={32} height={32} /><p className="text-[20px] font-bold text-[#111827]">Growzzy OS</p></div>
+          <p className="text-[13px] text-[#6B7280]">Tell Growzzy enough to make its first campaign feel like yours.</p>
         </div>
 
-        {/* Roadmap */}
-        <div className="space-y-2 mb-8">
-          {/* Step 1 — Completed */}
-          <div className="flex gap-3 items-start sku-card p-4">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: '#1F57F5' }}>
-              <Check size={14} className="text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-[#111827]">Create your identity</p>
-              <p className="text-[11px] text-[#9CA3AF] mt-0.5">
-                {state.step1.name} · {state.step1.email} · Authenticated
-              </p>
-            </div>
-          </div>
+        <div className="space-y-3">
+          <Phase number={1} title="Create your identity" complete>
+            <p className="text-[11.5px] text-[#6B7280]">{state.identity.name} · {state.identity.email} · Authenticated</p>
+          </Phase>
 
-          {/* Step 2 — Active or completed */}
-          <div className={cn('sku-card', state.currentStep === 2 ? 'ring-2 ring-[#1F57F5]' : '')}>
-            <div className="flex gap-3 items-start p-4 pb-3 border-b border-[#DDE1E7]">
-              <div
-                className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-semibold text-[12px]',
-                  state.currentStep >= 2
-                    ? 'bg-[#1F57F5] text-white'
-                    : 'border-2 border-[#D1D5DB] text-[#9CA3AF]'
-                )}
-              >
-                {state.currentStep > 2 ? <Check size={14} /> : '2'}
-              </div>
-              <p className={cn('text-[13px] font-semibold', state.currentStep >= 2 ? 'text-[#111827]' : 'text-[#9CA3AF]')}>
-                Configure your workspace
-              </p>
-            </div>
+          <Phase number={2} title="Configure your workspace" active={state.currentStep === 2} complete={state.currentStep > 2}>
+            {state.currentStep === 2 && <ConversationalWorkspace value={state.workspace} onChange={(patch) => setState((s) => ({ ...s, workspace: { ...s.workspace, ...patch } }))} onComplete={saveWorkspace} />}
+          </Phase>
 
-            {state.currentStep === 2 && (
-              <div className="p-4 space-y-4">
-                {/* Business name */}
-                <div className="space-y-1.5">
-                  <label className="block text-[12.5px] font-semibold text-[#374151]">Business name *</label>
-                  <input
-                    type="text"
-                    placeholder="Your business name"
-                    value={state.step2.businessName}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        step2: { ...s.step2, businessName: e.target.value },
-                      }))
-                    }
-                    className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
-                  />
-                </div>
-
-                {/* Website URL */}
-                <div className="space-y-1.5">
-                  <label className="block text-[12.5px] font-semibold text-[#374151]">Business website</label>
-                  <input
-                    type="url"
-                    placeholder="https://yourwebsite.com"
-                    value={state.step2.websiteUrl}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        step2: { ...s.step2, websiteUrl: e.target.value },
-                      }))
-                    }
-                    className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
-                  />
-                  <p className="text-[11px] text-[#9CA3AF]">We'll use this to understand your product</p>
-                </div>
-
-                {/* Primary goal */}
-                <div className="space-y-1.5">
-                  <label className="block text-[12.5px] font-semibold text-[#374151]">Primary goal *</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['Sales', 'Leads', 'App installs', 'Website traffic'].map((goal) => (
-                      <button
-                        key={goal}
-                        onClick={() => setState((s) => ({ ...s, step2: { ...s.step2, primaryGoal: goal } }))}
-                        className={cn(
-                          'h-9 px-4 text-[12px] font-semibold rounded-[20px] transition-all',
-                          state.step2.primaryGoal === goal
-                            ? 'bg-[#1F57F5] text-white'
-                            : 'bg-white text-[#111827] border border-[#DDE1E7] hover:border-[#1F57F5]'
-                        )}
-                      >
-                        {goal}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Currency & Timezone */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="block text-[12.5px] font-semibold text-[#374151]">Currency</label>
-                    <select
-                      value={state.step2.currency}
-                      onChange={(e) =>
-                        setState((s) => ({
-                          ...s,
-                          step2: { ...s.step2, currency: e.target.value },
-                        }))
-                      }
-                      className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
-                    >
-                      <option>USD ($)</option>
-                      <option>INR (₹)</option>
-                      <option>EUR (€)</option>
-                      <option>GBP (£)</option>
-                      <option>AUD (A$)</option>
-                    </select>
-                    <ChevronRight size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[12.5px] font-semibold text-[#374151]">Timezone</label>
-                    <select
-                      value={state.step2.timezone}
-                      onChange={(e) =>
-                        setState((s) => ({
-                          ...s,
-                          step2: { ...s.step2, timezone: e.target.value },
-                        }))
-                      }
-                      className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
-                    >
-                      <option value="">Select timezone</option>
-                      <option>UTC-8 (Pacific)</option>
-                      <option>UTC-5 (Eastern)</option>
-                      <option>UTC+0 (GMT)</option>
-                      <option>UTC+1 (CET)</option>
-                      <option>UTC+5:30 (IST)</option>
-                    </select>
-                    <ChevronRight size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Daily budget */}
-                <div className="space-y-1.5">
-                  <label className="block text-[12.5px] font-semibold text-[#374151]">Daily budget ceiling *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B7280] select-none">{currencySymbol}</span>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={state.step2.dailyBudget}
-                      onChange={(e) =>
-                        setState((s) => ({
-                          ...s,
-                          step2: { ...s.step2, dailyBudget: e.target.value },
-                        }))
-                      }
-                      className="w-full h-9 pl-6 pr-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
-                    />
-                  </div>
-                  <p className="text-[11px] text-[#9CA3AF]">
-                    Growzzy will never publish or shift budget beyond this amount per day — enforced automatically.
-                  </p>
-                </div>
-
-                {/* Product description */}
-                <div className="space-y-1.5">
-                  <label className="block text-[12.5px] font-semibold text-[#374151]">Product description</label>
-                  <textarea
-                    placeholder="Describe what you sell in a sentence or two — this is what AI uses to write your campaigns"
-                    value={state.step2.productDescription}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        step2: { ...s.step2, productDescription: e.target.value },
-                      }))
-                    }
-                    className="w-full h-[60px] px-3 py-2 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input resize-none"
-                  />
-                </div>
-
-                {/* Button */}
-                <button
-                  onClick={handleContinueStep2}
-                  disabled={!canContinueStep2}
-                  className={cn(
-                    'w-full h-10 text-[13px] font-semibold rounded-[8px] transition-all',
-                    canContinueStep2
-                      ? 'sku-btn-primary text-white cursor-pointer'
-                      : 'bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed'
-                  )}
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Step 3 — Connections */}
-          <div className={cn('sku-card', state.currentStep === 3 ? 'ring-2 ring-[#1F57F5]' : '')}>
-            <div className="flex gap-3 items-start p-4 pb-3 border-b border-[#DDE1E7]">
-              <div
-                className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-semibold text-[12px]',
-                  state.currentStep >= 3
-                    ? 'bg-[#1F57F5] text-white'
-                    : 'border-2 border-[#D1D5DB] text-[#9CA3AF]'
-                )}
-              >
-                3
-              </div>
-              <p className={cn('text-[13px] font-semibold', state.currentStep >= 3 ? 'text-[#111827]' : 'text-[#9CA3AF]')}>
-                Connect your advertising
-              </p>
-            </div>
-
+          <Phase number={3} title="Connect your advertising" active={state.currentStep === 3}>
             {state.currentStep === 3 && (
-              <div className="p-4 space-y-4">
-                {/* Google Ads Card */}
-                <div className="sku-card p-4 flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-[13px] font-semibold text-[#111827] mb-2">Google Ads</p>
-                    {!state.step3.googleConnected ? (
-                      <button
-                        onClick={handleGoogleConnect}
-                        disabled={state.step3.syncing}
-                        className="inline-flex items-center gap-2 h-8 px-3 text-[12px] font-semibold text-white sku-btn-primary rounded-[6px] disabled:opacity-50"
-                      >
-                        {state.step3.syncing ? (
-                          <>
-                            <Loader2 size={13} className="animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          'Connect'
-                        )}
-                      </button>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="inline-flex items-center gap-2 h-6 px-2 rounded-[4px] bg-[#E6F4EC]">
-                          <Check size={12} className="text-[#2E9E5B]" />
-                          <span className="text-[11px] font-semibold text-[#2E9E5B]">Connected</span>
-                        </div>
-                        <p className="text-[12px] text-[#6B7280]">Account: {state.step3.googleAccountId}</p>
-                        {state.step3.syncing ? (
-                          <p className="flex items-center gap-2 text-[11px] text-[#9CA3AF]">
-                            <Clock size={12} />
-                            Syncing your account…
-                          </p>
-                        ) : (
-                          <p className="flex items-center gap-1 text-[11px] text-[#2E9E5B]">
-                            <Check size={12} />
-                            Synced
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+              <div className="space-y-4 p-5">
+                <div className="sku-card flex items-center justify-between p-4">
+                  <div><p className="text-[13.5px] font-semibold text-[#111827]">Google Ads</p><p className="mt-0.5 text-[11.5px] text-[#6B7280]">{state.google.connected ? `Connected account ${state.google.accountId}` : "Connect, choose an account, and begin the first real sync."}</p></div>
+                  {state.google.connected ? <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F4EC] px-2 py-1 text-[11px] font-semibold text-[#2E9E5B]"><Check size={11} /> Connected</span> : <a href="/api/integrations/google/connect?returnTo=/dashboard/onboarding" className="sku-btn-primary rounded-[8px] px-4 py-2 text-[12px] font-semibold text-white">Connect Google</a>}
                 </div>
-
-                {/* Meta Ads Card — Disabled */}
-                <div className="sku-card p-4 flex items-start justify-between gap-3 opacity-60">
-                  <div className="flex-1">
-                    <p className="text-[13px] font-semibold text-[#9CA3AF] mb-2">Meta Ads</p>
-                    <div className="inline-flex items-center gap-2 h-6 px-2 rounded-[4px] bg-[#F3F4F6]">
-                      <span className="text-[11px] font-semibold text-[#6B7280]">Coming soon</span>
-                    </div>
-                    <p className="text-[11px] text-[#9CA3AF] mt-2">
-                      Meta Ads support is on the way. Google Ads is fully supported today.
-                    </p>
-                  </div>
+                <div className="sku-card flex items-center justify-between p-4 opacity-60"><div><p className="text-[13.5px] font-semibold text-[#374151]">Meta Ads</p><p className="mt-0.5 text-[11.5px] text-[#9CA3AF]">Visible now; enabled only when the real Meta backend ships.</p></div><span className="rounded-full bg-[#E5E7EB] px-2 py-1 text-[11px] font-semibold text-[#6B7280]">Planned</span></div>
+                <div className="flex gap-3">
+                  <button onClick={() => setState((s) => ({ ...s, currentStep: 2 }))} className="sku-btn h-10 flex-1 rounded-[8px] text-[13px] font-semibold">Back</button>
+                  <button disabled={!state.google.connected} onClick={() => complete("/dashboard/campaigns/new")} className="sku-btn-primary h-10 flex-1 rounded-[8px] text-[13px] font-semibold text-white disabled:opacity-40">Create your first campaign</button>
                 </div>
-
-                {/* Buttons */}
-                <div className="flex gap-3 pt-3">
-                  <button
-                    onClick={handleBackStep3}
-                    className="flex-1 h-10 text-[13px] font-semibold rounded-[8px] sku-btn text-[#111827]"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleCreateCampaign}
-                    disabled={!state.step3.googleConnected}
-                    className={cn(
-                      'flex-1 h-10 text-[13px] font-semibold rounded-[8px]',
-                      state.step3.googleConnected
-                        ? 'sku-btn-primary text-white cursor-pointer'
-                        : 'bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed'
-                    )}
-                  >
-                    Create your first campaign
-                  </button>
-                </div>
-
-                <button
-                  onClick={handleSkipConnect}
-                  className="w-full h-9 text-[12px] text-[#1F57F5] hover:text-[#1849d6] transition-colors"
-                >
-                  I'll connect later
-                </button>
+                <button onClick={() => complete("/dashboard")} className="w-full text-[12px] font-semibold text-[#1F57F5]">I&apos;ll connect later</button>
               </div>
             )}
-          </div>
+          </Phase>
         </div>
       </div>
     </div>
   )
+}
+
+function Phase({ number, title, active, complete, children }: { number: number; title: string; active?: boolean; complete?: boolean; children: React.ReactNode }) {
+  return <div className={cn("overflow-hidden rounded-[14px] sku-card", active && "ring-2 ring-[#1F57F5]")}>
+    <div className="flex items-center gap-3 border-b border-[#DDE1E7] p-4">
+      <span className={cn("flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-semibold", active || complete ? "bg-[#1F57F5] text-white" : "bg-[#E5E7EB] text-[#9CA3AF]")}>{complete ? <Check size={14} /> : number}</span>
+      <p className={cn("text-[13.5px] font-semibold", active || complete ? "text-[#111827]" : "text-[#9CA3AF]")}>{title}</p>
+    </div>
+    {complete && !active ? <div className="px-4 py-3">{children}</div> : children}
+  </div>
 }

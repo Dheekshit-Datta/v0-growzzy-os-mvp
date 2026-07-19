@@ -7,6 +7,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { recordActivity } from "@/lib/activity-log"
 import { accountIdVariants, normalizeAccountId } from "@/lib/account-id"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
   })
   if (!adAccount) return NextResponse.json({ ok: false, code: "NO_SELECTED_AD_ACCOUNT", error: "Selected Google Ads account metadata is missing." }, { status: 409 })
   const adAccountId = adAccount.id
+  const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: "AI Campaign Builder is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
@@ -105,6 +107,7 @@ Target customer: ${input.targetCustomer}
 Budget: $${input.budget}/day
 Location: ${input.location}
 Goal: ${input.goal}
+${businessContext}
 
 Create 2-3 tightly themed ad groups. Each needs 10-20 keywords, at least 5 negative keywords, 8-15 headlines, and 3-4 descriptions.
 

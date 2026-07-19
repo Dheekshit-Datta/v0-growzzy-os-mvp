@@ -4,6 +4,8 @@ import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimit } from "@/lib/rate-limit"
+import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -20,6 +22,8 @@ export async function POST(req: NextRequest) {
   if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many requests — wait a moment" }, { status: 429 })
 
   const input = EnhanceSchema.parse(await req.json())
+  const workspaceId = await getRequestWorkspaceId(userId, req)
+  const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: "AI Enhance is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
@@ -34,7 +38,7 @@ export async function POST(req: NextRequest) {
         content:
           "You sharpen rough Google Ads campaign briefs into specific, launch-ready briefs. Given the user's raw description, rewrite and extend it in their voice, adding concrete target audience, budget, and location detail ONLY where it can be reasonably inferred from what they wrote. Never invent facts, numbers, or claims not implied by the input. If key detail is missing, note what's missing instead of guessing. Return plain text, 2-4 short paragraphs, no markdown headers.",
       },
-      { role: "user", content: input.prompt },
+      { role: "user", content: `${input.prompt}${businessContext}` },
     ],
   })
 
