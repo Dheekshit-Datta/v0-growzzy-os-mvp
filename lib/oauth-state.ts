@@ -16,6 +16,12 @@ export function getStateCookieName(provider: string): string {
     return `oauth_state_${provider}`
 }
 
+export function stateMatches(incomingState: string | null, storedState: string | null): boolean {
+    if (!incomingState || !storedState) return false
+    if (Buffer.byteLength(incomingState, "utf8") !== Buffer.byteLength(storedState, "utf8")) return false
+    return crypto.timingSafeEqual(Buffer.from(incomingState, "utf8"), Buffer.from(storedState, "utf8"))
+}
+
 /** Set a state cookie on the given response */
 export function attachStateCookie(
     response: NextResponse,
@@ -38,16 +44,8 @@ export async function verifyState(
     provider: string,
     incomingState: string | null
 ): Promise<boolean> {
-    if (!incomingState) return false
     const cookieStore = await cookies()
-    const stored = cookieStore.get(getStateCookieName(provider))?.value
-    if (!stored) return false
-    if (Buffer.byteLength(incomingState, "utf8") !== Buffer.byteLength(stored, "utf8")) return false
-    // Constant-time comparison to prevent timing attacks
-    return crypto.timingSafeEqual(
-        Buffer.from(incomingState, "utf8"),
-        Buffer.from(stored, "utf8")
-    )
+    return stateMatches(incomingState, cookieStore.get(getStateCookieName(provider))?.value || null)
 }
 
 /** Clear the state cookie after callback */

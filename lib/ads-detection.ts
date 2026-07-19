@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma"
 import { persistEncryptedGoogleTokenBinding } from "@/lib/google-token-store"
-import { persistEncryptedMetaTokenBinding } from "@/lib/meta-token-store"
 import { GoogleAdsApiError, GoogleAdsService } from "@/services/integrations/google"
 import { MetaAdsService, MetaApiError } from "@/services/integrations/meta"
 import { encryptedIntegrationTokens } from "@/lib/integration-tokens"
@@ -236,12 +235,6 @@ export async function persistIntegration({
           updatedAt: new Date(),
         },
       })
-      await persistEncryptedMetaTokenBinding({
-        integrationId: updatedIntegration.id,
-        accessToken,
-        refreshToken,
-        expiresAt,
-      })
       return updatedIntegration
     }
 
@@ -250,8 +243,7 @@ export async function persistIntegration({
         userId,
         workspaceId: scopedWorkspaceId,
         platform,
-        accessToken,
-        refreshToken,
+        ...tokenData,
         expiresAt,
         hasAdsAccount: false,
         hasAdsAccess: false,
@@ -259,12 +251,6 @@ export async function persistIntegration({
         validationError: discoveryError || "Meta Ads account discovery failed",
         lastSyncError: discoveryError || null,
       },
-    })
-    await persistEncryptedMetaTokenBinding({
-      integrationId: createdIntegration.id,
-      accessToken,
-      refreshToken,
-      expiresAt,
     })
     return createdIntegration
   }
@@ -311,14 +297,6 @@ export async function persistIntegration({
         integrationId: integration.id,
         refreshToken,
         customerId: null,
-      })
-    }
-    if (platform === "META") {
-      await persistEncryptedMetaTokenBinding({
-        integrationId: integration.id,
-        accessToken,
-        refreshToken,
-        expiresAt,
       })
     }
     return integration
@@ -395,15 +373,6 @@ export async function persistIntegration({
       integrationId: integration.id,
       refreshToken,
       customerId: selectedAccount?.externalId || null,
-    })
-  }
-
-  if (platform === "META") {
-    await persistEncryptedMetaTokenBinding({
-      integrationId: integration.id,
-      accessToken,
-      refreshToken,
-      expiresAt,
     })
   }
 
