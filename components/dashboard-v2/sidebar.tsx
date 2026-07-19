@@ -60,12 +60,25 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const [promptsExpanded, setPromptsExpanded] = useState(true)
   const [progress, setProgress] = useState(0)
   const [workspaceName, setWorkspaceName] = useState("Growzzy Workspace")
+  const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(null)
 
   useEffect(() => {
     fetch("/api/onboarding-progress", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const loadProfile = () => {
+      fetch("/api/auth/me", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => { if (json?.user) setProfile(json.user) })
+        .catch(() => {})
+    }
+    loadProfile()
+    window.addEventListener("growzzy:profile-updated", loadProfile)
+    return () => window.removeEventListener("growzzy:profile-updated", loadProfile)
   }, [])
 
   useEffect(() => {
@@ -247,26 +260,27 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         {navLink(SETTINGS_ITEM)}
 
         {/* User card */}
-        <button
+        <Link
+          href="/dashboard/settings?tab=profile"
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[9px] hover:bg-white/60 cursor-pointer transition-colors"
           aria-label="Account menu"
         >
           <span
-            className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+            className="w-[26px] h-[26px] rounded-full overflow-hidden flex items-center justify-center text-white text-[10px] font-bold shrink-0"
             style={{ background: "#1F57F5" }}
           >
-            {(session?.user?.name || session?.user?.email || "G").charAt(0).toUpperCase()}
+            {profile?.image ? <img src={profile.image} alt="" className="w-full h-full object-cover" /> : (profile?.name || session?.user?.name || profile?.email || session?.user?.email || "G").charAt(0).toUpperCase()}
           </span>
           {!collapsed && (
             <>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-[12px] font-semibold text-[#111827] truncate leading-tight">{session?.user?.name || session?.user?.email || "Growzzy user"}</p>
+                <p className="text-[12px] font-semibold text-[#111827] truncate leading-tight">{profile?.name || session?.user?.name || profile?.email || session?.user?.email || "Growzzy user"}</p>
                 <p className="text-[10.5px] text-[#9CA3AF] truncate leading-tight">{workspaceName}</p>
               </div>
               <ChevronDown size={12} className="text-[#9CA3AF] shrink-0" />
             </>
           )}
-        </button>
+        </Link>
       </div>
     </aside>
   )

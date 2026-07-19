@@ -1,19 +1,104 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2 } from "lucide-react"
+import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2, UserRound, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CURATED_AVATARS } from "@/lib/profile-avatars"
 
-type Tab = "general" | "integrations" | "notifications" | "danger"
+type Tab = "profile" | "general" | "integrations" | "notifications" | "danger"
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: "profile",       label: "Profile",       icon: UserRound   },
   { id: "general",       label: "General",       icon: Settings    },
   { id: "integrations",  label: "Integrations",  icon: Plug        },
   { id: "notifications", label: "Notifications", icon: Bell        },
   { id: "danger",        label: "Danger zone",   icon: ShieldAlert },
 ]
+
+function ProfileTab() {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [image, setImage] = useState("")
+  const [name, setName] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        setImage(json?.user?.image || "")
+        setName(json?.user?.name || json?.user?.email || "Growzzy user")
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const chooseUpload = (file?: File) => {
+    setError("")
+    if (!file) return
+    if (!(["image/png", "image/jpeg", "image/webp"].includes(file.type)) || file.size > 750_000) {
+      setError("Upload a PNG, JPEG, or WebP image smaller than 750 KB.")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setImage(String(reader.result || ""))
+    reader.readAsDataURL(file)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    setError("")
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || "Could not save profile picture")
+      window.dispatchEvent(new Event("growzzy:profile-updated"))
+    } catch (err: any) {
+      setError(err?.message || "Could not save profile picture")
+      throw err
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <SectionCard title="Profile picture" description="Choose how you appear in Growzzy."><div className="flex justify-center py-10 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div></SectionCard>
+
+  return (
+    <SectionCard title="Profile picture" description="Upload your own photo or choose a Growzzy avatar.">
+      <div className="flex items-center gap-4 mb-5">
+        <div className="w-16 h-16 overflow-hidden rounded-full bg-[#EAF0FE] flex items-center justify-center text-[#1F57F5] text-lg font-bold ring-2 ring-white shadow-[0_1px_4px_rgba(0,0,0,0.14)]">
+          {image ? <img src={image} alt={`${name} profile`} className="w-full h-full object-cover" /> : name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <p className="text-[13.5px] font-semibold text-[#111827]">{name}</p>
+          <div className="flex gap-2 mt-2">
+            <button type="button" onClick={() => inputRef.current?.click()} className="h-8 px-3 inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-[8px] sku-btn"><Upload size={13} /> Upload photo</button>
+            {image && <button type="button" onClick={() => setImage("")} className="h-8 px-3 text-[12px] font-semibold text-[#6B7280] rounded-[8px] hover:bg-[#F0F2F5]">Remove</button>}
+          </div>
+          <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => chooseUpload(e.target.files?.[0])} />
+        </div>
+      </div>
+
+      <p className="text-[12.5px] font-semibold text-[#374151] mb-3">Or choose an avatar</p>
+      <div className="grid grid-cols-8 gap-3">
+        {CURATED_AVATARS.map((avatar, index) => (
+          <button key={avatar} type="button" onClick={() => { setImage(avatar); setError("") }} className={cn("relative aspect-square overflow-hidden rounded-full transition-all", image === avatar ? "ring-2 ring-[#1F57F5] ring-offset-2" : "hover:ring-2 hover:ring-[#C7D5FD] hover:ring-offset-2")} aria-label={`Choose avatar ${index + 1}`}>
+            <img src={avatar} alt="" className="w-full h-full object-cover" />
+            {image === avatar && <span className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-[#1F57F5] text-white flex items-center justify-center"><Check size={10} /></span>}
+          </button>
+        ))}
+      </div>
+      {error && <p className="text-[11.5px] text-[#D3564C] mt-3">{error}</p>}
+      <div className="flex justify-end mt-5"><SaveButton label="Save profile picture" onSave={save} saving={saving} /></div>
+    </SectionCard>
+  )
+}
 
 type WorkspaceData = {
   id: string
@@ -470,7 +555,7 @@ function DangerTab() {
   )
 }
 
-const VALID_TABS: Tab[] = ["general", "integrations", "notifications", "danger"]
+const VALID_TABS: Tab[] = ["profile", "general", "integrations", "notifications", "danger"]
 
 export default function SettingsPage() {
   const searchParams = useSearchParams()
@@ -481,10 +566,10 @@ export default function SettingsPage() {
     if (requested && (VALID_TABS as string[]).includes(requested)) {
       setActiveTab(requested as Tab)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [searchParams])
 
   const CONTENT: Record<Tab, React.ReactNode> = {
+    profile:       <ProfileTab />,
     general:       <GeneralTab />,
     integrations:  <IntegrationsTab />,
     notifications: <NotificationsTab />,
@@ -492,6 +577,7 @@ export default function SettingsPage() {
   }
 
   const TAB_DESCRIPTIONS: Record<Tab, string> = {
+    profile:       "Choose how your account appears across Growzzy.",
     general:       "Configure your workspace identity and AI context.",
     integrations:  "Connect your ad platforms to start running campaigns.",
     notifications: "Control which emails Growzzy sends you.",
