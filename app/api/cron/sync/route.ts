@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
 import { runAutomationsForUser } from "@/lib/automation-engine"
 import { sendEmail } from "@/lib/email"
-import { log } from "@/lib/logger"
+import { log, reportError } from "@/lib/logger"
 import { validateEnv } from "@/lib/env"
 import { normalizeReportType, renderReportHtml } from "@/lib/report-template-renderer"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
@@ -105,10 +105,11 @@ export async function GET(req: Request) {
       synced += 1
       automationUsers.add(integration.userId)
     } catch (error: any) {
-      log("error", "cron/sync", "Integration sync failed", {
+      reportError(error, "cron/sync:integration", {
         userId: integration.userId,
+        workspaceId: integration.workspaceId,
+        integrationId: integration.id,
         platform: integration.platform,
-        message: error?.message,
       })
       await prisma.integration.update({
         where: { id: integration.id },
@@ -131,7 +132,7 @@ export async function GET(req: Request) {
     try {
       await runAutomationsForUser(userId)
     } catch (error: any) {
-      log("error", "cron/sync", "Automation run failed", { userId, message: error?.message })
+      reportError(error, "cron/sync:automation", { userId })
       errors.push({
         integrationId: "automation",
         userId,
@@ -168,7 +169,7 @@ export async function GET(req: Request) {
         data: { lastSent: new Date() },
       })
     } catch (error: any) {
-      log("error", "cron/sync", "Scheduled report failed", { userId: schedule.userId, scheduleId: schedule.id, message: error?.message })
+      reportError(error, "cron/sync:scheduled-report", { userId: schedule.userId, scheduleId: schedule.id })
       errors.push({
         integrationId: `schedule:${schedule.id}`,
         userId: schedule.userId,

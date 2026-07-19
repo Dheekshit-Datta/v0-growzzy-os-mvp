@@ -2,11 +2,11 @@
 
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { log } from "@/lib/logger"
+import { reportError } from "@/lib/logger"
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    log("error", "global-error-boundary", "Global client error", { message: error.message, digest: error.digest })
+    reportError(error, "global-error-boundary", { digest: error.digest })
   }, [error])
 
   return (

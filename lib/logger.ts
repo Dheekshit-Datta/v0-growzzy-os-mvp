@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs"
+
 type LogLevel = "debug" | "info" | "warn" | "error"
 type LogContext = Record<string, unknown>
 
@@ -46,4 +48,16 @@ export function log(level: LogLevel, context: string, message: string, data?: Lo
   const prefix = `[${new Date().toISOString()}] [${level.toUpperCase()}] [${context}]`
   if (data) console[level === "debug" ? "log" : level](prefix, message, sanitize(data))
   else console[level === "debug" ? "log" : level](prefix, message)
+}
+
+export function reportError(error: unknown, context: string, data?: LogContext) {
+  const normalized = error instanceof Error ? error : new Error(String(error))
+
+  Sentry.withScope((scope) => {
+    scope.setTag("context", context)
+    if (data) scope.setContext("details", sanitize(data) as LogContext)
+    Sentry.captureException(normalized)
+  })
+
+  log("error", context, normalized.message, data)
 }

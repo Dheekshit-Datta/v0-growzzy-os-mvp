@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { deriveMetrics } from "@/lib/metrics"
 import { GoogleAdsService } from "@/services/integrations/google"
 import { refreshGoogleAccessToken } from "@/lib/ads-detection"
-import { log } from "@/lib/logger"
+import { log, reportError } from "@/lib/logger"
 import { encryptedIntegrationTokens, getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
 import { generateAndPersistRecommendations } from "@/lib/ai-recommendation-engine"
 
@@ -453,6 +453,7 @@ export async function syncGoogleAdsCampaigns(
 
     return syncedCampaigns
   } catch (error: any) {
+    reportError(error, "sync/google", { userId, workspaceId, integrationId, adAccountDbId })
     await prisma.adAccount.update({
       where: { id: adAccountDbId },
       data: { syncStatus: "ERROR", syncError: error?.message || "Google sync failed" },
