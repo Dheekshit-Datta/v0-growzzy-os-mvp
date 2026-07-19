@@ -154,13 +154,13 @@ export function TopBar({ title }: TopBarProps) {
         </div>
 
         {/* Help */}
-        <a
-          href="mailto:support@growzzy.com"
+        <button
+          onClick={() => window.dispatchEvent(new Event("growzzy:open-feedback"))}
           className="w-8 h-8 flex items-center justify-center rounded-[8px] text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn"
           aria-label="Help"
         >
           <HelpCircle size={15} />
-        </a>
+        </button>
 
         {/* Notifications */}
         <div className="relative" ref={notifRef}>

@@ -19,6 +19,15 @@ export function BetaFeedbackWidget() {
     setHidden(localStorage.getItem("growzzy-feedback-submitted") === "true")
   }, [])
 
+  useEffect(() => {
+    const openFeedback = () => {
+      setHidden(false)
+      setOpen(true)
+    }
+    window.addEventListener("growzzy:open-feedback", openFeedback)
+    return () => window.removeEventListener("growzzy:open-feedback", openFeedback)
+  }, [])
+
   const submit = async () => {
     if (message.trim().length < 3) {
       toast.error("Drop a little feedback first")
