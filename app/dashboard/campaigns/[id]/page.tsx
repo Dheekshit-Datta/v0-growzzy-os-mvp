@@ -31,11 +31,14 @@ type CampaignDetail = {
   externalId: string
   totalSpend: number
   totalRevenue: number
+  projectId: string | null
   integration: { id: string; platform: string; accountName: string | null; selectedAdAccountName: string | null } | null
   metricsDaily: MetricDaily[]
   adGroups: AdGroup[]
   creatives: unknown[]
 }
+
+type ProjectOption = { id: string; name: string }
 
 function money(n: number | null | undefined) {
   return "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
@@ -75,6 +78,8 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [savingProject, setSavingProject] = useState(false)
 
   useEffect(() => {
     if (!params?.id) return
@@ -86,7 +91,30 @@ export default function CampaignDetailPage() {
       })
       .catch((e) => setError(e?.message || "Failed to load campaign"))
       .finally(() => setLoading(false))
+    fetch("/api/projects", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => setProjects(json?.projects ?? []))
+      .catch(() => {})
   }, [params?.id])
+
+  const assignProject = async (projectId: string) => {
+    if (!campaign || savingProject) return
+    setSavingProject(true)
+    const prev = campaign.projectId
+    setCampaign({ ...campaign, projectId: projectId || null })
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: projectId || null }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setCampaign((c) => (c ? { ...c, projectId: prev } : c))
+    } finally {
+      setSavingProject(false)
+    }
+  }
 
   const totalClicks = campaign?.metricsDaily.reduce((sum, m) => sum + (m.clicks || 0), 0) ?? 0
   const totalConversions = campaign?.metricsDaily.reduce((sum, m) => sum + (m.conversions || 0), 0) ?? 0
@@ -154,6 +182,24 @@ export default function CampaignDetailPage() {
                 <span>Daily budget: <strong className="text-[#374151]">{money(campaign.dailyBudget)}</strong></span>
                 {campaign.metricsDaily.length === 0 && (
                   <span className="text-[#9CA3AF]">No performance data synced yet — this appears after the next sync.</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#F0F2F5]">
+                <span className="text-[12.5px] text-[#6B7280]">Project:</span>
+                <select
+                  value={campaign.projectId || ""}
+                  onChange={(e) => assignProject(e.target.value)}
+                  disabled={savingProject}
+                  className="h-8 px-2.5 text-[12.5px] text-[#111827] outline-none rounded-[7px] sku-input disabled:opacity-60"
+                >
+                  <option value="">No project</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {projects.length === 0 && (
+                  <span className="text-[11px] text-[#9CA3AF]">No projects yet — <a href="/dashboard/projects" className="text-[#1F57F5] hover:underline">create one</a></span>
                 )}
               </div>
             </Card>
