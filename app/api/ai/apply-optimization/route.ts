@@ -6,6 +6,7 @@ import { recordActivity } from "@/lib/activity-log"
 import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
 import { mutateCampaignStatusOnPlatform, mutateGoogleCampaignBudgetOnPlatform } from "@/lib/platform-mutation"
 import { classifyActionError, createCorrelationId } from "@/lib/action-response"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 export const dynamic = "force-dynamic"
 
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, redirectTo: `/dashboard/creatives?campaignId=${campaign.id}`, message: "Open Creative Studio to refresh this campaign" })
     }
 
-    if (campaign.platform !== "GOOGLE" || !integration?.accessToken || !integration.selectedAdAccountId) {
+    if (campaign.platform !== "GOOGLE" || !integration || !getIntegrationAccessToken(integration) || !integration.selectedAdAccountId) {
       await prisma.optimizationLog.update({
         where: { id: previewLog.id },
         data: {

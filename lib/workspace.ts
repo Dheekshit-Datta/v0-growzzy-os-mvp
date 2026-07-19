@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import type { NextRequest } from "next/server"
 
 export const ACTIVE_WORKSPACE_COOKIE = "growzzy_active_workspace_id"
@@ -13,30 +14,34 @@ function slugify(value: string) {
 }
 
 export async function ensureDefaultWorkspace(userId: string, name?: string | null) {
-  const existing = await prisma.workspaceMember.findFirst({
-    where: { userId },
-    include: { workspace: true },
-    orderBy: { workspace: { createdAt: "asc" } },
-  })
-
-  if (existing?.workspace) return existing.workspace
-
   const base = slugify(name || "Growzzy Workspace") || "growzzy-workspace"
-  const slug = `${base}-${userId.slice(-6).toLowerCase()}`
+  const slug = `${base.slice(0, 20)}-${userId.toLowerCase()}`
 
-  return prisma.workspace.create({
-    data: {
-      name: name || "Growzzy Workspace",
-      slug,
-      ownerId: userId,
-      members: {
-        create: {
-          userId,
-          role: "ADMIN",
+  try {
+    return await prisma.workspace.upsert({
+      where: { defaultForOwnerId: userId },
+      update: {},
+      create: {
+        name: name || "Growzzy Workspace",
+        slug,
+        ownerId: userId,
+        defaultForOwnerId: userId,
+        members: {
+          create: {
+            userId,
+            role: "ADMIN",
+          },
         },
       },
-    },
-  })
+    })
+  } catch (error) {
+    // A concurrent first request may finish the same unique upsert first.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const workspace = await prisma.workspace.findUnique({ where: { defaultForOwnerId: userId } })
+      if (workspace) return workspace
+    }
+    throw error
+  }
 }
 
 export async function assertWorkspaceMember(userId: string, workspaceId?: string | null) {

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") ?? "1", 10)
     const pageSize = 20
 
-    const [suggestions, total, healthScore] = await Promise.all([
+    const [suggestions, total] = await Promise.all([
         prisma.optimizationSuggestion.findMany({
             where: { workspaceId, dismissed: false },
             orderBy: [{ applied: "asc" }, { confidence: "desc" }, { createdAt: "desc" }],
@@ -32,12 +32,11 @@ export async function GET(req: NextRequest) {
         prisma.optimizationSuggestion.count({
             where: { workspaceId, dismissed: false },
         }),
-        prisma.accountHealthScore.findFirst({ where: { userId } }),
     ])
 
     const campaignIds = [...new Set(suggestions.map((s) => s.campaignId).filter(Boolean))] as string[]
     const campaigns = campaignIds.length
-        ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } })
+        ? await prisma.campaign.findMany({ where: { id: { in: campaignIds }, workspaceId }, select: { id: true, name: true } })
         : []
     const campaignNameById = new Map(campaigns.map((c) => [c.id, c.name]))
 
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
         success: true,
         suggestions: suggestions.map((s) => ({ ...s, campaignName: s.campaignId ? campaignNameById.get(s.campaignId) || null : null })),
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-        healthScore: healthScore ?? null,
+        healthScore: null,
         totalEstimatedImpact: parseFloat(totalImpact.toFixed(2)),
     })
 }

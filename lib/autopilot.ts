@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { recordActivity } from "@/lib/activity-log"
 import { mutateCampaignStatusOnPlatform, mutateGoogleCampaignBudgetOnPlatform } from "@/lib/platform-mutation"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 // Real autopilot execution - only runs for workspaces that have explicitly
 // opted into defaultAutomationMode="FULL" (default is "ALERT"; nobody gets
@@ -49,7 +50,12 @@ export async function runAutopilotForWorkspace(input: { userId: string; workspac
       include: { integration: { include: { adAccounts: true } } },
     })
     if (!campaign) continue
-    if (campaign.platform !== "GOOGLE" || !campaign.integration?.accessToken || !campaign.integration.selectedAdAccountId) continue
+    if (
+      campaign.platform !== "GOOGLE" ||
+      !campaign.integration ||
+      !getIntegrationAccessToken(campaign.integration) ||
+      !campaign.integration.selectedAdAccountId
+    ) continue
 
     let targetBudget: number | null = null
     if (suggestion.actionType === "BUDGET_INCREASE") {

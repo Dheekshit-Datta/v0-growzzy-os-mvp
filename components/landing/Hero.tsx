@@ -40,7 +40,7 @@ export function HeroSection() {
             New
           </span>
           <span className="text-sm text-white/90">
-            AI Ad Campaigns That Actually Launch on Google &amp; Meta
+            AI Ad Campaigns That Actually Launch on Google
           </span>
         </motion.div>
 
@@ -61,7 +61,7 @@ export function HeroSection() {
         >
           Growzzy OS is the AI marketing co-pilot built for solo founders and small teams.
           Describe your product, set your budget — we handle the creatives, targeting, and
-          publishing across Google and Meta.
+          publishing to Google Ads. Meta support is planned, not active yet.
         </motion.p>
 
         {/* CTAs */}

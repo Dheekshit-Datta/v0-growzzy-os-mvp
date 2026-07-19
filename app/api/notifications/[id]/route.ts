@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
+import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export const dynamic = "force-dynamic"
 
-export async function PATCH(_req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -13,8 +14,9 @@ export async function PATCH(_req: Request, { params }: { params: { id: string } 
     }
 
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
     const notification = await prisma.notification.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId, workspaceId },
     })
 
     if (!notification) {

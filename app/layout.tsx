@@ -22,7 +22,7 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "GROWZZY OS - Unified AI-Powered Marketing Operations Platform",
   description:
-    "Manage, optimize, and automate your multi-channel marketing campaigns from a single intelligent dashboard. Aggregate Meta and Google advertising data with AI-driven insights.",
+    "Create, publish, monitor, and optimize Google Ads campaigns with an AI-assisted workflow and verified campaign data.",
   generator: "v0.app",
 }
 

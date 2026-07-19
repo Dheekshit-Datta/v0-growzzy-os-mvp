@@ -6,7 +6,7 @@ const easeOut = [0.16, 1, 0.3, 1] as const
 
 const STARTER_FEATURES = [
   '2 active campaigns',
-  'Google Ads + Meta',
+  'Google Ads publishing',
   'AI creative generation',
   'Basic performance dashboard',
   '1 ad account per platform',
@@ -14,7 +14,7 @@ const STARTER_FEATURES = [
 
 const GROWTH_FEATURES = [
   'Unlimited campaigns',
-  'Google Ads + Meta',
+  'Google Ads publishing',
   'AI creative studio (all formats)',
   'Optimization autopilot',
   'Advanced analytics',

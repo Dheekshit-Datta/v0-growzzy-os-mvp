@@ -356,21 +356,21 @@ function NotificationsTab() {
   }
 
   if (loading) {
-    return <SectionCard title="Email notifications" description="Choose what Growzzy emails you about.">
+    return <SectionCard title="In-app notifications" description="Choose what appears in your Growzzy notification feed.">
       <div className="flex items-center justify-center py-10 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div>
     </SectionCard>
   }
 
   return (
-    <SectionCard title="Email notifications" description="Choose what Growzzy emails you about.">
+    <SectionCard title="In-app notifications" description="Choose what appears in your Growzzy notification feed.">
       <div>
-        <SkuToggle label="Weekly performance digest" description="Email summary of spend, results, and AI actions every Monday" checked={prefs.weeklyDigest} onChange={(v) => update({ weeklyDigest: v })} />
-        <SkuToggle label="Optimization alerts" description="Email when AI flags something that needs your attention" checked={prefs.optimizationAlerts} onChange={(v) => update({ optimizationAlerts: v })} />
-        <SkuToggle label="Budget alerts" description="Email if a campaign is on track to hit your daily budget ceiling" checked={prefs.budgetAlerts} onChange={(v) => update({ budgetAlerts: v })} />
+        <SkuToggle label="Weekly performance digest" description="Show a summary of spend, results, and AI actions every Monday" checked={prefs.weeklyDigest} onChange={(v) => update({ weeklyDigest: v })} />
+        <SkuToggle label="Optimization alerts" description="Notify when AI flags something that needs your attention" checked={prefs.optimizationAlerts} onChange={(v) => update({ optimizationAlerts: v })} />
+        <SkuToggle label="Budget alerts" description="Notify if a campaign is on track to hit your daily budget ceiling" checked={prefs.budgetAlerts} onChange={(v) => update({ budgetAlerts: v })} />
         <SkuToggle label="Product updates" description="Occasional announcements about new features — off by default" checked={prefs.productUpdates} onChange={(v) => update({ productUpdates: v })} />
       </div>
       <p className="text-[11px] text-[#9CA3AF] mt-4 pt-4 border-t border-[#DDE1E7]">
-        These preferences are saved to your account. Actual email delivery isn&apos;t wired to a mail service yet, so no emails send today — but your choices are remembered.
+        These alerts are in-app only. Email delivery is not enabled in this environment.
       </p>
     </SectionCard>
   )

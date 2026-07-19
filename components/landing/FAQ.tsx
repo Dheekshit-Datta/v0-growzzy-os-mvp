@@ -8,8 +8,8 @@ const easeOut = [0.16, 1, 0.3, 1] as const
 
 const FAQS = [
   {
-    q: 'Do I need a Google Ads or Meta account first?',
-    a: "Yes, you'll connect your existing accounts during onboarding. If you don't have one yet, we walk you through creating it — it takes about 5 minutes per platform.",
+    q: 'Do I need a Google Ads account first?',
+    a: "Yes. You'll connect and select an existing Google Ads account during onboarding. Meta support is planned but is not active today.",
   },
   {
     q: 'Will Growzzy spend my budget without my approval?',
@@ -20,7 +20,7 @@ const FAQS = [
     a: 'All of the above. Growzzy works for any product type. You describe what you sell and who buys it — the AI adapts the creative and targeting strategy accordingly.',
   },
   {
-    q: 'How is this different from just using Google Ads or Meta directly?',
+    q: 'How is this different from using Google Ads directly?',
     a: 'Those tools are built for experts. Growzzy handles the strategy, creative, and optimization automatically — you just set your goal and budget. Most founders go live in under 10 minutes versus days of setup.',
   },
   {

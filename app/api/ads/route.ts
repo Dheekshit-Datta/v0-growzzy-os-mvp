@@ -5,12 +5,14 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { createGoogleResponsiveSearchAd } from "@/lib/platform-actions"
 import { log } from "@/lib/logger"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
     const { adGroupId, headlines, descriptions, finalUrl, displayPath1, displayPath2, adStrength } = await req.json()
     if (!adGroupId || !finalUrl || !Array.isArray(headlines) || !Array.isArray(descriptions)) {
       return NextResponse.json({ error: "adGroupId, finalUrl, headlines and descriptions are required" }, { status: 400 })
@@ -20,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const adGroup = await prisma.adGroup.findFirst({
-      where: { id: adGroupId, userId },
+      where: { id: adGroupId, userId, campaign: { workspaceId } },
       include: { campaign: { include: { integration: { include: { adAccounts: { where: { isPrimary: true } } } } } } },
     })
     if (!adGroup) return NextResponse.json({ error: "Ad group not found" }, { status: 404 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
+import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export const dynamic = "force-dynamic"
 
@@ -12,10 +13,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
     const body = await req.json()
 
     const existing = await prisma.automationRule.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId, workspaceId },
       select: { id: true },
     })
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -38,16 +40,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const existing = await prisma.automationRule.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId, workspaceId },
       select: { id: true },
     })
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -59,16 +62,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const rule = await prisma.automationRule.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId, workspaceId },
       include: {
         logs: {
           take: 10,

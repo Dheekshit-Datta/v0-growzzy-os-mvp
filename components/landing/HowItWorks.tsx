@@ -14,12 +14,12 @@ const STEPS = [
   {
     number: '02',
     title: 'Configure your workspace',
-    body: 'Growzzy generates your ad creatives, headlines, audience targeting, and bidding strategy for both Google and Meta — ready to review before anything goes live.',
+    body: 'Growzzy generates your Google Search headlines, keywords, targeting, and bidding strategy, ready to review before anything is published.',
   },
   {
     number: '03',
     title: 'Connect your advertising',
-    body: 'Connect Google Ads and Meta with one click. Growzzy publishes, then monitors performance daily, reallocates budget to winning ads, and pauses what isn’t working.',
+    body: 'Connect Google Ads, select your account, and sync real campaign data. Meta remains disabled until its full backend is ready.',
   },
 ]
 

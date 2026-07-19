@@ -15,15 +15,15 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     icon: Wand2,
-    tags: ['Google Ready', 'Meta Ready', 'On-Brand', 'Auto-Sized'],
+    tags: ['Google Ready', 'Meta Planned', 'On-Brand', 'Auto-Sized'],
     title: 'AI Creative Studio',
-    body: 'Describe your product in plain English. Growzzy generates scroll-stopping ad creatives — headlines, copy, and visuals — sized perfectly for every Google and Meta placement.',
+    body: 'Describe your product in plain English. Growzzy generates Google-ready headlines, copy, and creative directions you can review before launch.',
   },
   {
     icon: Rocket,
     tags: ['No Setup', 'Live in 3 Min', 'Budget Safe', 'Auto-Optimize'],
     title: 'One-Click Launch',
-    body: 'Set your goal, daily budget, and audience — Growzzy publishes your campaign directly to Google Ads and Meta with the right objective, bidding strategy, and targeting. No agency needed.',
+    body: 'Set your goal, daily budget, and audience. Growzzy publishes a paused Google Ads campaign with the reviewed objective, bidding strategy, and targeting.',
   },
   {
     icon: Gauge,

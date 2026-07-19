@@ -22,7 +22,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "GrowzzyOS - AI-Powered Ad Management Platform",
   description:
-    "Manage Meta and Google campaigns with real-time analytics, AI optimization and forensic alerts.",
+    "Create and manage Google Ads campaigns with verified analytics, AI recommendations, and budget safeguards.",
 }
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {

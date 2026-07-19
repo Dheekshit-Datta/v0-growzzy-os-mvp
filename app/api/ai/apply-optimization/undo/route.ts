@@ -6,6 +6,7 @@ import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
 import { recordActivity } from "@/lib/activity-log"
 import { mutateCampaignStatusOnPlatform, mutateGoogleCampaignBudgetOnPlatform } from "@/lib/platform-mutation"
 import { classifyActionError, createCorrelationId } from "@/lib/action-response"
+import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 
 function parseNumericValue(input: string) {
   const value = Number(String(input || "").replace(/[^0-9.]/g, ""))
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const campaign = log.campaign
   const integration = campaign.integration
-  if (campaign.platform !== "GOOGLE" || !integration?.accessToken || !integration.selectedAdAccountId) {
+  if (campaign.platform !== "GOOGLE" || !integration || !getIntegrationAccessToken(integration) || !integration.selectedAdAccountId) {
     return NextResponse.json({ error: "Undo is currently supported for Google campaign actions only.", correlationId, code: "PREFLIGHT_BLOCK" }, { status: 400 })
   }
 

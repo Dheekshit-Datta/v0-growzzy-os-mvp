@@ -5,17 +5,19 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { createGoogleKeywords } from "@/lib/platform-actions"
 import { log } from "@/lib/logger"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
     const { adGroupId, keywords } = await req.json()
     if (!adGroupId || !Array.isArray(keywords)) return NextResponse.json({ error: "adGroupId and keywords are required" }, { status: 400 })
 
     const adGroup = await prisma.adGroup.findFirst({
-      where: { id: adGroupId, userId },
+      where: { id: adGroupId, userId, campaign: { workspaceId } },
       include: { campaign: { include: { integration: { include: { adAccounts: { where: { isPrimary: true } } } } } } },
     })
     if (!adGroup) return NextResponse.json({ error: "Ad group not found" }, { status: 404 })

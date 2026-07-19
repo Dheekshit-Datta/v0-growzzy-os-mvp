@@ -33,7 +33,7 @@ export function assertCampaignMutationSafe(campaign: CampaignWithIntegration, ki
       "Sync campaigns and only run actions on verified live campaigns."
     )
   }
-  if (!campaign.integration?.accessTokenEncrypted && !campaign.integration?.accessToken) {
+  if (!campaign.integration || !getIntegrationAccessToken(campaign.integration)) {
     throw preflightError(
       "Platform token missing. Reconnect the ad account first.",
       "Reconnect integration in Ad Accounts and rerun sync."

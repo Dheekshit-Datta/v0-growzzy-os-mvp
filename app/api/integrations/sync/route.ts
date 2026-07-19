@@ -182,6 +182,7 @@ export async function POST(req: Request) {
         await prisma.notification.create({
           data: {
             userId,
+            workspaceId,
             title: "Sync complete",
             body: `${integration.platform} sync updated ${count} campaign${count === 1 ? "" : "s"}.`,
             type: "SYNC_COMPLETE",
