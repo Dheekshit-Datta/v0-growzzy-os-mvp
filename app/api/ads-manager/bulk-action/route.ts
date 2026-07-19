@@ -10,6 +10,7 @@ import {
   mutateCampaignStatusOnPlatform,
   mutateGoogleCampaignBudgetOnPlatform,
 } from "@/lib/platform-mutation"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -97,6 +98,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", correlationId, code: "UNAUTHORIZED" }, { status: 401 })
 
   const userId = await resolveUserId(session.user.id)
+  const limit = await rateLimitPolicy(userId, "optimizationMutation")
+  if (!limit.allowed) return rateLimitResponse(limit)
   const workspaceId = await getRequestWorkspaceId(userId, req)
   const parsed = BulkActionSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors, correlationId, code: "VALIDATION_FAILED" }, { status: 400 })

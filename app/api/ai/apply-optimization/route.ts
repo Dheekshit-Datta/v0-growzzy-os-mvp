@@ -7,6 +7,7 @@ import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
 import { mutateCampaignStatusOnPlatform, mutateGoogleCampaignBudgetOnPlatform } from "@/lib/platform-mutation"
 import { classifyActionError, createCorrelationId } from "@/lib/action-response"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", correlationId, code: "UNAUTHORIZED" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "optimizationMutation")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const workspaceFilter = workspaceWhere(workspaceId, false)
     const body = await req.json()

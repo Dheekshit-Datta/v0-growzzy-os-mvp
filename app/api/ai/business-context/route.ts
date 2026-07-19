@@ -3,7 +3,7 @@ import OpenAI from "openai"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   const userId = await resolveUserId(session.user.id)
-  const limit = await rateLimit(`ai:business-context:${userId}`, 5, 60_000)
-  if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many requests - wait a moment" }, { status: 429 })
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid business answers" }, { status: 400 })

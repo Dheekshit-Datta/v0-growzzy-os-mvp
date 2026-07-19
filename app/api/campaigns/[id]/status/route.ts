@@ -9,6 +9,7 @@ import { isUnverifiedExternalId } from "@/lib/data-trust"
 import { mutateCampaignStatusOnPlatform } from "@/lib/platform-mutation"
 import { createCorrelationId, parseActionErrorDetails } from "@/lib/action-response"
 import { recordActivity } from "@/lib/activity-log"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", correlationId, code: "UNAUTHORIZED" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "optimizationMutation")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const parsed = StatusSchema.safeParse(await req.json())
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors, correlationId, code: "VALIDATION_FAILED" }, { status: 400 })
 

@@ -3,7 +3,7 @@ import OpenAI from "openai"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   const userId = await resolveUserId(session.user.id)
 
-  const limit = await rateLimit(`ai:boolean-audience:${userId}`, 15, 60_000)
-  if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many requests — wait a moment" }, { status: 429 })
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
 
   const input = BooleanAudienceSchema.parse(await req.json())
   const workspaceId = await getRequestWorkspaceId(userId, req)

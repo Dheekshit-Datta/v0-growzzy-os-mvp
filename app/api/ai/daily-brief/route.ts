@@ -8,6 +8,7 @@ import { buildDailyBriefFromCampaigns } from "@/lib/daily-brief"
 import { recordActivity } from "@/lib/activity-log"
 import { log } from "@/lib/logger"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -163,6 +164,8 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "aiUtility")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const body = await req.json().catch(() => ({}))
     const workspace = body.workspaceId ? await assertWorkspaceMember(userId, body.workspaceId) : await assertWorkspaceMember(userId, await getRequestWorkspaceId(userId, req))
     const workspaceId = workspace.id

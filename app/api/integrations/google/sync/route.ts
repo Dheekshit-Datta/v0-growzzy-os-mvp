@@ -5,6 +5,7 @@ import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
 import { GoogleAdsApiError } from "@/services/integrations/google"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const GOOGLE_SYNC_ACCESS_DENIED_MESSAGE =
   "Access Denied: Ensure you are using a Production Developer Token for real accounts, or use a Test Account for development."
@@ -12,6 +13,8 @@ const GOOGLE_SYNC_ACCESS_DENIED_MESSAGE =
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId()
+    const limit = await rateLimitPolicy(userId, "platformSync")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const integration = await prisma.integration.findFirst({

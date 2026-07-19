@@ -14,6 +14,7 @@ import { getRequestWorkspaceId } from "@/lib/workspace"
 import { enrichRecommendation } from "@/lib/daily-brief"
 import { recordActivity } from "@/lib/activity-log"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "aiUtility")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     let settings = await prisma.userSettings.findUnique({ where: { userId } })
     if (!settings) {

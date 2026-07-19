@@ -3,7 +3,7 @@ import { z } from "zod"
 import dns from "dns/promises"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -141,8 +141,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   const userId = await resolveUserId(session.user.id)
 
-  const limit = await rateLimit(`scrape-site:${userId}`, 20, 60_000)
-  if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many scrape requests — try again shortly" }, { status: 429 })
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ ok: false, error: "A valid URL is required" }, { status: 400 })

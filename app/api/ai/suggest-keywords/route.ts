@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  await resolveUserId(session.user.id)
+  const userId = await resolveUserId(session.user.id)
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
 
   const { theme, goal } = await req.json()
   if (!process.env.OPENAI_API_KEY) {

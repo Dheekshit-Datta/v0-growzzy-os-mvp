@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { checkPlanPolicy } from "@/lib/services/policy-check"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   const userId = await resolveUserId(session.user.id)
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
   const workspaceId = await getRequestWorkspaceId(userId, req)
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => ({})))

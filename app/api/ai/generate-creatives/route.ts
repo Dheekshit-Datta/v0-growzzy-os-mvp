@@ -8,6 +8,7 @@ import { getRequestWorkspaceId } from "@/lib/workspace"
 import { scoreCreativeVariation } from "@/lib/marketing-logic"
 import { recordActivity } from "@/lib/activity-log"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -86,6 +87,12 @@ export async function POST(request: Request) {
     if (!session?.user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
     const input = CreativeBriefSchema.parse(await request.json())
+    const textLimit = await rateLimitPolicy(userId, "creativeText")
+    if (!textLimit.allowed) return rateLimitResponse(textLimit)
+    if (input.generateImages !== false) {
+      const imageLimit = await rateLimitPolicy(userId, "imageGeneration")
+      if (!imageLimit.allowed) return rateLimitResponse(imageLimit)
+    }
     const workspaceId = await getRequestWorkspaceId(userId, request as any)
     const requestedCount = input.variations || 3
     const businessContext = await getBusinessContextForWorkspace(workspaceId)

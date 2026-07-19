@@ -5,6 +5,7 @@ import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import OpenAI from "openai"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -21,6 +22,8 @@ export async function POST(req: Request) {
   }
 
   const userId = await resolveUserId(session.user.id)
+  const limit = await rateLimitPolicy(userId, "aiUtility")
+  if (!limit.allowed) return rateLimitResponse(limit)
   if (!process.env.OPENAI_API_KEY) {
     return new Response("AI assistant is unavailable because OPENAI_API_KEY is not configured.", { status: 503 })
   }

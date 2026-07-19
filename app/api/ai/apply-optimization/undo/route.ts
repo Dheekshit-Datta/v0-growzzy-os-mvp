@@ -7,6 +7,7 @@ import { recordActivity } from "@/lib/activity-log"
 import { mutateCampaignStatusOnPlatform, mutateGoogleCampaignBudgetOnPlatform } from "@/lib/platform-mutation"
 import { classifyActionError, createCorrelationId } from "@/lib/action-response"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 function parseNumericValue(input: string) {
   const value = Number(String(input || "").replace(/[^0-9.]/g, ""))
@@ -16,9 +17,11 @@ function parseNumericValue(input: string) {
 export async function POST(req: NextRequest) {
   const correlationId = createCorrelationId()
   const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", correlationId, code: "UNAUTHORIZED" }, { status: 401 })
-  const userId = await resolveUserId(session.user.id)
-  const workspaceId = await getRequestWorkspaceId(userId, req)
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized", correlationId, code: "UNAUTHORIZED" }, { status: 401 })
+    const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "optimizationMutation")
+    if (!limit.allowed) return rateLimitResponse(limit)
+    const workspaceId = await getRequestWorkspaceId(userId, req)
   const workspaceFilter = workspaceWhere(workspaceId, false)
   const { optimizationLogId } = await req.json()
   if (!optimizationLogId) return NextResponse.json({ error: "optimizationLogId is required", correlationId, code: "VALIDATION_FAILED" }, { status: 400 })

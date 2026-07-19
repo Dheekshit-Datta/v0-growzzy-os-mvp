@@ -5,7 +5,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
 import { GoogleAdsApiError } from "@/services/integrations/google"
 import { log } from "@/lib/logger"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimitPolicy } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { logSlowApi } from "@/lib/api-timing"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, req as any)
-    const limit = await rateLimit(`sync:${userId}`, 3, 5 * 60 * 1000)
+    const limit = await rateLimitPolicy(userId, "platformSync")
     if (!limit.allowed) {
       return NextResponse.json(
         {

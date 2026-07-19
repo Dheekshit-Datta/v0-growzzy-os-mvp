@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { launchPlanToGoogle } from "@/lib/services/google-publish"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -12,10 +12,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
   const userId = await resolveUserId(session.user.id)
+  const limit = await rateLimitPolicy(userId, "campaignLaunch")
+  if (!limit.allowed) return rateLimitResponse(limit)
   const workspaceId = await getRequestWorkspaceId(userId, req)
-
-  const limit = await rateLimit(`plan-launch:${userId}`, 10, 60_000)
-  if (!limit.allowed) return NextResponse.json({ ok: false, error: "Too many launch attempts — wait a moment" }, { status: 429 })
 
   const result = await launchPlanToGoogle({ planRowId: params.id, userId, workspaceId })
 

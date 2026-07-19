@@ -6,6 +6,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "aiUtility")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const workspaceFilter = workspaceWhere(workspaceId, false)
     const scope = await getActiveAdAccountScope(userId, workspaceId, req.nextUrl.searchParams.get("adAccountId"))

@@ -7,6 +7,7 @@ import { scoreLeadFit } from "@/lib/marketing-logic"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { logSlowApi } from "@/lib/api-timing"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -36,6 +37,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "aiUtility")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, _req)
     const accountScope = await getActiveAdAccountScope(userId, workspaceId, _req.nextUrl.searchParams.get("adAccountId"))
     if (!accountScope) return NextResponse.json({ error: "Connect and select an ad account first." }, { status: 409 })
