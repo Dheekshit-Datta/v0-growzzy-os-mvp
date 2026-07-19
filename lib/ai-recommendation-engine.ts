@@ -6,9 +6,9 @@ export interface AIRecommendation {
   id: string
   title: string
   description: string
-  action: "pause" | "increase_budget" | "refresh_creative" | "improve_ctr" | "declining_trend"
+  action: "pause" | "increase_budget" | "refresh_creative" | "improve_ctr" | "declining_trend" | "tracking_integrity"
   impact: "high" | "medium" | "low"
-  campaignId: string
+  campaignId: string | null
   platform: "GOOGLE" | "META"
   estimatedImprovement: string
   confidence: number
@@ -38,7 +38,15 @@ const ACTION_TYPE_MAP: Record<AIRecommendation["action"], string | null> = {
   refresh_creative: "CREATIVE_REFRESH",
   improve_ctr: null,
   declining_trend: null,
+  tracking_integrity: null,
 }
+
+// Meaningful spend with zero recorded conversions account-wide is the
+// single most common thing that silently wrecks a self-serve ad account -
+// every ROAS/CPA number the rest of this engine reasons about is garbage
+// if conversion tracking isn't actually firing. Checked at account level
+// (not per-campaign) using data already synced - no extra Google API call.
+const TRACKING_INTEGRITY_SPEND_FLOOR = 75
 
 function safeMetric(value: number | null | undefined) {
   return Number(value || 0)
@@ -137,6 +145,26 @@ export async function generateAIRecommendations(input: {
   }
 
   const recommendations: AIRecommendation[] = []
+
+  const accountSpend = campaigns.reduce((sum, c) => sum + safeMetric(c.spend || c.totalSpend), 0)
+  const accountConversions = campaigns.reduce((sum, c) => sum + safeMetric(c.conversions || c.totalConversions), 0)
+  if (accountSpend >= TRACKING_INTEGRITY_SPEND_FLOOR && accountConversions === 0) {
+    recommendations.push({
+      id: `rec_tracking_${input.workspaceId}`,
+      title: "Your conversion tracking may not be working",
+      description: `You've spent $${accountSpend.toFixed(2)} across ${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"} with 0 conversions recorded anywhere. This usually means the tracking tag isn't firing correctly, not that the campaigns are failing - verify your conversion tracking setup in Google Ads before trusting any ROAS or CPA numbers here.`,
+      action: "tracking_integrity",
+      impact: "high",
+      campaignId: null,
+      platform: "GOOGLE",
+      estimatedImprovement: "Every optimization decision below is unreliable until this is fixed",
+      confidence: 90,
+      riskLevel: "LOW",
+      currentBudget: null,
+      recommendedBudget: null,
+      metrics: { spend: accountSpend, clicks: 0, impressions: 0, conversions: 0, ctr: 0, roas: 0, cpa: 0 },
+    })
+  }
 
   for (const campaign of campaigns) {
     const spend = safeMetric(campaign.spend || campaign.totalSpend)
@@ -268,18 +296,23 @@ export async function generateAndPersistRecommendations(input: {
   const recommendations = await generateAIRecommendations(input)
   if (!recommendations.length) return []
 
-  const campaignIds = recommendations.map((r) => r.campaignId)
+  const campaignIds = recommendations.map((r) => r.campaignId).filter((id): id is string => id != null)
 
   // Clear this account's own stale, un-actioned suggestions for these
   // campaigns before writing fresh ones, so re-running generation doesn't
   // pile up duplicates every sync. Applied/dismissed suggestions are left
-  // alone - they're history, not live recommendations.
+  // alone - they're history, not live recommendations. Account-level
+  // insights (campaignId null, e.g. tracking_integrity) are deduped
+  // separately by insightType since they have no campaignId to key on.
   await prisma.optimizationSuggestion.deleteMany({
     where: {
       workspaceId: input.workspaceId,
-      campaignId: { in: campaignIds },
       applied: false,
       dismissed: false,
+      OR: [
+        { campaignId: { in: campaignIds } },
+        { campaignId: null, insightType: "tracking_integrity" },
+      ],
     },
   })
 

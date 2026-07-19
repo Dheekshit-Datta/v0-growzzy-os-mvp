@@ -212,6 +212,7 @@ export default function OptimizationPage() {
       case "refresh_creative": return "Refresh creative"
       case "improve_ctr": return "Targeting insight"
       case "declining_trend": return "Trend alert"
+      case "tracking_integrity": return "Tracking alert"
       default: return insightType
     }
   }
