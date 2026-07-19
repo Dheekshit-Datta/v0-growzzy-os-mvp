@@ -259,7 +259,7 @@ export default function ReportsPage() {
                   {loadingAction === `${template.id}:preview` ? "Opening..." : "Preview HTML"}
                 </button>
                 <button
-                  className="btn btn-primary h-9"
+                  className="btn h-9 border-0 text-white sku-btn-primary"
                   onClick={() => exportTemplate(template.id)}
                   disabled={loadingAction === `${template.id}:export`}
                 >
@@ -365,7 +365,7 @@ export default function ReportsPage() {
               <button className="btn btn-secondary h-9" onClick={() => setModalOpen(false)}>
                 Cancel
               </button>
-              <button className="btn btn-primary h-9" onClick={createSchedule} disabled={loadingAction === "schedule:create"}>
+              <button className="btn h-9 border-0 text-white sku-btn-primary" onClick={createSchedule} disabled={loadingAction === "schedule:create"}>
                 {loadingAction === "schedule:create" ? "Saving..." : "Save"}
               </button>
             </div>
