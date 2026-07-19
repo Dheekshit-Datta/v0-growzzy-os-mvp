@@ -28,9 +28,11 @@ function validatePlan(plan: any) {
     campaignType: "SEARCH",
     objective: String(plan?.objective || "CONVERSIONS"),
     campaignName: String(plan?.campaignName || "AI Google Search Campaign").slice(0, 120),
-    biddingStrategy: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA"].includes(String(plan?.biddingStrategy))
+    biddingStrategy: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA", "TARGET_ROAS"].includes(String(plan?.biddingStrategy))
       ? String(plan.biddingStrategy)
       : "MAXIMIZE_CONVERSIONS",
+    targetCpa: plan?.targetCpa ? Number(plan.targetCpa) : null,
+    targetRoas: plan?.targetRoas ? Number(plan.targetRoas) : null,
     dailyBudget: Number(plan?.dailyBudget || 0),
     locations: Array.isArray(plan?.locations) ? plan.locations : [],
     languages: Array.isArray(plan?.languages) ? plan.languages : ["English"],
@@ -106,12 +108,15 @@ Goal: ${input.goal}
 
 Create 2-3 tightly themed ad groups. Each needs 10-20 keywords, at least 5 negative keywords, 8-15 headlines, and 3-4 descriptions.
 
+Bidding strategy: this is a brand-new campaign with zero conversion history in this Google Ads account. Choose MAXIMIZE_CONVERSIONS, MAXIMIZE_CLICKS, or TARGET_CPA. Do NOT choose TARGET_ROAS here - Target ROAS bidding requires an established history of accurate conversion value data to perform well, which a day-one campaign never has; recommending it now would set the account up to underperform.
+
 Return ONLY JSON:
 {
   "campaignName": "clear Google campaign name",
   "campaignType": "SEARCH",
   "objective": "LEADS|SALES|TRAFFIC|AWARENESS",
   "biddingStrategy": "MAXIMIZE_CONVERSIONS|MAXIMIZE_CLICKS|TARGET_CPA",
+  "targetCpa": "number or null - only if biddingStrategy is TARGET_CPA",
   "dailyBudget": number,
   "finalUrl": "${input.landingPageUrl || "https://example.com"}",
   "locations": ["..."],

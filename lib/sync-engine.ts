@@ -120,6 +120,7 @@ export async function syncGoogleAdsCampaigns(
       metrics.clicks,
       metrics.cost_micros,
       metrics.conversions,
+      metrics.conversions_value,
       metrics.ctr,
       metrics.average_cpc
     FROM campaign
@@ -152,10 +153,13 @@ export async function syncGoogleAdsCampaigns(
         const clicks = Number(metrics.clicks ?? 0)
         const impressions = Number(metrics.impressions ?? 0)
         const conversions = Number(metrics.conversions ?? 0)
+        // Google Ads reports conversion value as a plain currency amount (not micros),
+        // unlike cost/budget fields - this is what makes real ROAS reporting possible.
+        const revenue = Number(metrics.conversionsValue ?? 0)
         const budgetAmount = campaignBudget.amountMicros ? Number(campaignBudget.amountMicros) / 1_000_000 : null
         const cpcVal = metrics.averageCpc ? Number(metrics.averageCpc) / 1_000_000 : null
 
-        const derived = deriveMetrics({ spend, clicks, impressions, conversions })
+        const derived = deriveMetrics({ spend, clicks, impressions, conversions, revenue })
 
         await prisma.campaign.upsert({
           where: {
@@ -181,6 +185,7 @@ export async function syncGoogleAdsCampaigns(
             clicks,
             spend,
             conversions,
+            revenue,
             ctr: derived.ctr,
             cpa: derived.cpa,
             cpc: cpcVal,

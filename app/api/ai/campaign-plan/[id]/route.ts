@@ -26,8 +26,9 @@ const AdGroupSchema = z.object({
 const PlanPatchSchema = z.object({
   campaignName: z.string().min(1).max(120).optional(),
   dailyBudget: z.coerce.number().positive().max(100000).optional(),
-  biddingStrategy: z.enum(["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA"]).optional(),
+  biddingStrategy: z.enum(["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA", "TARGET_ROAS"]).optional(),
   targetCpa: z.coerce.number().positive().optional().nullable(),
+  targetRoas: z.coerce.number().positive().optional().nullable(),
   finalUrl: z.string().url().optional(),
   locations: z.array(z.string().max(120)).max(20).optional(),
   adGroups: z.array(AdGroupSchema).min(1).max(6).optional(),
@@ -77,6 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (updates.dailyBudget !== undefined) mergedPlan.dailyBudget = updates.dailyBudget
   if (updates.biddingStrategy !== undefined) mergedPlan.biddingStrategy = updates.biddingStrategy
   if (updates.targetCpa !== undefined) mergedPlan.targetCpa = updates.targetCpa
+  if (updates.targetRoas !== undefined) mergedPlan.targetRoas = updates.targetRoas
   if (updates.finalUrl !== undefined) mergedPlan.finalUrl = updates.finalUrl
   if (updates.locations !== undefined) mergedPlan.locations = updates.locations
   if (updates.adGroups !== undefined) {

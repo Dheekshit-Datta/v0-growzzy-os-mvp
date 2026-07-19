@@ -34,8 +34,9 @@ type ValidatedAdGroup = {
 type ValidatedPlan = {
   campaignName: string
   dailyBudget: number
-  biddingStrategy: "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA"
+  biddingStrategy: "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA" | "TARGET_ROAS"
   targetCpa: number | null
+  targetRoas: number | null
   adGroups: ValidatedAdGroup[]
 }
 
@@ -44,11 +45,18 @@ export function validatePlanForLaunch(plan: any, fallbackFinalUrl?: string | nul
   if (!campaignName) return { error: "Plan is missing a campaign name" }
   const dailyBudget = Number(plan?.dailyBudget)
   if (!Number.isFinite(dailyBudget) || dailyBudget <= 0) return { error: "Plan is missing a valid daily budget" }
-  const biddingStrategy = ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA"].includes(String(plan?.biddingStrategy))
+  const biddingStrategy = ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA", "TARGET_ROAS"].includes(String(plan?.biddingStrategy))
     ? (String(plan.biddingStrategy) as ValidatedPlan["biddingStrategy"])
     : "MAXIMIZE_CONVERSIONS"
   const targetCpa = biddingStrategy === "TARGET_CPA" ? Number(plan?.targetCpa) || null : null
   if (biddingStrategy === "TARGET_CPA" && !targetCpa) return { error: "TARGET_CPA bidding requires a target CPA value" }
+  // Target ROAS is expressed to Google Ads as a ratio (e.g. 4 = 400% / $4 revenue per $1 spend),
+  // not a currency amount - reject anything that looks like a currency value entered by mistake.
+  const targetRoas = biddingStrategy === "TARGET_ROAS" ? Number(plan?.targetRoas) || null : null
+  if (biddingStrategy === "TARGET_ROAS" && !targetRoas) return { error: "TARGET_ROAS bidding requires a target ROAS value" }
+  if (targetRoas != null && (targetRoas < 0.1 || targetRoas > 50)) {
+    return { error: "Target ROAS should be a ratio like 4 (meaning 4x / 400%), not a currency amount" }
+  }
 
   const planFinalUrl = String(plan?.finalUrl || fallbackFinalUrl || "").trim()
   const rawGroups = Array.isArray(plan?.adGroups) ? plan.adGroups : []
@@ -81,7 +89,7 @@ export function validatePlanForLaunch(plan: any, fallbackFinalUrl?: string | nul
     adGroups.push({ name, theme: String(group?.theme || ""), keywords, negativeKeywords, headlines, descriptions, finalUrl })
   }
 
-  return { plan: { campaignName, dailyBudget, biddingStrategy, targetCpa, adGroups } }
+  return { plan: { campaignName, dailyBudget, biddingStrategy, targetCpa, targetRoas, adGroups } }
 }
 
 export function planFingerprint(planRowId: string, plan: ValidatedPlan): string {
@@ -179,6 +187,7 @@ export async function launchPlanToGoogle(params: {
       objective: "SEARCH",
       biddingStrategy: plan.biddingStrategy,
       targetCpaMicros: plan.targetCpa ? Math.round(plan.targetCpa * 1_000_000) : null,
+      targetRoas: plan.targetRoas,
       status: "PAUSED",
       loginCustomerId,
     })
@@ -199,6 +208,7 @@ export async function launchPlanToGoogle(params: {
         type: "SEARCH",
         biddingStrategy: plan.biddingStrategy,
         targetCpa: plan.targetCpa,
+        targetRoas: plan.targetRoas,
         budgetAmount: plan.dailyBudget,
         dailyBudget: plan.dailyBudget,
         externalBudgetId: campaignResult.budgetResourceName || null,

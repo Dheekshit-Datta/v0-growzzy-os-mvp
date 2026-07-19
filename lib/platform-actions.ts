@@ -1,5 +1,5 @@
 type GoogleObjective = "SEARCH" | "DISPLAY" | "VIDEO"
-type GoogleBiddingStrategy = "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA"
+type GoogleBiddingStrategy = "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA" | "TARGET_ROAS"
 
 export type CreateCampaignParams = {
   accessToken: string
@@ -9,6 +9,7 @@ export type CreateCampaignParams = {
   objective: GoogleObjective
   biddingStrategy?: GoogleBiddingStrategy
   targetCpaMicros?: number | null
+  targetRoas?: number | null
   status?: "PAUSED" | "ENABLED"
   loginCustomerId?: string | null
 }
@@ -83,11 +84,16 @@ function mapObjectiveToChannelType(objective: string): GoogleObjective {
   return "SEARCH"
 }
 
-function googleBiddingConfig(strategy: GoogleBiddingStrategy, targetCpaMicros?: number | null) {
+function googleBiddingConfig(strategy: GoogleBiddingStrategy, targetCpaMicros?: number | null, targetRoas?: number | null) {
   if (strategy === "MAXIMIZE_CLICKS") return { targetSpend: {} }
   if (strategy === "TARGET_CPA") {
     if (!targetCpaMicros || targetCpaMicros <= 0) throw new Error("TARGET_CPA requires a positive target CPA")
     return { targetCpa: { targetCpaMicros } }
+  }
+  if (strategy === "TARGET_ROAS") {
+    // Google Ads API takes this as a plain ratio (4 = 400% = $4 revenue per $1 spend), not micros.
+    if (!targetRoas || targetRoas <= 0) throw new Error("TARGET_ROAS requires a positive target ROAS")
+    return { targetRoas: { targetRoas } }
   }
   return { maximizeConversions: {} }
 }
@@ -136,6 +142,7 @@ export async function createGoogleAdsCampaign({
   objective,
   biddingStrategy = "MAXIMIZE_CONVERSIONS",
   targetCpaMicros,
+  targetRoas,
   status = "PAUSED",
   loginCustomerId,
 }: CreateCampaignParams) {
@@ -155,7 +162,7 @@ export async function createGoogleAdsCampaign({
           campaignBudget: budgetResource,
           advertisingChannelType: mapObjectiveToChannelType(objective),
           containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
-          ...googleBiddingConfig(biddingStrategy, targetCpaMicros),
+          ...googleBiddingConfig(biddingStrategy, targetCpaMicros, targetRoas),
         },
       },
     ],
