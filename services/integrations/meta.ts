@@ -100,6 +100,29 @@ async function requestMeta<T>({
   return payload as T
 }
 
+async function mutateMeta<T>({
+  endpoint,
+  accessToken,
+  fields,
+  method = "POST",
+}: {
+  endpoint: string
+  accessToken: string
+  fields?: Record<string, string>
+  method?: "POST" | "DELETE"
+}): Promise<T> {
+  const response = await fetchMeta(`${META_GRAPH_BASE_URL}/${graphVersion()}${endpoint}`, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: fields ? new URLSearchParams(fields) : undefined,
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || payload?.error) {
+    throw new MetaApiError(endpoint, response.status, payload?.error?.message || response.statusText || "Unknown Meta API error", payload)
+  }
+  return payload as T
+}
+
 async function paginateMeta({
   endpoint,
   accessToken,
@@ -205,6 +228,114 @@ export const MetaAdsService = {
   },
 
   request: requestMeta,
+
+  mutate: mutateMeta,
+
+  async createCampaign(accessToken: string, adAccountId: string, input: { name: string; objective: string }) {
+    return mutateMeta<{ id: string }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/campaigns`,
+      accessToken,
+      fields: { name: input.name, objective: input.objective, status: "PAUSED", special_ad_categories: "[]" },
+    })
+  },
+
+  async createAdSet(accessToken: string, adAccountId: string, input: {
+    name: string
+    campaignId: string
+    dailyBudgetMinor: number
+    billingEvent: string
+    optimizationGoal: string
+    targeting: Record<string, unknown>
+    placements?: Record<string, unknown>
+    promotedObject?: Record<string, unknown>
+  }) {
+    return mutateMeta<{ id: string }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/adsets`,
+      accessToken,
+      fields: {
+        name: input.name,
+        campaign_id: input.campaignId,
+        daily_budget: String(input.dailyBudgetMinor),
+        billing_event: input.billingEvent,
+        optimization_goal: input.optimizationGoal,
+        bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+        targeting: JSON.stringify(input.targeting),
+        ...Object.fromEntries(Object.entries(input.placements || {}).map(([key, value]) => [key, JSON.stringify(value)])),
+        ...(input.promotedObject ? { promoted_object: JSON.stringify(input.promotedObject) } : {}),
+        status: "PAUSED",
+      } as Record<string, string>,
+    })
+  },
+
+  async uploadAdImage(accessToken: string, adAccountId: string, imageUrl: string) {
+    const payload = await mutateMeta<{ images?: Record<string, { hash?: string }> }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/adimages`,
+      accessToken,
+      fields: { url: imageUrl },
+    })
+    const image = Object.values(payload.images || {})[0]
+    if (!image?.hash) throw new Error("Meta did not return an uploaded image hash")
+    return image.hash
+  },
+
+  deleteAdImage(accessToken: string, adAccountId: string, imageHash: string) {
+    return mutateMeta<{ success?: boolean }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/adimages`,
+      accessToken,
+      method: "DELETE",
+      fields: { hash: imageHash },
+    })
+  },
+
+  async createAdCreative(accessToken: string, adAccountId: string, input: {
+    name: string
+    pageId: string
+    instagramActorId?: string | null
+    imageHash: string
+    primaryText: string
+    headline: string
+    description?: string
+    destinationUrl: string
+    callToAction: string
+  }) {
+    const objectStorySpec = {
+      page_id: input.pageId,
+      ...(input.instagramActorId ? { instagram_user_id: input.instagramActorId } : {}),
+      link_data: {
+        image_hash: input.imageHash,
+        link: input.destinationUrl,
+        message: input.primaryText,
+        name: input.headline,
+        ...(input.description ? { description: input.description } : {}),
+        call_to_action: { type: input.callToAction, value: { link: input.destinationUrl } },
+      },
+    }
+    return mutateMeta<{ id: string }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/adcreatives`,
+      accessToken,
+      fields: { name: input.name, object_story_spec: JSON.stringify(objectStorySpec) },
+    })
+  },
+
+  async createAd(accessToken: string, adAccountId: string, input: { name: string; adSetId: string; creativeId: string }) {
+    return mutateMeta<{ id: string }>({
+      endpoint: `/${normalizeMetaAdAccountId(adAccountId)}/ads`,
+      accessToken,
+      fields: { name: input.name, adset_id: input.adSetId, creative: JSON.stringify({ creative_id: input.creativeId }), status: "PAUSED" },
+    })
+  },
+
+  updateCampaignStatus(accessToken: string, campaignId: string, status: "ACTIVE" | "PAUSED" | "ARCHIVED") {
+    return mutateMeta<{ success?: boolean }>({ endpoint: `/${campaignId}`, accessToken, fields: { status } })
+  },
+
+  updateAdSetBudget(accessToken: string, adSetId: string, dailyBudgetMinor: number) {
+    return mutateMeta<{ success?: boolean }>({ endpoint: `/${adSetId}`, accessToken, fields: { daily_budget: String(dailyBudgetMinor) } })
+  },
+
+  deleteObject(accessToken: string, id: string) {
+    return mutateMeta<{ success?: boolean }>({ endpoint: `/${id}`, accessToken, method: "DELETE" })
+  },
 
   async discoverAdAccounts(accessToken: string): Promise<MetaDiscoveredAccount[]> {
     const data = await requestMeta<{ data?: any[] }>({

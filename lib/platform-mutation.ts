@@ -3,6 +3,8 @@ import { isUnverifiedExternalId } from "@/lib/data-trust"
 import { updateGoogleCampaignStatus } from "@/lib/platform-actions"
 import { GoogleAdsService } from "@/services/integrations/google"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { MetaAdsService } from "@/services/integrations/meta"
+import { currencyMinorAmount } from "@/lib/services/meta-publish"
 
 type CampaignWithIntegration = Campaign & {
   integration: (Integration & { adAccounts?: AdAccount[] | null }) | null
@@ -53,10 +55,10 @@ export function assertCampaignMutationSafe(campaign: CampaignWithIntegration, ki
     )
   }
 
-  if (campaign.platform !== "GOOGLE") {
+  if (campaign.platform !== "GOOGLE" && campaign.platform !== "META") {
     throw preflightError(
-      "Only Google campaign mutations are supported in this pass.",
-      "Use a synced Google Ads campaign."
+      "This campaign platform is not supported for live mutations.",
+      "Use a verified Google or Meta campaign."
     )
   }
 }
@@ -71,10 +73,10 @@ export async function mutateCampaignStatusOnPlatform(
     throw new Error("Campaign integration missing. Reconnect and sync first.")
   }
   const accessToken = getIntegrationAccessToken(integration)
-  if (!accessToken) throw new Error("Google access token missing. Reconnect the ad account first.")
+  if (!accessToken) throw new Error("Platform access token missing. Reconnect the ad account first.")
 
   if (campaign.platform === "GOOGLE") {
-    const customerId = campaign.adAccountId || integration.selectedAdAccountId || integration.accountId
+    const customerId = campaign.adAccountExternalId || integration.selectedAdAccountId || integration.accountId
     if (!customerId) throw new Error("Google customer ID missing for this campaign.")
     const adAccounts = integration.adAccounts || []
     const primary = adAccounts.find((account) => account.isPrimary)
@@ -86,6 +88,11 @@ export async function mutateCampaignStatusOnPlatform(
       status: normalizeGoogleStatus(status),
       loginCustomerId,
     })
+  }
+
+  if (campaign.platform === "META") {
+    const metaStatus = status === "REMOVED" ? "ARCHIVED" : status === "ENABLED" ? "ACTIVE" : status
+    return MetaAdsService.updateCampaignStatus(accessToken, campaign.externalId, metaStatus)
   }
 
   throw new Error("Unsupported platform for status mutation.")
@@ -100,16 +107,23 @@ export async function mutateGoogleCampaignBudgetOnPlatform(
   if (!integration) {
     throw new Error("Campaign integration missing. Reconnect and sync first.")
   }
+
   const accessToken = getIntegrationAccessToken(integration)
-  if (!accessToken) throw new Error("Google access token missing. Reconnect the ad account first.")
-  if (campaign.platform !== "GOOGLE") {
-    throw new Error("Budget mutation is only supported for Google right now.")
-  }
+  if (!accessToken) throw new Error("Platform access token missing. Reconnect the ad account first.")
   if (!Number.isFinite(nextBudgetAmount) || nextBudgetAmount <= 0) {
     throw new Error("Budget amount must be a positive number.")
   }
 
-  const customerId = campaign.adAccountId || integration.selectedAdAccountId || integration.accountId
+  if (campaign.platform === "META") {
+    const raw = (campaign.rawData || {}) as Record<string, any>
+    const adSetId = raw?.meta?.adSetId
+    if (!adSetId) throw new Error("Meta ad set ID is missing; sync this campaign before changing its budget.")
+    const account = (integration.adAccounts || []).find((item) => item.externalId === campaign.adAccountExternalId) || (integration.adAccounts || []).find((item) => item.isPrimary)
+    return MetaAdsService.updateAdSetBudget(accessToken, String(adSetId), currencyMinorAmount(nextBudgetAmount, account?.currencyCode || "USD"))
+  }
+  if (campaign.platform !== "GOOGLE") throw new Error("Unsupported platform for budget mutation.")
+
+  const customerId = campaign.adAccountExternalId || integration.selectedAdAccountId || integration.accountId
   if (!customerId) throw new Error("Google customer ID missing for this campaign.")
   const adAccounts = integration.adAccounts || []
   const primary = adAccounts.find((account) => account.isPrimary)

@@ -34,6 +34,38 @@ const PlanPatchSchema = z.object({
   adGroups: z.array(AdGroupSchema).min(1).max(6).optional(),
 })
 
+const MetaPlanPatchSchema = z.object({
+  campaignName: z.string().min(1).max(120).optional(),
+  dailyBudget: z.coerce.number().positive().max(100000).optional(),
+  adSetName: z.string().min(1).max(120).optional(),
+  targeting: z.object({
+    geo_locations: z.object({ countries: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(25) }),
+    age_min: z.coerce.number().int().min(18).max(65).optional(),
+    age_max: z.coerce.number().int().min(18).max(65).optional(),
+    genders: z.array(z.union([z.literal(1), z.literal(2)])).max(2).optional(),
+    interests: z.array(z.object({ id: z.string().regex(/^\d+$/), name: z.string().min(1).max(120) })).max(50).optional(),
+  }).optional(),
+  placements: z.object({
+    publisher_platforms: z.array(z.enum(["facebook", "instagram", "messenger", "audience_network"])).max(4).optional(),
+    facebook_positions: z.array(z.enum(["feed", "right_hand_column", "instant_article", "marketplace", "video_feeds", "story", "reels"])).max(7).optional(),
+    instagram_positions: z.array(z.enum(["stream", "story", "explore", "reels", "profile_feed"])).max(5).optional(),
+  }).optional(),
+  pageId: z.string().min(1).optional(),
+  instagramActorId: z.string().min(1).nullable().optional(),
+  pixelId: z.string().min(1).nullable().optional(),
+  appId: z.string().min(1).nullable().optional(),
+  objectStoreUrl: z.string().url().nullable().optional(),
+  creative: z.object({
+    name: z.string().min(1).max(120),
+    primaryText: z.string().min(1).max(2200),
+    headline: z.string().min(1).max(255),
+    description: z.string().max(255).default(""),
+    imageUrl: z.string().url(),
+    destinationUrl: z.string().url(),
+    callToAction: z.string().min(1).max(60),
+  }).optional(),
+})
+
 async function loadOwnedPlan(req: NextRequest, id: string) {
   const session = await auth()
   if (!session?.user?.id) return { error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) }
@@ -62,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     )
   }
 
-  const parsed = PlanPatchSchema.safeParse(await req.json().catch(() => ({})))
+  const parsed = (planRow.platform === "META" ? MetaPlanPatchSchema : PlanPatchSchema).safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
     return NextResponse.json(
@@ -72,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const existingPlan = (planRow.plan as Record<string, unknown>) || {}
-  const updates = parsed.data
+  const updates: any = parsed.data
   const mergedPlan: Record<string, unknown> = { ...existingPlan }
   if (updates.campaignName !== undefined) mergedPlan.campaignName = updates.campaignName
   if (updates.dailyBudget !== undefined) mergedPlan.dailyBudget = updates.dailyBudget
@@ -86,6 +118,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // Ad text changed — any previous policy check is stale
     delete mergedPlan.policyCheck
   }
+  for (const key of ["adSetName", "targeting", "placements", "pageId", "instagramActorId", "pixelId", "appId", "objectStoreUrl", "creative"] as const) {
+    if (updates[key] !== undefined) mergedPlan[key] = updates[key]
+  }
+  if (updates.creative !== undefined) delete mergedPlan.policyCheck
 
   const updated = await prisma.campaignPlan.update({
     where: { id: planRow.id },

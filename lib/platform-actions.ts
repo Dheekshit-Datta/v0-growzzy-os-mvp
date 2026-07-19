@@ -13,15 +13,6 @@ export type CreateCampaignParams = {
   status?: "PAUSED" | "ENABLED"
   loginCustomerId?: string | null
 }
-
-type CreateMetaCampaignParams = {
-  accessToken: string
-  adAccountId: string
-  name: string
-  objective: string
-  status?: string
-}
-
 function normalizeId(value: string) {
   return String(value).replace(/\D/g, "")
 }
@@ -218,22 +209,6 @@ export async function updateGoogleCampaignStatus({
   })
 }
 
-export async function updateMetaCampaignStatus({
-  accessToken,
-  campaignId,
-  status,
-}: {
-  accessToken: string
-  campaignId: string
-  status: "ACTIVE" | "PAUSED" | "ARCHIVED"
-}) {
-  const params = new URLSearchParams({ status, access_token: accessToken })
-  const response = await fetch(`https://graph.facebook.com/v19.0/${campaignId}`, { method: "POST", body: params })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload?.error?.message || "Failed to update Meta campaign status")
-  return payload
-}
-
 export async function createGoogleAdGroup({
   accessToken,
   customerId,
@@ -361,29 +336,4 @@ export async function createGoogleResponsiveSearchAd({
   const payload: any = await mutateGoogle({ accessToken, customerId, loginCustomerId, resource: "adGroupAds", body })
   const resourceName = payload?.results?.[0]?.resourceName
   return { adId: String(resourceName || "").split("~").pop() || "", resourceName }
-}
-
-export async function createMetaCampaign({
-  accessToken,
-  adAccountId,
-  name,
-  objective,
-  status = "PAUSED",
-}: CreateMetaCampaignParams) {
-  const normalizedAdAccountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId.replace(/^act_/, "")}`
-  const endpoint = `https://graph.facebook.com/v19.0/${normalizedAdAccountId}/campaigns`
-  const params = new URLSearchParams({
-    name,
-    objective,
-    status,
-    special_ad_categories: "[]",
-    access_token: accessToken,
-  })
-  const response = await fetch(endpoint, { method: "POST", body: params })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload?.error?.message || "Failed to create Meta campaign")
-  return {
-    campaignId: String(payload?.id || ""),
-    resourceName: String(payload?.id || ""),
-  }
 }
