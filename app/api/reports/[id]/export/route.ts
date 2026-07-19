@@ -6,11 +6,6 @@ import { getRequestWorkspaceId, workspaceWhere } from '@/lib/workspace'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-// Mock window for jspdf to work in Node.js
-if (typeof window === 'undefined') {
-    global.window = {} as any
-}
-
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }

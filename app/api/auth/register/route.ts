@@ -6,8 +6,10 @@ import { log } from "@/lib/logger"
 import { sendEmailVerification, sendWelcomeEmail } from "@/lib/email"
 import { rateLimit } from "@/lib/rate-limit"
 import crypto from "crypto"
+import { requestPassesSameOrigin } from "@/lib/request-origin"
 
 export async function POST(req: Request) {
+  if (!requestPassesSameOrigin(req)) return NextResponse.json({ ok: false, error: { code: "CROSS_ORIGIN_MUTATION", message: "Cross-origin mutation blocked." } }, { status: 403 })
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
     const limit = await rateLimit(`auth:register:${ip}`, 5, 60_000, { strict: true })

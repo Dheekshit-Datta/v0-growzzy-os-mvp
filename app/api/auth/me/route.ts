@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { resolveUserId } from '@/lib/resolve-user'
 import { isAllowedProfileImage } from '@/lib/profile-avatars'
+import { requestPassesSameOrigin } from '@/lib/request-origin'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,7 @@ const ProfileSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest) {
+  if (!requestPassesSameOrigin(req)) return NextResponse.json({ ok: false, error: { code: 'CROSS_ORIGIN_MUTATION', message: 'Cross-origin mutation blocked.' } }, { status: 403 })
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

@@ -2,10 +2,12 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { rateLimit } from "@/lib/rate-limit"
+import { requestPassesSameOrigin } from "@/lib/request-origin"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(req: Request) {
+  if (!requestPassesSameOrigin(req)) return NextResponse.json({ ok: false, error: { code: "CROSS_ORIGIN_MUTATION", message: "Cross-origin mutation blocked." } }, { status: 403 })
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
     const limit = await rateLimit(`auth:reset:${ip}`, 8, 60_000, { strict: true })
