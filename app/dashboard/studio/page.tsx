@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { Sparkles, Grid, RefreshCw, Copy, Check, ImageIcon, Loader2 } from "lucide-react"
+import { Sparkles, Grid, RefreshCw, Copy, Check, ImageIcon, Loader2, Maximize2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 
 const AD_STYLES = ["Luxury", "Bold", "Minimal", "Festive", "Corporate", "Playful"]
 const ASPECT_RATIOS = [
@@ -25,8 +26,8 @@ type GeneratedCreative = {
 }
 
 function CreativePreview({
-  imageUrl, headline, body, format,
-}: { imageUrl: string | null; headline: string; body?: string; format: string }) {
+  imageUrl, headline, body, format, onPreview,
+}: { imageUrl: string | null; headline: string; body?: string; format: string; onPreview?: (url: string, title: string) => void }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
     navigator.clipboard.writeText([headline, body].filter(Boolean).join("\n")).catch(() => {})
@@ -37,16 +38,19 @@ function CreativePreview({
     <div className="sku-card overflow-hidden group">
       <div className="w-full h-[180px] relative bg-[#F0F2F5] flex items-center justify-center">
         {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={headline} className="w-full h-full object-cover" />
+          <button type="button" onClick={() => onPreview?.(imageUrl, headline)} className="w-full h-full" aria-label={`View ${headline} full size`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imageUrl} alt={headline} className="w-full h-full object-cover" />
+          </button>
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-center px-3">
             <ImageIcon size={18} className="text-[#D1D5DB]" />
             <p className="text-[10px] text-[#9CA3AF]">Image unavailable — copy still real</p>
           </div>
         )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-          <button onClick={handleCopy} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] shadow hover:bg-[#F0F2F5] transition-colors">
+        {imageUrl && <div className="pointer-events-none absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><Maximize2 size={20} className="text-white" /></div>}
+        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={handleCopy} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] shadow hover:bg-[#F0F2F5] transition-colors" aria-label="Copy creative text">
             {copied ? <Check size={14} className="text-[#2E9E5B]" /> : <Copy size={14} />}
           </button>
         </div>
@@ -70,6 +74,7 @@ export default function AdStudioPage() {
   const [error, setError] = useState("")
   const [variations, setVariations] = useState<Variation[]>([])
   const [imageUrls, setImageUrls] = useState<string[]>([])
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
 
   const [library, setLibrary] = useState<GeneratedCreative[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
@@ -125,6 +130,8 @@ export default function AdStudioPage() {
       setGenerating(false)
     }
   }
+
+  const openPreview = (url: string, title: string) => setPreview({ url, title })
 
   return (
     <Shell title="Ad Studio">
@@ -236,7 +243,7 @@ export default function AdStudioPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     {variations.map((v, i) => (
-                      <CreativePreview key={i} imageUrl={imageUrls[i] || null} headline={v.headline} body={v.body || v.description} format={format} />
+                      <CreativePreview key={i} imageUrl={imageUrls[i] || null} headline={v.headline} body={v.body || v.description} format={format} onPreview={openPreview} />
                     ))}
                   </div>
                 </div>
@@ -269,22 +276,34 @@ export default function AdStudioPage() {
             <div>
               <p className="text-[13.5px] font-semibold text-[#111827] mb-3">{library.length} saved creative{library.length > 1 ? "s" : ""}</p>
               <div className="grid grid-cols-4 gap-4">
-                {library.map((c) => {
+                {library.flatMap((c) => {
                   const urls = Array.isArray(c.imageUrls) ? (c.imageUrls as string[]) : []
-                  return (
+                  const count = Math.max(urls.length, c.headlines?.length || 0, 1)
+                  return Array.from({ length: count }, (_, index) => (
                     <CreativePreview
-                      key={c.id}
-                      imageUrl={urls[0] || null}
-                      headline={c.headlines?.[0] || "Untitled creative"}
-                      body={c.descriptions?.[0]}
+                      key={`${c.id}-${index}`}
+                      imageUrl={urls[index] || null}
+                      headline={c.headlines?.[index] || "Untitled creative"}
+                      body={c.descriptions?.[index]}
                       format={new Date(c.createdAt).toLocaleDateString()}
+                      onPreview={openPreview}
                     />
-                  )
+                  ))
                 })}
               </div>
             </div>
           )
         )}
+
+        <Dialog open={Boolean(preview)} onOpenChange={(open) => { if (!open) setPreview(null) }}>
+          <DialogContent className="max-w-[min(92vw,960px)] border-0 bg-white p-3">
+            <DialogTitle className="sr-only">{preview?.title || "Creative preview"}</DialogTitle>
+            {preview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.url} alt={preview.title} className="max-h-[82vh] w-full object-contain rounded-[8px]" />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Shell>
   )

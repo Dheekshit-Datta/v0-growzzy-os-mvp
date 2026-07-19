@@ -60,16 +60,17 @@ export async function getActiveAdAccountScope(
         integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
         integration.adAccounts.find((account) => account.isPrimary) ||
         null
-      if (!mappedAccount || !integration.hasAdsAccess) return null
+      const selectedAdAccountId = mappedAccount?.externalId || integration.selectedAdAccountId || integration.accountId
+      if (!selectedAdAccountId || !integration.hasAdsAccess) return null
       if (integration.platform !== "GOOGLE" && integration.platform !== "META") return null
       return {
         integrationId: integration.id,
         platform: integration.platform as ActiveAdAccountScope["platform"],
-        adAccountId: mappedAccount.externalId,
-        adAccountName: mappedAccount.name || null,
+        adAccountId: selectedAdAccountId,
+        adAccountName: mappedAccount?.name || integration.selectedAdAccountName || integration.accountName || null,
         hasAdsAccess: Boolean(integration.hasAdsAccess),
         status: String(integration.status),
-        lastSyncedAt: integration.lastSyncedAt || integration.lastSyncAt || mappedAccount.lastSyncedAt || null,
+        lastSyncedAt: integration.lastSyncedAt || integration.lastSyncAt || mappedAccount?.lastSyncedAt || null,
       }
     })
     .filter(Boolean) as ActiveAdAccountScope[]
