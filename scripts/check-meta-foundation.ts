@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { MetaAdsService } from "../services/integrations/meta"
+import { MetaAdsService, parseMetaInsight } from "../services/integrations/meta"
 import { stateMatches } from "../lib/oauth-state"
 
 async function main() {
@@ -13,6 +13,19 @@ async function main() {
     assert.equal(stateMatches("known-state", "known-state"), true)
     assert.equal(stateMatches("known-state", "wrong-state"), false)
     assert.equal(stateMatches(null, "known-state"), false)
+
+    const insight = parseMetaInsight({
+      spend: "12.50",
+      impressions: "1000",
+      clicks: "25",
+      actions: [
+        { action_type: "lead", value: "3" },
+        { action_type: "purchase", value: "2" },
+      ],
+      action_values: [{ action_type: "purchase", value: "49.95" }],
+    })
+    assert.deepEqual(insight, { spend: 12.5, impressions: 1000, clicks: 25, conversions: 5, leads: 3, revenue: 49.95 })
+    assert.equal(parseMetaInsight({ actions: [{ action_type: "purchase", value: "9" }] }).revenue, 0)
 
     process.env.ENABLE_META_ADS = "true"
     delete process.env.META_GRAPH_API_VERSION

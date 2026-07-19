@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
-import { syncGoogleIntegration } from "@/lib/sync-engine"
+import { syncGoogleIntegration, syncMetaIntegration } from "@/lib/sync-engine"
+import { MetaAdsService } from "@/services/integrations/meta"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export async function POST(req: Request, { params }: { params: { provider: string } }) {
@@ -45,6 +46,8 @@ export async function POST(req: Request, { params }: { params: { provider: strin
 
     if (provider === "google") {
       await syncGoogleIntegration(updated)
+    } else if (MetaAdsService.isEnabled()) {
+      await syncMetaIntegration(updated)
     }
 
     return NextResponse.json({ success: true })

@@ -2,13 +2,14 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
-import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
+import { syncGoogleAdsCampaigns, syncMetaAdsCampaigns } from "@/lib/sync-engine"
 import { GoogleAdsApiError } from "@/services/integrations/google"
 import { log } from "@/lib/logger"
 import { rateLimitPolicy } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { logSlowApi } from "@/lib/api-timing"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { MetaAdsService } from "@/services/integrations/meta"
 
 export const dynamic = "force-dynamic"
 
@@ -42,13 +43,13 @@ export async function POST(req: Request) {
     }
 
     const platformKey = platform.toUpperCase()
-    if (platformKey !== "GOOGLE") {
+    if (platformKey !== "GOOGLE" && !(platformKey === "META" && MetaAdsService.isEnabled())) {
       return NextResponse.json({
         success: false,
         code: "PLATFORM_UNSUPPORTED",
         correlationId,
-        error: "Only Google Ads sync is supported in this pass.",
-        remediation: ["Reconnect a Google Ads account."],
+        error: "This advertising platform is not enabled.",
+        remediation: ["Connect an enabled advertising platform."],
       }, { status: 400 })
     }
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
       where: {
         userId,
         workspaceId,
-        platform: "GOOGLE",
+        platform: platformKey as any,
       },
       include: {
         adAccounts: { where: { isPrimary: true } },
@@ -178,6 +179,14 @@ export async function POST(req: Request) {
             }
             throw syncErr
           }
+        } else if (integration.platform === "META") {
+          count = await syncMetaAdsCampaigns(
+            userId,
+            integration.id,
+            primaryAccount.id,
+            primaryAccount.externalId,
+            accessToken
+          )
         }
         await prisma.notification.create({
           data: {

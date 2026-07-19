@@ -5,6 +5,7 @@ import { refreshGoogleAccessToken } from "@/lib/ads-detection"
 import { log, reportError } from "@/lib/logger"
 import { encryptedIntegrationTokens, getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
 import { generateAndPersistRecommendations } from "@/lib/ai-recommendation-engine"
+import { MetaAdsService, parseMetaInsight } from "@/services/integrations/meta"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -498,24 +499,190 @@ export async function syncGoogleIntegration(integration: any) {
 export async function syncMetaAdsCampaigns(
   userId: string,
   integrationId: string,
-  _adAccountDbId: string,
+  adAccountDbId: string,
   externalAccountId: string,
-  _accessToken: string
+  accessToken: string
 ) {
-  await prisma.integration.update({
-    where: { id: integrationId },
-    data: {
-      status: "ACTIVE",
-      lastSyncAt: new Date(),
-      lastSyncedAt: new Date(),
-      lastSyncStatus: "SUCCESS",
-      syncStatus: "SYNCED",
-      lastSyncError: null,
-      hasAdsAccess: true,
-    },
+  const hasLock = await acquireSyncLock(userId, adAccountDbId)
+  if (!hasLock) return 0
+  const scope = await prisma.adAccount.findFirst({
+    where: { id: adAccountDbId, integrationId, externalId: externalAccountId, userId },
+    select: { workspaceId: true, currencyCode: true },
   })
+  if (!scope) throw new Error("Selected Meta ad account does not belong to this integration")
 
-  return prisma.campaign.count({
-    where: { userId, platform: "META", adAccountExternalId: externalAccountId },
+  const metrics = (row: any) => {
+    const parsed = parseMetaInsight(row)
+    return { ...parsed, ...deriveMetrics(parsed) }
+  }
+  const inChunks = async <T>(rows: T[], work: (row: T) => Promise<void>, size = 25) => {
+    for (let index = 0; index < rows.length; index += size) await Promise.all(rows.slice(index, index + size).map(work))
+  }
+
+  try {
+    const snapshot = await MetaAdsService.readAccountSnapshot(accessToken, externalAccountId)
+    const insightByCampaign = new Map<string, any[]>()
+    for (const row of snapshot.campaignInsights) {
+      const key = String(row.campaign_id || "")
+      if (key) insightByCampaign.set(key, [...(insightByCampaign.get(key) || []), row])
+    }
+    const campaignIds = new Map<string, string>()
+
+    await inChunks(snapshot.campaigns, async (campaign) => {
+      const externalId = String(campaign.id || "")
+      if (!externalId) return
+      const dailyRows = insightByCampaign.get(externalId) || []
+      const totals = dailyRows.reduce(
+        (sum, row) => {
+          const value = metrics(row)
+          sum.impressions += value.impressions
+          sum.clicks += value.clicks
+          sum.spend += value.spend
+          sum.conversions += value.conversions
+          sum.leads += value.leads
+          sum.revenue += value.revenue
+          return sum
+        },
+        { impressions: 0, clicks: 0, spend: 0, conversions: 0, leads: 0, revenue: 0 }
+      )
+      const derived = deriveMetrics(totals)
+      const status = String(campaign.effective_status || campaign.status || "UNKNOWN")
+      const budget = Number(campaign.daily_budget || campaign.lifetime_budget || 0) / 100
+      const saved = await prisma.campaign.upsert({
+        where: { integrationId_externalId: { integrationId, externalId } },
+        create: {
+          integrationId,
+          workspaceId: scope.workspaceId,
+          userId,
+          platform: "META",
+          externalId,
+          adAccountId: adAccountDbId,
+          adAccountExternalId: externalAccountId,
+          name: String(campaign.name || `Meta Campaign ${externalId}`),
+          status,
+          objective: campaign.objective || null,
+          budgetAmount: budget || null,
+          budgetCurrency: scope.currencyCode || null,
+          impressions: totals.impressions,
+          clicks: totals.clicks,
+          spend: totals.spend,
+          conversions: totals.conversions,
+          revenue: totals.revenue,
+          totalLeads: Math.round(totals.leads),
+          ctr: derived.ctr,
+          cpa: derived.cpa,
+          roas: derived.roas,
+          rawData: campaign,
+          syncedAt: new Date(),
+          isLive: true,
+          liveStatus: status === "ACTIVE" ? "LIVE_ENABLED" : "LIVE_PAUSED",
+          verifiedAt: new Date(),
+        },
+        update: {
+          workspaceId: scope.workspaceId,
+          userId,
+          adAccountId: adAccountDbId,
+          adAccountExternalId: externalAccountId,
+          name: String(campaign.name || `Meta Campaign ${externalId}`),
+          status,
+          objective: campaign.objective || null,
+          budgetAmount: budget || null,
+          impressions: totals.impressions,
+          clicks: totals.clicks,
+          spend: totals.spend,
+          conversions: totals.conversions,
+          revenue: totals.revenue,
+          totalLeads: Math.round(totals.leads),
+          ctr: derived.ctr,
+          cpa: derived.cpa,
+          roas: derived.roas,
+          rawData: campaign,
+          syncedAt: new Date(),
+          lastSeenAt: new Date(),
+          isLive: true,
+          liveStatus: status === "ACTIVE" ? "LIVE_ENABLED" : "LIVE_PAUSED",
+          verifiedAt: new Date(),
+          liveError: null,
+        },
+      })
+      campaignIds.set(externalId, saved.id)
+
+      await inChunks(dailyRows, async (row) => {
+        if (!row.date_start) return
+        const value = metrics(row)
+        const metricDate = new Date(`${row.date_start}T00:00:00.000Z`)
+        await prisma.campaignMetricDaily.upsert({
+          where: { campaignId_metricDate: { campaignId: saved.id, metricDate } },
+          create: { campaignId: saved.id, platform: "META", metricDate, impressions: value.impressions, clicks: value.clicks, spend: value.spend, conversions: value.conversions, revenue: value.revenue, ctr: value.ctr, cpa: value.cpa, roas: value.roas },
+          update: { impressions: value.impressions, clicks: value.clicks, spend: value.spend, conversions: value.conversions, revenue: value.revenue, ctr: value.ctr, cpa: value.cpa, roas: value.roas },
+        })
+      })
+    })
+
+    const adGroupIds = new Map<string, string>()
+    await inChunks(snapshot.adSets, async (adSet) => {
+      const campaignId = campaignIds.get(String(adSet.campaign_id || ""))
+      const externalId = String(adSet.id || "")
+      if (!campaignId || !externalId) return
+      const saved = await prisma.adGroup.upsert({
+        where: { campaignId_externalId: { campaignId, externalId } },
+        create: { userId, campaignId, externalId, name: String(adSet.name || "Meta Ad Set"), status: String(adSet.effective_status || adSet.status || "UNKNOWN"), isLive: true },
+        update: { name: String(adSet.name || "Meta Ad Set"), status: String(adSet.effective_status || adSet.status || "UNKNOWN"), isLive: true },
+      })
+      adGroupIds.set(externalId, saved.id)
+    })
+
+    const adIds = new Map<string, string>()
+    await inChunks(snapshot.ads, async (ad) => {
+      const adGroupId = adGroupIds.get(String(ad.adset_id || ""))
+      const externalId = String(ad.id || "")
+      if (!adGroupId || !externalId) return
+      const creative = ad.creative || {}
+      const story = creative.object_story_spec || {}
+      const finalUrl = story.link_data?.link || story.video_data?.call_to_action?.value?.link || ""
+      const saved = await prisma.ad.upsert({
+        where: { adGroupId_externalId: { adGroupId, externalId } },
+        create: { userId, adGroupId, externalId, headlines: [{ text: creative.title || ad.name || "Meta Ad" }], descriptions: [{ text: creative.body || "" }], finalUrl, status: String(ad.effective_status || ad.status || "UNKNOWN"), isLive: true },
+        update: { headlines: [{ text: creative.title || ad.name || "Meta Ad" }], descriptions: [{ text: creative.body || "" }], finalUrl, status: String(ad.effective_status || ad.status || "UNKNOWN"), isLive: true },
+      })
+      adIds.set(externalId, saved.id)
+    })
+
+    await inChunks(snapshot.adInsights, async (row) => {
+      const adId = adIds.get(String(row.ad_id || ""))
+      if (!adId || !row.date_start) return
+      const value = metrics(row)
+      const metricDate = new Date(`${row.date_start}T00:00:00.000Z`)
+      await prisma.adMetricDaily.upsert({
+        where: { adId_metricDate: { adId, metricDate } },
+        create: { adId, metricDate, impressions: value.impressions, clicks: value.clicks, spend: value.spend, conversions: value.conversions, revenue: value.revenue, ctr: value.ctr, cpa: value.cpa, roas: value.roas },
+        update: { impressions: value.impressions, clicks: value.clicks, spend: value.spend, conversions: value.conversions, revenue: value.revenue, ctr: value.ctr, cpa: value.cpa, roas: value.roas },
+      })
+    })
+
+    const syncedAt = new Date()
+    await prisma.adAccount.update({ where: { id: adAccountDbId }, data: { lastSyncedAt: syncedAt, syncStatus: "SYNCED", syncError: null } })
+    await prisma.integration.update({
+      where: { id: integrationId },
+      data: { status: "ACTIVE", lastSyncAt: syncedAt, lastSyncedAt: syncedAt, lastSyncStatus: "SUCCESS", syncStatus: "SYNCED", lastSyncError: null, hasAdsAccess: true },
+    })
+    return campaignIds.size
+  } catch (error: any) {
+    reportError(error, "sync/meta", { userId, integrationId, adAccountDbId })
+    await prisma.adAccount.update({ where: { id: adAccountDbId }, data: { syncStatus: "ERROR", syncError: error?.message || "Meta sync failed" } })
+    await prisma.integration.update({ where: { id: integrationId }, data: { status: "SYNC_FAILED", lastSyncStatus: "FAILED", syncStatus: "ERROR", lastSyncError: error?.message || "Meta sync failed" } })
+    throw error
+  }
+}
+
+export async function syncMetaIntegration(integration: any) {
+  if (integration.platform !== "META") return 0
+  const accessToken = getIntegrationAccessToken(integration)
+  if (!accessToken || !integration.selectedAdAccountId) throw new Error("Missing Meta access token or selected ad account")
+  const account = await prisma.adAccount.findFirst({
+    where: { integrationId: integration.id, externalId: integration.selectedAdAccountId },
+    select: { id: true, externalId: true },
   })
+  if (!account) throw new Error("Selected Meta ad account metadata not found")
+  return syncMetaAdsCampaigns(integration.userId, integration.id, account.id, account.externalId, accessToken)
 }

@@ -38,6 +38,28 @@ export type MetaAssets = {
   apps: Array<{ id: string; name: string }>
 }
 
+function firstActionValue(rows: unknown, types: string[]): number {
+  const values = Array.isArray(rows) ? rows : []
+  for (const type of types) {
+    const match = values.find((item: any) => item?.action_type === type)
+    if (match) return Number(match.value || 0)
+  }
+  return 0
+}
+
+export function parseMetaInsight(row: any) {
+  const leads = firstActionValue(row.actions, ["offsite_conversion.fb_pixel_lead", "onsite_conversion.lead_grouped", "lead"])
+  const purchases = firstActionValue(row.actions, ["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"])
+  return {
+    spend: Number(row.spend || 0),
+    clicks: Number(row.clicks || 0),
+    impressions: Number(row.impressions || 0),
+    conversions: leads + purchases,
+    leads,
+    revenue: firstActionValue(row.action_values, ["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"]),
+  }
+}
+
 function required(name: string): string {
   const value = String(process.env[name] || "").trim()
   if (!value) throw new Error(`Missing ${name}`)
@@ -76,6 +98,41 @@ async function requestMeta<T>({
     throw new MetaApiError(endpoint, response.status, payload?.error?.message || response.statusText || "Unknown Meta API error", payload)
   }
   return payload as T
+}
+
+async function paginateMeta({
+  endpoint,
+  accessToken,
+  params,
+  maxPages = 5,
+  maxItems = 500,
+}: {
+  endpoint: string
+  accessToken: string
+  params: Record<string, string>
+  maxPages?: number
+  maxItems?: number
+}) {
+  const rows: any[] = []
+  let after: string | undefined
+  for (let page = 0; page < maxPages && rows.length < maxItems; page += 1) {
+    const payload = await requestMeta<{ data?: any[]; paging?: { cursors?: { after?: string } } }>({
+      endpoint,
+      accessToken,
+      params: { ...params, limit: "100", ...(after ? { after } : {}) },
+    })
+    rows.push(...(Array.isArray(payload.data) ? payload.data : []))
+    const next = payload.paging?.cursors?.after
+    if (!next || next === after || !payload.data?.length) break
+    after = next
+  }
+  return rows.slice(0, maxItems)
+}
+
+function isoDate(daysAgo: number) {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() - daysAgo)
+  return date.toISOString().slice(0, 10)
 }
 
 function normalizeMetaAdAccountId(id: string, accountId?: string): string {
@@ -199,5 +256,50 @@ export const MetaAdsService = {
         .slice(0, 100)
         .map((app) => ({ id: String(app.id), name: String(app.name || "Meta App") })),
     }
+  },
+
+  async readAccountSnapshot(accessToken: string, adAccountId: string) {
+    const account = `/${normalizeMetaAdAccountId(adAccountId)}`
+    const timeRange = JSON.stringify({ since: isoDate(29), until: isoDate(0) })
+    const [campaigns, adSets, ads, campaignInsights, adInsights] = await Promise.all([
+      paginateMeta({
+        endpoint: `${account}/campaigns`,
+        accessToken,
+        params: { fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget,created_time,updated_time" },
+      }),
+      paginateMeta({
+        endpoint: `${account}/adsets`,
+        accessToken,
+        params: { fields: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,targeting" },
+      }),
+      paginateMeta({
+        endpoint: `${account}/ads`,
+        accessToken,
+        params: { fields: "id,name,status,effective_status,adset_id,campaign_id,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec}" },
+      }),
+      paginateMeta({
+        endpoint: `${account}/insights`,
+        accessToken,
+        maxItems: 3_000,
+        params: {
+          level: "campaign",
+          time_range: timeRange,
+          time_increment: "1",
+          fields: "campaign_id,date_start,spend,impressions,clicks,actions,action_values,ctr,cpc",
+        },
+      }),
+      paginateMeta({
+        endpoint: `${account}/insights`,
+        accessToken,
+        maxItems: 5_000,
+        params: {
+          level: "ad",
+          time_range: timeRange,
+          time_increment: "1",
+          fields: "ad_id,campaign_id,date_start,spend,impressions,clicks,actions,action_values,ctr,cpc",
+        },
+      }),
+    ])
+    return { campaigns, adSets, ads, campaignInsights, adInsights }
   },
 }

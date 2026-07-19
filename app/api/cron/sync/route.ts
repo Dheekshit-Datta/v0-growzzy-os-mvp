@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { syncGoogleAdsCampaigns } from "@/lib/sync-engine"
+import { syncGoogleAdsCampaigns, syncMetaAdsCampaigns } from "@/lib/sync-engine"
 import { runAutomationsForUser } from "@/lib/automation-engine"
 import { sendEmail } from "@/lib/email"
 import { log, reportError } from "@/lib/logger"
@@ -53,11 +53,12 @@ export async function GET(req: Request) {
   const startedAt = Date.now()
   log("info", "cron/sync", "Cron sync started")
 
+  const enabledPlatforms = process.env.ENABLE_META_ADS === "true" ? ["GOOGLE", "META"] as const : ["GOOGLE"] as const
   const integrations = await prisma.integration.findMany({
     where: {
       hasAdsAccess: true,
       status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
-      platform: "GOOGLE",
+      platform: { in: [...enabledPlatforms] },
     },
     include: {
       adAccounts: true,
@@ -81,17 +82,20 @@ export async function GET(req: Request) {
     }
 
     try {
-      if (integration.platform !== "GOOGLE") continue
       const accessToken = getIntegrationAccessToken(integration)
-      if (!accessToken) throw new Error("Missing Google access token")
-      await syncGoogleAdsCampaigns(
-        integration.userId,
-        integration.id,
-        primary.id,
-        primary.externalId,
-        accessToken,
-        primary.managerCustomerId
-      )
+      if (!accessToken) throw new Error(`Missing ${integration.platform} access token`)
+      if (integration.platform === "META") {
+        await syncMetaAdsCampaigns(integration.userId, integration.id, primary.id, primary.externalId, accessToken)
+      } else {
+        await syncGoogleAdsCampaigns(
+          integration.userId,
+          integration.id,
+          primary.id,
+          primary.externalId,
+          accessToken,
+          primary.managerCustomerId
+        )
+      }
 
       await prisma.integration.update({
         where: { id: integration.id },
