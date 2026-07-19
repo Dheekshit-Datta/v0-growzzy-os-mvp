@@ -211,6 +211,7 @@ export default function OptimizationPage() {
       case "increase_budget": return "Scale budget"
       case "refresh_creative": return "Refresh creative"
       case "improve_ctr": return "Targeting insight"
+      case "declining_trend": return "Trend alert"
       default: return insightType
     }
   }
