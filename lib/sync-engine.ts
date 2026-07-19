@@ -308,6 +308,117 @@ export async function syncGoogleAdsCampaigns(
       }
     }
 
+    // Ad-level sync for creative testing (which variant is winning, and
+    // fatigue detection over time) - separate from the campaign-level sync
+    // above, which only ever saw aggregate numbers. Pulls real ad_group_ad
+    // performance and upserts AdGroup/Ad/AdMetricDaily even for ad groups
+    // that were never launched through this app (matched by externalId).
+    if (localCampaignIdByExternalId.size > 0) {
+      try {
+        const creativeQuery = `
+          SELECT
+            campaign.id,
+            ad_group.id,
+            ad_group.name,
+            ad_group_ad.ad.id,
+            ad_group_ad.ad.resource_name,
+            ad_group_ad.status,
+            ad_group_ad.ad.responsive_search_ad.headlines,
+            ad_group_ad.ad.responsive_search_ad.descriptions,
+            ad_group_ad.ad.final_urls,
+            segments.date,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.conversions_value
+          FROM ad_group_ad
+          WHERE segments.date DURING LAST_14_DAYS
+            AND campaign.status != 'REMOVED'
+            AND ad_group_ad.status != 'REMOVED'
+          ORDER BY campaign.id
+          LIMIT 3000
+        `
+        const creativeStreamData = await GoogleAdsService.searchStream<any>({
+          accessToken: resolvedAccessToken,
+          customerId: externalAccountId,
+          query: creativeQuery,
+          loginCustomerId: preferredLoginCustomerId,
+        })
+        const creativeRows = Array.isArray(creativeStreamData) ? creativeStreamData.flatMap((chunk: any) => chunk.results ?? []) : []
+
+        const localAdIdByExternalId = new Map<string, string>()
+
+        for (const row of creativeRows) {
+          const externalCampaignId = String(row.campaign?.id || "")
+          const localCampaignId = localCampaignIdByExternalId.get(externalCampaignId)
+          const externalAdGroupId = String(row.adGroup?.id || "")
+          const externalAdId = String(row.adGroupAd?.ad?.id || "")
+          const dateStr = row.segments?.date
+          if (!localCampaignId || !externalAdGroupId || !externalAdId || !dateStr) continue
+
+          const cacheKey = `${externalAdGroupId}:${externalAdId}`
+          let localAdId = localAdIdByExternalId.get(cacheKey)
+
+          if (!localAdId) {
+            const localAdGroup = await prisma.adGroup.upsert({
+              where: { campaignId_externalId: { campaignId: localCampaignId, externalId: externalAdGroupId } },
+              create: { userId, campaignId: localCampaignId, externalId: externalAdGroupId, name: row.adGroup?.name || "Ad Group", isLive: true },
+              update: { name: row.adGroup?.name || "Ad Group" },
+            })
+
+            const headlines = (row.adGroupAd?.ad?.responsiveSearchAd?.headlines || []).map((h: any) => ({ text: h?.text || "" })).filter((h: any) => h.text)
+            const descriptions = (row.adGroupAd?.ad?.responsiveSearchAd?.descriptions || []).map((d: any) => ({ text: d?.text || "" })).filter((d: any) => d.text)
+            const finalUrl = (row.adGroupAd?.ad?.finalUrls || [])[0] || ""
+            const status = row.adGroupAd?.status || "ENABLED"
+
+            const localAd = await prisma.ad.upsert({
+              where: { adGroupId_externalId: { adGroupId: localAdGroup.id, externalId: externalAdId } },
+              create: {
+                userId,
+                adGroupId: localAdGroup.id,
+                externalId: externalAdId,
+                resourceName: row.adGroupAd?.ad?.resourceName || null,
+                headlines: headlines.length ? headlines : [{ text: "(no headlines synced)" }],
+                descriptions: descriptions.length ? descriptions : [{ text: "(no descriptions synced)" }],
+                finalUrl,
+                status,
+                isLive: true,
+              },
+              update: {
+                resourceName: row.adGroupAd?.ad?.resourceName || null,
+                ...(headlines.length ? { headlines } : {}),
+                ...(descriptions.length ? { descriptions } : {}),
+                ...(finalUrl ? { finalUrl } : {}),
+                status,
+              },
+            })
+            localAdId = localAd.id
+            localAdIdByExternalId.set(cacheKey, localAdId)
+          }
+
+          const metricDate = new Date(`${dateStr}T00:00:00.000Z`)
+          const metrics = row.metrics || {}
+          const spend = metrics.costMicros ? Number(metrics.costMicros) / 1_000_000 : 0
+          const clicks = Number(metrics.clicks ?? 0)
+          const impressions = Number(metrics.impressions ?? 0)
+          const conversions = Number(metrics.conversions ?? 0)
+          const revenue = Number(metrics.conversionsValue ?? 0)
+          const derived = deriveMetrics({ spend, clicks, impressions, conversions, revenue })
+
+          await prisma.adMetricDaily.upsert({
+            where: { adId_metricDate: { adId: localAdId, metricDate } },
+            create: { adId: localAdId, metricDate, impressions, clicks, spend, conversions, revenue, ctr: derived.ctr, cpa: derived.cpa, roas: derived.roas },
+            update: { impressions, clicks, spend, conversions, revenue, ctr: derived.ctr, cpa: derived.cpa, roas: derived.roas },
+          })
+        }
+      } catch (creativeError: any) {
+        // Non-fatal for the same reason as the daily-metric sync above -
+        // creative testing data just won't refresh until the next sync.
+        log("warn", "sync/google", "Ad-level creative sync failed", { userId, adAccountDbId, message: creativeError?.message })
+      }
+    }
+
     const partialError = rows.length > 0 && errors.length >= rows.length / 2
     const syncStatus = partialError ? "PARTIAL_ERROR" : "SYNCED"
     const syncError = errors.length ? errors.slice(0, 10).join("\n") : null

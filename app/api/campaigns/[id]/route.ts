@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
+import { analyzeAdGroupCreatives } from "@/lib/creative-testing"
 
 interface Params {
   params: { id: string }
@@ -21,13 +22,22 @@ export async function GET(request: NextRequest, { params }: Params) {
       include: {
         integration: { select: { id: true, platform: true, accountName: true, selectedAdAccountName: true } },
         metricsDaily: { orderBy: { metricDate: "asc" }, take: 90 },
-        adGroups: { include: { keywords: true, ads: true } },
+        adGroups: { include: { keywords: true, ads: { include: { metricsDaily: { orderBy: { metricDate: "asc" }, take: 30 } } } } },
         creatives: true,
       },
     })
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
 
-    return NextResponse.json({ ok: true, campaign })
+    const adGroups = campaign.adGroups.map((group) => {
+      const analysis = analyzeAdGroupCreatives(group.ads)
+      const analysisByAdId = new Map(analysis.map((a) => [a.adId, a]))
+      return {
+        ...group,
+        ads: group.ads.map((ad) => ({ ...ad, creativeTest: analysisByAdId.get(ad.id) || null })),
+      }
+    })
+
+    return NextResponse.json({ ok: true, campaign: { ...campaign, adGroups } })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

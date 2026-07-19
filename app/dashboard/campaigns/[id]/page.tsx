@@ -16,7 +16,25 @@ type MetricDaily = {
 }
 
 type Keyword = { id: string; text: string; matchType: string; isNegative: boolean; status: string }
-type AdItem = { id: string; headlines: string[]; descriptions: string[]; finalUrl: string }
+type CreativeTest = {
+  impressions: number
+  clicks: number
+  spend: number
+  conversions: number
+  revenue: number
+  ctr: number
+  roas: number | null
+  isWinner: boolean
+  fatigue: { isFatiguing: boolean; ctrChangePct: number | null }
+} | null
+type AdItem = {
+  id: string
+  externalId: string | null
+  headlines: { text: string }[]
+  descriptions: { text: string }[]
+  finalUrl: string
+  creativeTest: CreativeTest
+}
 type AdGroup = { id: string; name: string; theme: string | null; status: string; keywords: Keyword[]; ads: AdItem[] }
 
 type CampaignDetail = {
@@ -223,14 +241,38 @@ export default function CampaignDetailPage() {
                             {statusPill(g.status).label}
                           </span>
                         </div>
-                        {g.ads[0] && (
-                          <div className="mt-3 p-3 rounded-[8px] bg-[#F6F7F9]">
-                            <p className="text-[13px] text-[#1a0dab] font-medium">
-                              {(g.ads[0].headlines || []).slice(0, 3).join(" | ")}
-                            </p>
-                            <p className="text-[12px] text-[#4d5156] mt-1">
-                              {(g.ads[0].descriptions || []).slice(0, 2).join(" ")}
-                            </p>
+                        {g.ads.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {g.ads.map((ad) => (
+                              <div key={ad.id} className="p-3 rounded-[8px] bg-[#F6F7F9]">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {ad.creativeTest?.isWinner && (
+                                    <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-[#E6F4EC] text-[#2E9E5B]">
+                                      Winning variant
+                                    </span>
+                                  )}
+                                  {ad.creativeTest?.fatigue.isFatiguing && (
+                                    <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-[#FBF0DA] text-[#B8892B]">
+                                      Fatiguing — CTR down {Math.abs(Math.round(ad.creativeTest.fatigue.ctrChangePct || 0))}%
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[13px] text-[#1a0dab] font-medium">
+                                  {(ad.headlines || []).slice(0, 3).map((h) => h.text).join(" | ")}
+                                </p>
+                                <p className="text-[12px] text-[#4d5156] mt-1">
+                                  {(ad.descriptions || []).slice(0, 2).map((d) => d.text).join(" ")}
+                                </p>
+                                {ad.creativeTest && ad.creativeTest.impressions > 0 && (
+                                  <div className="flex items-center gap-4 mt-2 pt-2 border-t border-[#E9EBEF] text-[11px] text-[#6B7280] tabular">
+                                    <span>{ad.creativeTest.impressions.toLocaleString()} impr</span>
+                                    <span>{(ad.creativeTest.ctr * 100).toFixed(2)}% CTR</span>
+                                    <span>{money(ad.creativeTest.spend)} spend</span>
+                                    <span>{ad.creativeTest.roas ? ad.creativeTest.roas.toFixed(2) + "x ROAS" : "—"}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         )}
                         <div className="flex flex-wrap gap-1.5 mt-3">

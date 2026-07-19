@@ -551,6 +551,7 @@ model AdGroup {
   ads      Ad[]
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([campaignId, externalId])
   @@index([campaignId])
   @@index([userId])
 }
@@ -595,9 +596,35 @@ model Ad {
 
   adGroup AdGroup? @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metricsDaily AdMetricDaily[]
 
+  @@unique([adGroupId, externalId])
   @@index([adGroupId])
   @@index([userId])
+}
+
+model AdMetricDaily {
+  id         String   @id @default(cuid())
+  adId       String
+  metricDate DateTime
+
+  impressions Int   @default(0)
+  clicks      Int   @default(0)
+  spend       Float @default(0)
+  conversions Float @default(0)
+  revenue     Float @default(0)
+
+  ctr Float?
+  cpa Float?
+  roas Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ad Ad @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([adId, metricDate])
+  @@index([metricDate])
 }
 
 model GeneratedCreative {
