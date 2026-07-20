@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
+import { getRequestWorkspaceId } from "@/lib/workspace"
+import { cachedUtilityCompletion } from "@/lib/ai-utility"
 
 const InputSchema = z.object({
   answers: z.object({
@@ -37,17 +36,20 @@ export async function POST(req: NextRequest) {
   const parsed = InputSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid business answers" }, { status: 400 })
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({ ok: false, error: "AI summary is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
+  const workspaceId = await getRequestWorkspaceId(userId, req)
 
   const prompt = `Write a factual 3-4 sentence business context summary for future advertising AI. Reconcile the owner's answers with website evidence. Prioritize what is sold, ideal customer and their need, differentiation, marketing history, tone, and goal. Never invent claims, audiences, prices, or results. Return plain text only.\n\nOwner answers:\n${JSON.stringify(parsed.data.answers)}\n\nWebsite evidence:\n${JSON.stringify(parsed.data.siteData || "Not available")}`
   let summary = ""
   for (let attempt = 0; attempt < 2 && !summary; attempt++) {
     try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
-        temperature: 0.25,
+      summary = await cachedUtilityCompletion({
+        route: "/api/ai/business-context",
+        operation: "business-context",
+        userId,
+        workspaceId,
+        input: parsed.data,
         messages: [{ role: "user", content: prompt }],
       })
-      summary = completion.choices[0]?.message?.content?.trim() || ""
     } catch {
       if (attempt === 1) return NextResponse.json({ ok: false, error: "Couldn't summarize your business. Please try again." }, { status: 502 })
     }

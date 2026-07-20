@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
+import { cachedUtilityCompletion } from "@/lib/ai-utility"
 
 const BooleanAudienceSchema = z.object({
   query: z.string().min(3).max(500),
@@ -29,10 +27,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Boolean audience search is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
   }
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
-    temperature: 0.3,
-    response_format: { type: "json_object" },
+  const content = await cachedUtilityCompletion({
+    route: "/api/ai/boolean-audience",
+    operation: "boolean-audience",
+    userId,
+    workspaceId,
+    input: { query: input.query, businessContext },
+    json: true,
     messages: [
       {
         role: "system",
@@ -49,7 +50,7 @@ Return ONLY JSON: {"interpretation": "one paragraph explaining how the boolean q
     ],
   })
 
-  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}")
+  const parsed = JSON.parse(content || "{}")
   const keywords = Array.isArray(parsed.keywords)
     ? parsed.keywords.slice(0, 30).map((k: any) => ({
         text: String(k?.text || "").slice(0, 80),

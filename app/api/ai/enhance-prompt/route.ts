@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
+import { cachedUtilityCompletion } from "@/lib/ai-utility"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
@@ -29,9 +27,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "AI Enhance is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
   }
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
-    temperature: 0.5,
+  const enhanced = await cachedUtilityCompletion({
+    route: "/api/ai/enhance-prompt",
+    operation: "enhance-prompt",
+    userId,
+    workspaceId,
+    input: { prompt: input.prompt, businessContext },
     messages: [
       {
         role: "system",
@@ -41,8 +42,6 @@ export async function POST(req: NextRequest) {
       { role: "user", content: `${input.prompt}${businessContext}` },
     ],
   })
-
-  const enhanced = completion.choices[0]?.message?.content?.trim() || ""
   if (!enhanced) {
     return NextResponse.json({ ok: false, error: "AI did not return an enhanced brief. Please try again." }, { status: 502 })
   }
