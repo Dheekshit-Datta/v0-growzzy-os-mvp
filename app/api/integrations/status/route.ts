@@ -45,12 +45,13 @@ export async function GET(req: NextRequest) {
 
   const result: Record<string, any> = {
     google: null,
+    meta: null,
     hasAnyAdsAccess: false,
   }
 
   for (const integration of integrations) {
-    if (integration.platform !== "GOOGLE") continue
-    const key = "google"
+    if (integration.platform !== "GOOGLE" && integration.platform !== "META") continue
+    const key = integration.platform === "META" ? "meta" : "google"
 
     const lastSyncedAt = integration.lastSyncAt || integration.lastSyncedAt
     const stale = lastSyncedAt ? Date.now() - new Date(lastSyncedAt).getTime() > 24 * 60 * 60 * 1000 : true

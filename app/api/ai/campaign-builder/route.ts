@@ -273,6 +273,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
       platform: input.platform,
       plan,
       briefInput: {
+        platform: input.platform,
         offer: input.offer,
         targetCustomer: input.targetCustomer,
         budget: input.budget,

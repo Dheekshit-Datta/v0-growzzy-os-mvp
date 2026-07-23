@@ -39,6 +39,19 @@ const GOALS = [
   { value: "TRAFFIC", label: "Website traffic" },
   { value: "AWARENESS", label: "Brand awareness" },
 ]
+const PLATFORMS = [
+  { value: "GOOGLE", label: "Google Ads" },
+  { value: "META", label: "Meta Ads" },
+]
+const META_OBJECTIVES = [
+  { value: "AWARENESS", label: "Awareness" },
+  { value: "TRAFFIC", label: "Traffic" },
+  { value: "ENGAGEMENT", label: "Engagement" },
+  { value: "LEADS", label: "Leads" },
+  { value: "SALES", label: "Sales" },
+  { value: "APP_PROMOTION", label: "App Promotion" },
+]
+const META_ENABLED = process.env.NEXT_PUBLIC_ENABLE_META_ADS === "true"
 
 type Tab = "campaign" | "boolean" | "creatives" | "launch"
 
@@ -118,6 +131,8 @@ export default function NewCampaignPage() {
   const [budget, setBudget] = useState(50)
   const [location, setLocation] = useState("")
   const [goal, setGoal] = useState("LEADS")
+  const [platform, setPlatform] = useState("GOOGLE")
+  const [metaObjective, setMetaObjective] = useState("")
   const [detected, setDetected] = useState<Set<string>>(new Set())
   const [enhancing, setEnhancing] = useState(false)
   const [enhanceError, setEnhanceError] = useState("")
@@ -129,6 +144,7 @@ export default function NewCampaignPage() {
 
   // Google connection + workspace brand (real context for AI Creatives)
   const [googleConnected, setGoogleConnected] = useState(false)
+  const [metaConnected, setMetaConnected] = useState(false)
   const [brand, setBrand] = useState<{ name?: string; industry?: string; toneOfVoice?: string; productDescription?: string } | null>(null)
 
   // Creatives state
@@ -176,6 +192,8 @@ export default function NewCampaignPage() {
         if (brief.budget) setBudget(brief.budget)
         if (brief.location) setLocation(brief.location)
         if (brief.goal) setGoal(brief.goal)
+        if (brief.platform === "META" && META_ENABLED) setPlatform("META")
+        if (brief.metaObjective) setMetaObjective(brief.metaObjective)
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,7 +202,10 @@ export default function NewCampaignPage() {
   useEffect(() => {
     fetch("/api/integrations/status", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((json) => setGoogleConnected(!!json?.google?.connected && !!json?.google?.hasAdsAccount))
+      .then((json) => {
+        setGoogleConnected(!!json?.google?.connected && !!json?.google?.hasAdsAccount)
+        setMetaConnected(!!json?.meta?.connected && !!json?.meta?.hasAdsAccount)
+      })
       .catch(() => {})
     fetch("/api/workspaces", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -229,11 +250,14 @@ export default function NewCampaignPage() {
           budget,
           location: location.trim(),
           goal,
+          platform,
+          metaObjective: platform === "META" ? metaObjective : undefined,
         }),
       })
       const json = await res.json()
       if (!res.ok || !json?.campaignPlanId) {
-        throw new Error(json?.error || "Couldn't build a plan. Connect Google Ads and select an account first.")
+        const platformName = platform === "META" ? "Meta Ads" : "Google Ads"
+        throw new Error(json?.error?.message || json?.error || `Couldn't build a plan. Connect ${platformName} and select an account first.`)
       }
       setCampaignPlanId(json.campaignPlanId)
       setCampaignName(json.plan?.campaignName || "")
@@ -281,7 +305,7 @@ export default function NewCampaignPage() {
           industry: brand?.industry,
           brandTone: brand?.toneOfVoice,
           objective: goal,
-          platform: "GOOGLE",
+          platform,
           format: "Display",
           adFormat: selectedRatio,
           visualStyle: selectedStyle,
@@ -310,7 +334,7 @@ export default function NewCampaignPage() {
     try {
       const res = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
       const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Launch failed. Please review the plan and try again.")
+      if (!res.ok || !json?.ok) throw new Error(json?.error?.message || json?.error || "Launch failed. Please review the plan and try again.")
       setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
       setTimeout(() => router.push("/dashboard/ads"), 1400)
     } catch (err: any) {
@@ -320,12 +344,14 @@ export default function NewCampaignPage() {
     }
   }
 
+  const platformName = platform === "META" ? "Meta Ads" : "Google Ads"
+  const platformConnected = platform === "META" ? metaConnected : googleConnected
   const launchChecklist = [
     { label: "Campaign strategy built", done: built },
     { label: "AI creatives generated (optional)", done: generatedCreatives.length > 0, optional: true },
-    { label: "Google Ads connected", done: googleConnected },
+    { label: `${platformName} connected`, done: platformConnected },
   ]
-  const canLaunch = built && googleConnected && !!campaignPlanId
+  const canLaunch = built && platformConnected && !!campaignPlanId
 
   return (
     <Shell title="">
@@ -408,7 +434,7 @@ export default function NewCampaignPage() {
               {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
 
               {/* Real budget/location/goal — required to build a plan */}
-              <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
                 <div>
                   <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Daily budget ($)</label>
                   <input type="number" min={1} value={budget} onChange={(e) => setBudget(Number(e.target.value))} className="w-full h-9 px-3 text-[13px] text-[#111827] outline-none rounded-[8px] sku-input" />
@@ -426,15 +452,50 @@ export default function NewCampaignPage() {
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Platform</label>
+                  <div className="relative">
+                    <select
+                      value={platform}
+                      onChange={(e) => {
+                        setPlatform(e.target.value)
+                        setBuilt(false)
+                        setCampaignPlanId(null)
+                        setLaunched(null)
+                      }}
+                      className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
+                    >
+                      {PLATFORMS.map((item) => (
+                        <option key={item.value} value={item.value} disabled={item.value === "META" && !META_ENABLED}>
+                          {item.label}{item.value === "META" && !META_ENABLED ? " (sandbox pending)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+                  </div>
+                </div>
               </div>
+
+              {platform === "META" && (
+                <div className="mt-4">
+                  <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Meta objective</label>
+                  <div className="relative">
+                    <select value={metaObjective} onChange={(e) => setMetaObjective(e.target.value)} className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
+                      <option value="">Select objective</option>
+                      {META_OBJECTIVES.map((objective) => <option key={objective.value} value={objective.value}>{objective.label}</option>)}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleBuild}
-                  disabled={!prompt.trim() || !location.trim() || building}
+                  disabled={!prompt.trim() || !location.trim() || building || (platform === "META" && !metaObjective)}
                   className={cn(
                     "flex items-center gap-1.5 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors",
-                    prompt.trim() && location.trim() && !building ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                    prompt.trim() && location.trim() && !building && (platform !== "META" || metaObjective) ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                   )}
                 >
                   {building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>)}
@@ -617,7 +678,7 @@ export default function NewCampaignPage() {
               <div className="sku-card p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Rocket size={16} className="text-[#1F57F5]" />
-                  <p className="text-[14px] font-semibold text-[#111827]">Launch to Google Ads</p>
+                  <p className="text-[14px] font-semibold text-[#111827]">Launch to {platformName}</p>
                 </div>
                 {!campaignPlanId && (
                   <div className="p-3 rounded-[10px] bg-[#FBF0DA] text-[#B8892B] text-[12.5px] font-medium mb-4">
@@ -631,8 +692,8 @@ export default function NewCampaignPage() {
                         {done ? <Check size={13} /> : <Circle size={12} />}
                       </div>
                       <span className={cn("text-[13px]", done ? "font-semibold text-[#2E9E5B]" : "font-medium text-[#4B5563]")}>{label}</span>
-                      {!done && !optional && label === "Google Ads connected" && (
-                        <a href="/api/integrations/google/connect" className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">Connect →</a>
+                      {!done && !optional && label === `${platformName} connected` && (
+                        <a href={platform === "META" ? "/api/integrations/meta/connect" : "/api/integrations/google/connect"} className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">Connect →</a>
                       )}
                     </div>
                   ))}
@@ -644,7 +705,7 @@ export default function NewCampaignPage() {
                 )}
                 {launched ? (
                   <div className="mt-5 p-4 rounded-[10px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-center">
-                    <p className="text-[13px] font-semibold text-[#2E9E5B] flex items-center justify-center gap-1.5"><Check size={14} /> Published to Google Ads (paused)</p>
+                    <p className="text-[13px] font-semibold text-[#2E9E5B] flex items-center justify-center gap-1.5"><Check size={14} /> Published to {platformName} (paused)</p>
                     <p className="text-[11.5px] text-[#374151] mt-1">Redirecting to Ads Manager…</p>
                   </div>
                 ) : (
@@ -653,7 +714,7 @@ export default function NewCampaignPage() {
                     disabled={!canLaunch || launching}
                     className={cn("mt-5 flex items-center justify-center gap-2 h-11 w-full rounded-[10px] text-[14px] font-semibold transition-colors", canLaunch && !launching ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
-                    {launching ? (<><Loader2 size={16} className="animate-spin" />Publishing…</>) : (<><Rocket size={15} />Publish to Google Ads</>)}
+                    {launching ? (<><Loader2 size={16} className="animate-spin" />Publishing…</>) : (<><Rocket size={15} />Publish to {platformName}</>)}
                   </button>
                 )}
               </div>
