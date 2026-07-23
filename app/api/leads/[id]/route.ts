@@ -54,6 +54,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
     if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
 
+    if (body.campaignId !== undefined && body.campaignId !== null) {
+      if (typeof body.campaignId !== "string") return NextResponse.json({ error: "Invalid campaign" }, { status: 400 })
+      const campaign = await prisma.campaign.findFirst({
+        where: { id: body.campaignId, userId, workspaceId, adAccountId: accountScope.adAccountId },
+        select: { id: true },
+      })
+      if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
+    }
+
     const shouldRescore = ["email", "phone", "company", "status", "source", "value", "notes"].some((key) => body[key] !== undefined)
     const nextScore = shouldRescore
       ? scoreLeadFit({
@@ -78,7 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(body.source !== undefined ? { source: body.source } : {}),
         ...(body.value !== undefined ? { value: body.value === null ? null : Number(body.value) } : {}),
         ...(body.notes !== undefined ? { notes: body.notes } : {}),
-        ...(body.campaignId !== undefined ? { campaignId: body.campaignId } : {}),
+        ...(body.campaignId !== undefined ? { campaignId: body.campaignId || null } : {}),
         ...(nextScore ? { aiScore: nextScore.score, aiInsights: nextScore.reasoning, lastActivity: new Date() } : {}),
       },
     })
