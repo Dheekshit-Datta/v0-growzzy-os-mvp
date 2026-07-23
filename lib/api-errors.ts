@@ -57,7 +57,7 @@ export function handleApiError(error: unknown) {
   }
 
   if (error instanceof Error) {
-    console.error("[v0] Unhandled error:", error)
+    log("error", "api", "Unhandled API error", { message: error.message })
     return {
       statusCode: 500,
       error: {
@@ -75,3 +75,4 @@ export function handleApiError(error: unknown) {
     },
   }
 }
+import { log } from "@/lib/logger"

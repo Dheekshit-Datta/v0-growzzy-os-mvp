@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { resolveUserId } from '@/lib/resolve-user'
 import { isAllowedProfileImage } from '@/lib/profile-avatars'
 import { requestPassesSameOrigin } from '@/lib/request-origin'
+import { log } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export async function GET() {
     })
     return NextResponse.json({ user })
   } catch (err) {
-    console.error('[api/auth/me] fatal error:', err)
+    log('error', 'auth/me', 'Failed to load current user', { message: err instanceof Error ? err.message : 'Unknown error' })
     return NextResponse.json({ user: null }, { status: 500 })
   }
 }

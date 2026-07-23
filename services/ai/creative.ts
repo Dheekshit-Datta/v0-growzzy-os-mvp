@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
+import { log } from '@/lib/logger'
 
 let _openai: OpenAI | null = null
 const openai = new Proxy({} as OpenAI, {
@@ -58,7 +59,7 @@ export const CreativeAIService = {
       })
       return response.data?.[0]?.url || null
     } catch (err) {
-      console.error("DALL-E Generation failed:", err)
+      log("error", "ai/creative-image", "Image generation failed", { message: err instanceof Error ? err.message : "Unknown error" })
       return null
     }
   },
@@ -88,7 +89,7 @@ export const CreativeAIService = {
         }
       })
     } catch (err) {
-      console.error("Creative save failed:", err)
+      log("error", "ai/creative-save", "Creative persistence failed", { message: err instanceof Error ? err.message : "Unknown error" })
       throw err
     }
   }

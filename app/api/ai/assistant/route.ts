@@ -7,6 +7,7 @@ import { getRequestWorkspaceId, workspaceWhere } from "@/lib/workspace"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { log } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
       context_used: true,
     })
   } catch (error: any) {
-    console.error("AI Assistant Error:", error)
+    log("error", "ai/assistant", "AI assistant failed", { message: error?.message || "Unknown error" })
 
     const msg = error?.message || ""
     let userMessage = "I encountered an unexpected error. Please try again in a moment."

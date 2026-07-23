@@ -1,5 +1,6 @@
 
 import OpenAI from "openai"
+import { log } from "@/lib/logger"
 
 let _openai: OpenAI | null = null
 const openai = new Proxy({} as OpenAI, {
@@ -83,14 +84,14 @@ Make each DIFFERENT, not just word swaps.`
         const parsed = JSON.parse(content)
         return parsed.creatives || []
       } catch {
-        console.error("[v0] Failed to parse creatives JSON")
+        log("error", "ai/creative", "Failed to parse creative response")
         return []
       }
     }
 
     return []
   } catch (error) {
-    console.error("[v0] Creative generation error:", error)
+    log("error", "ai/creative", "Creative generation failed", { message: error instanceof Error ? error.message : "Unknown error" })
     return []
   }
 }

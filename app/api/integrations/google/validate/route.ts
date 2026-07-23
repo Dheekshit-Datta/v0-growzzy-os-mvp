@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth"
 import { detectGoogleAdsAccounts, persistIntegration } from "@/lib/ads-detection"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getIntegrationAccessToken, getIntegrationRefreshToken } from "@/lib/integration-tokens"
+import { log } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
@@ -129,11 +130,9 @@ export async function POST(req: NextRequest) {
       autoSelected: false,
     })
   } catch (error: any) {
-    console.error("[Google Validate Error]", {
+    log("error", "google/validate", "Google integration validation failed", {
       message: error?.message,
       code: error?.code,
-      meta: error?.meta,
-      stack: error?.stack,
     })
 
     const isLikelyMigrationIssue =

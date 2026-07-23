@@ -7,6 +7,7 @@ import { ComprehensiveReportBuilder } from "@/lib/comprehensive-report-builder";
 import type { ReportMetrics } from "@/lib/report-metrics";
 import type { AIReportInsights } from "@/lib/report-insights";
 import type { ActionPlan } from "@/lib/report-action-plan";
+import { log } from "@/lib/logger";
 
 export async function GET(
   req: NextRequest,
@@ -35,8 +36,6 @@ export async function GET(
       return NextResponse.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Report not found' } }, { status: 404 });
     }
 
-    console.log("[Download] Generating PDF for report:", id);
-
     // Parse stored data
     // In our implementation, we store these as Json in Prisma, so they might already be parsed or need double checking
     const metrics = (report.metrics as unknown) as ReportMetrics;
@@ -61,8 +60,6 @@ export async function GET(
     pdfBuilder.build();
     const pdfBuffer = pdfBuilder.getBuffer();
 
-    console.log("[Download] PDF generated successfully");
-
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -70,7 +67,7 @@ export async function GET(
       },
     });
   } catch (error: any) {
-    console.error("[Download] Error:", error);
+    log("error", "reports/download", "PDF generation failed", { message: error?.message || "Unknown error" });
     return NextResponse.json(
       { ok: false, error: { code: 'INTERNAL', message: "Failed to generate PDF. Please ensure the report data is complete." } },
       { status: 500 }

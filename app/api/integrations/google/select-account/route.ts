@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth"
 import { persistEncryptedGoogleTokenBinding } from "@/lib/google-token-store"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getIntegrationRefreshToken } from "@/lib/integration-tokens"
+import { log } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,11 +75,9 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("[Google Select Account Error]", {
+    log("error", "google/select-account", "Google account selection failed", {
       message: error?.message,
       code: error?.code,
-      meta: error?.meta,
-      stack: error?.stack,
     })
 
     const isLikelyMigrationIssue =

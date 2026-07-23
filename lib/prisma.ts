@@ -26,7 +26,7 @@ if (process.env.DIRECT_URL) {
 
 const prismaClientSingleton = () => {
   if (!process.env.DATABASE_URL) {
-    console.error("[prisma] CRITICAL: DATABASE_URL is not set.")
+    console.error("[prisma] CRITICAL: database configuration is missing.")
   }
   return new PrismaClient({
     datasources: { db: { url: process.env.DATABASE_URL } },
@@ -55,7 +55,7 @@ export async function logSchemaHealthOnce() {
       console.warn("[schema-health] Lead.adAccountId column missing. Run prisma migrate deploy.")
     }
   } catch (error: any) {
-    console.warn("[schema-health] Unable to verify schema health:", error?.message || "unknown error")
+    console.warn("[schema-health] Unable to verify schema health.")
   }
 }
 

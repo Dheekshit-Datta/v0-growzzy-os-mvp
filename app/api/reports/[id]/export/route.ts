@@ -5,6 +5,7 @@ import { resolveUserId } from '@/lib/resolve-user'
 import { getRequestWorkspaceId, workspaceWhere } from '@/lib/workspace'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { log } from '@/lib/logger'
 
 export async function GET(
     request: NextRequest,
@@ -91,7 +92,7 @@ export async function GET(
         })
 
     } catch (error: any) {
-        console.error('[PDF Export] Error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        log('error', 'reports/export', 'PDF export failed', { message: error?.message || 'Unknown error' })
+        return NextResponse.json({ error: 'Failed to export report' }, { status: 500 })
     }
 }

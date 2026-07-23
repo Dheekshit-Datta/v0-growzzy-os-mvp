@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     const expiresAt = new Date(Date.now() + (expires_in ?? 3600) * 1000)
     const detection = await detectGoogleAdsAccounts(access_token)
     if (detection.usedAuthorizationFallback) {
-      console.warn("[Google OAuth Callback] Using authorization fallback root account discovery")
+      log("warn", "google/oauth/callback", "Using authorization fallback root account discovery")
     }
 
     await persistIntegration({
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
 
       if (primaryAccount) {
         if (detection.usedAuthorizationFallback) {
-          console.warn("[Google OAuth Callback] Auto-sync skipped due to authorization fallback", {
+          log("warn", "google/oauth/callback", "Auto-sync skipped due to authorization fallback", {
             userId,
             accountId: primaryAccount.externalId,
           })

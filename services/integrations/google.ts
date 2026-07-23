@@ -153,7 +153,7 @@ function getGoogleClientSecret(): string {
 
   const legacySecret = (process.env.GOOGLE_ADS_CLIENT_SECRET || "").trim()
   if (legacySecret) {
-    console.warn("[Google OAuth] GOOGLE_CLIENT_SECRET missing; using GOOGLE_ADS_CLIENT_SECRET fallback")
+    log("warn", "google/oauth", "Using legacy Google client-secret environment variable")
     return legacySecret
   }
 
@@ -255,9 +255,7 @@ async function requestWithVersionFallback<T>({
         loginCustomerId,
         apiVersion: fallbackVersion,
       })
-      console.warn(
-        `[Google Ads] ${path} succeeded with fallback API version ${fallbackVersion} after 404 on ${primaryVersion}`
-      )
+      log("warn", "google/ads", "Request used fallback API version", { path, fallbackVersion, primaryVersion })
       return payload
     } catch (error) {
       if (!(error instanceof GoogleAdsApiError) || error.status !== 404) {
@@ -317,7 +315,7 @@ async function requestWithRetry<T>({
 
     const { summary, errorCode } = getGoogleAdsErrorSummary(payload)
     const normalizedLoginCustomerId = loginCustomerId ? normalizeCustomerId(loginCustomerId) : null
-    console.error("[Google Ads API Request Failed]", {
+    log("error", "google/ads", "Google Ads API request failed", {
       path,
       apiVersion,
       status: response.status,
@@ -574,7 +572,10 @@ export const GoogleAdsService = {
         await walkHierarchy(rootCustomerId)
       } catch (rootError) {
         if (isAuthorizationDiscoveryError(rootError)) {
-          console.warn(`[Google Ads Discovery] Authorization-limited root traversal for ${rootCustomerId}:`, rootError)
+          log("warn", "google/discovery", "Authorization-limited root traversal", {
+            rootCustomerId,
+            message: rootError instanceof Error ? rootError.message : "Unknown error",
+          })
           usedAuthorizationFallback = true
           actionableAccounts.set(rootCustomerId, {
             externalId: rootCustomerId,
@@ -587,13 +588,16 @@ export const GoogleAdsService = {
           })
           continue
         }
-        console.warn(`[Google Ads Discovery] Failed root traversal for ${rootCustomerId}:`, rootError)
+        log("warn", "google/discovery", "Root traversal failed", {
+          rootCustomerId,
+          message: rootError instanceof Error ? rootError.message : "Unknown error",
+        })
         traversalErrors.push({ customerId: rootCustomerId, error: rootError })
       }
     }
 
     if (usedAuthorizationFallback) {
-      console.warn("[Google Ads Discovery] Authorization fallback enabled for one or more roots", {
+      log("warn", "google/discovery", "Authorization fallback enabled for one or more roots", {
         roots: rootCustomerIds,
       })
     }

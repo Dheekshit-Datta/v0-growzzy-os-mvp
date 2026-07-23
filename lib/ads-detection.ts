@@ -3,6 +3,7 @@ import { persistEncryptedGoogleTokenBinding } from "@/lib/google-token-store"
 import { GoogleAdsApiError, GoogleAdsService } from "@/services/integrations/google"
 import { MetaAdsService, MetaApiError } from "@/services/integrations/meta"
 import { encryptedIntegrationTokens } from "@/lib/integration-tokens"
+import { log } from "@/lib/logger"
 
 export type AdAccountInfo = {
   externalId: string
@@ -58,7 +59,7 @@ export async function detectGoogleAdsAccounts(accessToken: string): Promise<Goog
     }
   } catch (error) {
     if (error instanceof GoogleAdsApiError) {
-      console.warn("[Google Ads Detection] Discovery warning:", error)
+      log("warn", "google/detection", "Google Ads discovery failed", { message: error.message, code: error.errorCode })
       return {
         hasAdsAccess: false,
         accounts: [] as AdAccountInfo[],
@@ -68,7 +69,9 @@ export async function detectGoogleAdsAccounts(accessToken: string): Promise<Goog
       }
     }
 
-    console.error("[Google Ads Detection] Unexpected error:", error)
+    log("error", "google/detection", "Unexpected Google Ads discovery failure", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    })
     return {
       hasAdsAccess: false,
       accounts: [] as AdAccountInfo[],
@@ -112,7 +115,7 @@ export async function detectMetaAdsAccounts(accessToken: string): Promise<MetaAd
     }
   } catch (err) {
     if (err instanceof MetaApiError) {
-      console.warn("[Meta Ads Detection] API warning:", err)
+      log("warn", "meta/detection", "Meta Ads discovery failed", { message: err.message })
       return {
         hasAdsAccess: false,
         accounts: [] as AdAccountInfo[],
@@ -121,7 +124,9 @@ export async function detectMetaAdsAccounts(accessToken: string): Promise<MetaAd
         errorMessage: err.message,
       }
     }
-    console.error("[Meta Ads Detection] Unexpected error:", err)
+    log("error", "meta/detection", "Unexpected Meta Ads discovery failure", {
+      message: err instanceof Error ? err.message : "Unknown error",
+    })
     return {
       hasAdsAccess: false,
       accounts: [] as AdAccountInfo[],
