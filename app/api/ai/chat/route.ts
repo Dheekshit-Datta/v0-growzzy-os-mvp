@@ -6,6 +6,7 @@ import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import OpenAI from "openai"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -101,7 +102,7 @@ INSTRUCTIONS:
 - Format currency as USD, show ROAS as Xx format`
 
   const stream = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: UTILITY_MODEL,
     stream: true,
     temperature: 0.4,
     messages: [

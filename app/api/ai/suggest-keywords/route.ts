@@ -3,6 +3,7 @@ import OpenAI from "openai"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = `You are a Google Ads keyword strategist. For a campaign about '${theme || "the ad group"}' with goal '${goal || "conversions"}', suggest 15 high-intent keywords. Return ONLY a JSON array: [{ "keyword": string, "matchType": "BROAD"|"PHRASE"|"EXACT", "intent": "high"|"medium", "monthlySearches": "estimated range" }]`
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: UTILITY_MODEL,
     temperature: 0.35,
     messages: [{ role: "user", content: prompt }],
   })

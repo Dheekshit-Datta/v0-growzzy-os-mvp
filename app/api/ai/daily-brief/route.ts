@@ -9,6 +9,7 @@ import { recordActivity } from "@/lib/activity-log"
 import { log } from "@/lib/logger"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -58,7 +59,7 @@ async function maybePolishSummary(brief: ReturnType<typeof buildDailyBriefFromCa
 
   try {
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_AUDIT_MODEL || "gpt-4o",
+      model: UTILITY_MODEL,
       temperature: 0.2,
       messages: [
         {

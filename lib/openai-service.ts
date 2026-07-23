@@ -1,5 +1,6 @@
 import OpenAI from "openai"
-import { prisma } from "@/lib/prisma"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
+import { log } from "@/lib/logger"
 
 let _openai: OpenAI | null = null
 const openai = new Proxy({} as OpenAI, {
@@ -49,7 +50,15 @@ async function logOpenAIRequest(params: {
     durationMs?: number
     error?: string
 }) {
-    void params
+    log(params.status === "error" ? "error" : "info", "ai/usage", "AI utility completed", {
+        operation: params.type,
+        model: params.model,
+        tokens: params.tokens || 0,
+        durationMs: params.durationMs || 0,
+        cacheHit: false,
+        userId: params.userId,
+        ...(params.error ? { error: params.error } : {}),
+    })
 }
 
 // â”€â”€â”€ Key Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -159,7 +168,7 @@ ${isReport ? 'IMPORTANT: Return your response in a well-structured markdown form
         try {
             const response = await withRetry(() =>
                 openai.chat.completions.create({
-                    model: "gpt-4o",
+                    model: UTILITY_MODEL,
                     messages: [systemMessage, ...messages] as any,
                     tools: TOOLS,
                     tool_choice: "auto",
@@ -175,7 +184,7 @@ ${isReport ? 'IMPORTANT: Return your response in a well-structured markdown form
                 await logOpenAIRequest({
                     userId,
                     type: 'chat',
-                    model: 'gpt-4o',
+                    model: UTILITY_MODEL,
                     prompt: promptText,
                     response: content,
                     status: 'success',
@@ -190,14 +199,14 @@ ${isReport ? 'IMPORTANT: Return your response in a well-structured markdown form
                 await logOpenAIRequest({
                     userId,
                     type: 'chat',
-                    model: 'gpt-4o',
+                    model: UTILITY_MODEL,
                     prompt: promptText,
                     status: 'error',
                     error: error.message,
                     durationMs: Date.now() - start,
                 })
             }
-            console.error("[OPENAI_CHAT_ERROR]", error)
+            log("error", "ai/chat", "OpenAI chat failed", { message: error?.message || "Unknown error" })
             throw new Error(`AI Engine Error: ${error.message}`)
         }
     }
@@ -240,7 +249,7 @@ Provide insights in this JSON format:
         try {
             const response = await withRetry(() =>
                 openai.chat.completions.create({
-                    model: "gpt-4o",
+                    model: UTILITY_MODEL,
                     messages: [{ role: "user", content: prompt }],
                     response_format: { type: "json_object" },
                     temperature: 0.3,
@@ -251,7 +260,7 @@ Provide insights in this JSON format:
 
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'chat', model: 'gpt-4o',
+                    userId, type: 'insights', model: UTILITY_MODEL,
                     prompt, response: content || '',
                     status: 'success',
                     tokens: response.usage?.total_tokens,
@@ -263,12 +272,12 @@ Provide insights in this JSON format:
         } catch (error: any) {
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'chat', model: 'gpt-4o',
+                    userId, type: 'insights', model: UTILITY_MODEL,
                     prompt, status: 'error', error: error.message,
                     durationMs: Date.now() - start,
                 })
             }
-            console.error("[OPENAI_INSIGHTS_ERROR]", error)
+            log("error", "ai/insights", "OpenAI insights failed", { message: error?.message || "Unknown error" })
             return { insights: [] }
         }
     }
@@ -332,7 +341,7 @@ Return JSON format:
         try {
             const response = await withRetry(() =>
                 openai.chat.completions.create({
-                    model: "gpt-4o",
+                    model: process.env.OPENAI_CREATIVE_MODEL || "gpt-4o",
                     messages: [
                         { role: "system", content: "You are a senior ad specialist. Always respect character limits. Output valid JSON only." },
                         { role: "user", content: prompt }
@@ -346,7 +355,7 @@ Return JSON format:
 
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'creative-prod', model: 'gpt-4o',
+                    userId, type: 'creative-prod', model: process.env.OPENAI_CREATIVE_MODEL || "gpt-4o",
                     prompt, response: content || '',
                     status: 'success',
                     tokens: response.usage?.total_tokens,
@@ -360,12 +369,12 @@ Return JSON format:
         } catch (error: any) {
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'creative-prod', model: 'gpt-4o',
+                    userId, type: 'creative-prod', model: process.env.OPENAI_CREATIVE_MODEL || "gpt-4o",
                     prompt, status: 'error', error: error.message,
                     durationMs: Date.now() - start,
                 })
             }
-            console.error("[OPENAI_PROD_CREATIVE_ERROR]", error)
+            log("error", "ai/creative", "OpenAI creative generation failed", { message: error?.message || "Unknown error" })
             throw error
         }
     }
@@ -400,7 +409,7 @@ Keep it professional, data-driven, and actionable.`
         try {
             const response = await withRetry(() =>
                 openai.chat.completions.create({
-                    model: "gpt-4o",
+                    model: UTILITY_MODEL,
                     messages: [{ role: "user", content: prompt }],
                     temperature: 0.5,
                 })
@@ -410,7 +419,7 @@ Keep it professional, data-driven, and actionable.`
 
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'report', model: 'gpt-4o',
+                    userId, type: 'report', model: UTILITY_MODEL,
                     prompt, response: content,
                     status: 'success',
                     tokens: response.usage?.total_tokens,
@@ -422,12 +431,12 @@ Keep it professional, data-driven, and actionable.`
         } catch (error: any) {
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'report', model: 'gpt-4o',
+                    userId, type: 'report', model: UTILITY_MODEL,
                     prompt, status: 'error', error: error.message,
                     durationMs: Date.now() - start,
                 })
             }
-            console.error("[OPENAI_REPORT_ERROR]", error)
+            log("error", "ai/report", "OpenAI report summary failed", { message: error?.message || "Unknown error" })
             return "Report summary unavailable."
         }
     }
@@ -463,7 +472,7 @@ Return JSON: { "score": 85, "reasoning": "Why this score" }`
         try {
             const response = await withRetry(() =>
                 openai.chat.completions.create({
-                    model: "gpt-4o-mini",
+                    model: UTILITY_MODEL,
                     messages: [{ role: "user", content: prompt }],
                     response_format: { type: "json_object" },
                     temperature: 0.3,
@@ -474,7 +483,7 @@ Return JSON: { "score": 85, "reasoning": "Why this score" }`
 
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'lead-score', model: 'gpt-4o-mini',
+                    userId, type: 'lead-score', model: UTILITY_MODEL,
                     prompt, response: content || '',
                     status: 'success',
                     tokens: response.usage?.total_tokens,
@@ -487,12 +496,12 @@ Return JSON: { "score": 85, "reasoning": "Why this score" }`
         } catch (error: any) {
             if (userId) {
                 await logOpenAIRequest({
-                    userId, type: 'lead-score', model: 'gpt-4o-mini',
+                    userId, type: 'lead-score', model: UTILITY_MODEL,
                     prompt, status: 'error', error: error.message,
                     durationMs: Date.now() - start,
                 })
             }
-            console.error("[OPENAI_LEAD_SCORE_ERROR]", error)
+            log("error", "ai/lead-score", "OpenAI lead scoring failed", { message: error?.message || "Unknown error" })
             return { score: 50, reasoning: "Auto-assigned default score" }
         }
     }

@@ -4,6 +4,7 @@ import { log } from "@/lib/logger"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 const CACHE_TTL_SECONDS = 24 * 60 * 60
+export const UTILITY_MODEL = process.env.OPENAI_UTILITY_MODEL || "gpt-5-mini"
 
 type UtilityCall = {
   route: string
@@ -36,7 +37,7 @@ async function redis(command: string[]) {
 
 export async function cachedUtilityCompletion(call: UtilityCall) {
   const startedAt = Date.now()
-  const model = process.env.OPENAI_UTILITY_MODEL || "gpt-5-mini"
+  const model = UTILITY_MODEL
   const key = utilityCacheKey(call.operation, call.workspaceId, call.input)
 
   try {

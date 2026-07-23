@@ -1,4 +1,5 @@
 import OpenAI from "openai"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 export type PolicyFlag = {
   text: string
@@ -95,7 +96,7 @@ export async function runAiPolicyReview(adGroups: PlanAdGroupText[]): Promise<Po
     .join("\n\n")
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: UTILITY_MODEL,
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [

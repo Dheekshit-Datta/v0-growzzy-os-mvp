@@ -1,4 +1,6 @@
 import { getOpenAI } from "@/lib/openai";
+import { UTILITY_MODEL } from "@/lib/ai-utility";
+import { log } from "@/lib/logger";
 import type { ReportMetrics } from "./report-metrics";
 
 export interface ReportRecommendation {
@@ -15,8 +17,6 @@ export interface AIReportInsights {
 }
 
 export async function generateAIInsights(metrics: ReportMetrics): Promise<AIReportInsights> {
-  console.log("[v0] Generating AI insights using OpenAI GPT-4 Turbo");
-
   const topCampaignsText = metrics.topCampaigns
     .slice(0, 10)
     .map((c, i) => `${i + 1}. ${c.name}: ROAS ${c.roas.toFixed(2)}x, Spend $${c.spend.toFixed(2)}`)
@@ -100,13 +100,11 @@ Return ONLY this JSON object, no markdown, no additional text:
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-4-turbo",
+      model: UTILITY_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 3000,
       temperature: 0.3,
     });
-
-    console.log("[v0] OpenAI response received, parsing JSON");
 
     // Extract JSON from response
     const responseText = response.choices[0]?.message?.content || "";
@@ -117,7 +115,7 @@ Return ONLY this JSON object, no markdown, no additional text:
 
     const insights = JSON.parse(jsonMatch[0]) as AIReportInsights;
 
-    console.log("[v0] AI insights generated:", {
+    log("info", "report/insights", "AI insights generated", {
       wins: insights.wins.length,
       concerns: insights.concerns.length,
       recommendations: insights.recommendations.length,
@@ -125,7 +123,7 @@ Return ONLY this JSON object, no markdown, no additional text:
 
     return insights;
   } catch (error) {
-    console.error("[v0] OpenAI API error:", error);
+    log("error", "report/insights", "AI insights failed", { message: error instanceof Error ? error.message : "Unknown error" });
     throw error;
   }
 }

@@ -15,6 +15,7 @@ import { enrichRecommendation } from "@/lib/daily-brief"
 import { recordActivity } from "@/lib/activity-log"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -150,7 +151,7 @@ Return ONLY valid JSON in this exact format:
   ]
 }`
       const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_AUDIT_MODEL || "gpt-4o",
+        model: UTILITY_MODEL,
         temperature: 0.3,
         response_format: { type: "json_object" },
         messages: [{ role: "user", content: auditPrompt }],

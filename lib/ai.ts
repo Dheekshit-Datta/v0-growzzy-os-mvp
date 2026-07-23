@@ -1,4 +1,5 @@
 import OpenAI from "openai"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 let _openai: OpenAI | null = null
 const openai = new Proxy({} as OpenAI, {
@@ -19,7 +20,7 @@ export async function generateAIResponse(messages: AIMessage[]): Promise<string>
   }
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: UTILITY_MODEL,
     messages: messages.map((m) => ({
       role: m.role as "user" | "assistant" | "system",
       content: m.content,

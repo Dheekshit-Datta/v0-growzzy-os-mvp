@@ -8,6 +8,7 @@ import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { logSlowApi } from "@/lib/api-timing"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -60,7 +61,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
     if (process.env.OPENAI_API_KEY) {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: UTILITY_MODEL,
         temperature: 0.25,
         response_format: { type: "json_object" },
         messages: [

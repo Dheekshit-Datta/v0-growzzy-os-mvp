@@ -1,6 +1,7 @@
 import fs from "fs"
 import path from "path"
 import OpenAI from "openai"
+import { UTILITY_MODEL } from "@/lib/ai-utility"
 import { prisma } from "@/lib/prisma"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 
@@ -218,7 +219,7 @@ async function generateNarrative(data: Record<string, unknown>, type: ReportType
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: UTILITY_MODEL,
       response_format: { type: "json_object" },
       temperature: 0.3,
       messages: [

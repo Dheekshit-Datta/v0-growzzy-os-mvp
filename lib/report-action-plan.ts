@@ -1,4 +1,6 @@
 import { getOpenAI } from "@/lib/openai";
+import { UTILITY_MODEL } from "@/lib/ai-utility";
+import { log } from "@/lib/logger";
 import type { ReportMetrics } from "./report-metrics";
 import type { AIReportInsights } from "./report-insights";
 
@@ -18,8 +20,6 @@ export async function generateActionPlan(
   metrics: ReportMetrics,
   insights: AIReportInsights
 ): Promise<ActionPlan> {
-  console.log("[v0] Generating action plan using OpenAI GPT-4 Turbo");
-
   const recommendationsText = insights.recommendations
     .map((r, i) => `${i + 1}. ${r.title}: ${r.reasoning}`)
     .join("\n");
@@ -81,13 +81,11 @@ Return ONLY this JSON object, no markdown, no additional text:
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-4-turbo",
+      model: UTILITY_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 2000,
       temperature: 0.3,
     });
-
-    console.log("[v0] Action plan response received, parsing JSON");
 
     // Extract JSON from response
     const responseText = response.choices[0]?.message?.content || "";
@@ -98,11 +96,11 @@ Return ONLY this JSON object, no markdown, no additional text:
 
     const actionPlan = JSON.parse(jsonMatch[0]) as ActionPlan;
 
-    console.log("[v0] Action plan generated with", actionPlan.weeks.length, "weeks");
+    log("info", "report/action-plan", "AI action plan generated", { weeks: actionPlan.weeks.length });
 
     return actionPlan;
   } catch (error) {
-    console.error("[v0] Action plan generation error:", error);
+    log("error", "report/action-plan", "AI action plan failed", { message: error instanceof Error ? error.message : "Unknown error" });
     throw error;
   }
 }
