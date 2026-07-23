@@ -25,9 +25,11 @@ type ScrapeResult = {
   priceHints: string[]
 }
 
-function isPrivateAddress(address: string): boolean {
-  if (address === "::1" || address.startsWith("fe80:") || address.startsWith("fc") || address.startsWith("fd")) return true
-  const parts = address.split(".").map(Number)
+export function isPrivateAddress(address: string): boolean {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "")
+  if (normalized.startsWith("::ffff:")) return isPrivateAddress(normalized.slice(7))
+  if (normalized === "::" || normalized === "::1" || normalized.startsWith("fe80:") || normalized.startsWith("fc") || normalized.startsWith("fd")) return true
+  const parts = normalized.split(".").map(Number)
   if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false
   const [a, b] = parts
   if (a === 10 || a === 127 || a === 0) return true
@@ -37,14 +39,14 @@ function isPrivateAddress(address: string): boolean {
   return false
 }
 
-async function assertPublicHost(url: URL): Promise<void> {
+export async function assertPublicHost(url: URL, lookup = dns.lookup): Promise<void> {
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only http/https URLs are supported")
   const host = url.hostname.toLowerCase()
   if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) throw new Error("This host cannot be scraped")
   const looksLikeIp = /^[\d.]+$/.test(host) || host.includes(":")
   if (looksLikeIp && isPrivateAddress(host)) throw new Error("This host cannot be scraped")
   if (!looksLikeIp) {
-    const records = await dns.lookup(host, { all: true }).catch(() => [])
+    const records = await lookup(host, { all: true }).catch(() => [])
     if (records.length === 0) throw new Error("Could not resolve host")
     for (const record of records) {
       if (isPrivateAddress(record.address)) throw new Error("This host cannot be scraped")
@@ -52,15 +54,19 @@ async function assertPublicHost(url: URL): Promise<void> {
   }
 }
 
-async function fetchWithLimits(startUrl: string): Promise<{ finalUrl: string; html: string }> {
+export async function fetchWithLimits(
+  startUrl: string,
+  fetchImpl: typeof fetch = fetch,
+  lookup = dns.lookup
+): Promise<{ finalUrl: string; html: string }> {
   let currentUrl = startUrl
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const url = new URL(currentUrl)
-    await assertPublicHost(url)
+    await assertPublicHost(url, lookup)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(url.toString(), {
+      const response = await fetchImpl(url.toString(), {
         redirect: "manual",
         signal: controller.signal,
         headers: { "User-Agent": "GrowzzyBot/1.0 (+https://growzzyos.vercel.app)", Accept: "text/html" },
@@ -72,6 +78,8 @@ async function fetchWithLimits(startUrl: string): Promise<{ finalUrl: string; ht
         continue
       }
       if (!response.ok) throw new Error(`Site returned ${response.status}`)
+      const contentLength = Number(response.headers.get("content-length") || 0)
+      if (contentLength > MAX_BYTES) throw new Error("Site response is larger than 2 MB")
       const reader = response.body?.getReader()
       if (!reader) throw new Error("Empty response")
       const chunks: Uint8Array[] = []
@@ -80,6 +88,7 @@ async function fetchWithLimits(startUrl: string): Promise<{ finalUrl: string; ht
         const { done, value } = await reader.read()
         if (done) break
         received += value.length
+        if (received > MAX_BYTES) throw new Error("Site response is larger than 2 MB")
         chunks.push(value)
       }
       reader.cancel().catch(() => undefined)
