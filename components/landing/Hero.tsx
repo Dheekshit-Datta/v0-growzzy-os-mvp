@@ -2,11 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { ArrowUpRight, Play } from 'lucide-react'
-import { FadingVideo } from '@/components/landing/FadingVideo'
 import { BlurText } from '@/components/landing/BlurText'
-
-const VIDEO_SRC =
-  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4'
 
 const easeOut = [0.16, 1, 0.3, 1] as const
 
@@ -14,18 +10,10 @@ export function HeroSection() {
   return (
     <section
       id="home"
-      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[rgb(10,10,10)]"
+      className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[#a9e7dd]"
     >
-      {/* Background video */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        <div className="hero-zoom-out h-full w-full">
-          <FadingVideo
-            src={VIDEO_SRC}
-            className="absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2 object-cover object-center"
-            style={{ width: '100%', height: '100%' }}
-          />
-        </div>
-      </div>
+      <div className="absolute inset-0 z-0 hero-mint-bg" />
+      <div className="absolute inset-0 z-0 bg-black/25" />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center px-4 pt-24 text-center">

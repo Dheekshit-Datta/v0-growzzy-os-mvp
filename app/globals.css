@@ -428,6 +428,14 @@
   font-family: var(--font-body);
 }
 
+.hero-mint-bg {
+  background:
+    radial-gradient(circle at 40% 0%, rgba(255, 254, 233, 0.95) 0 12%, rgba(255, 254, 233, 0) 32%),
+    radial-gradient(ellipse at 115% 72%, rgba(255, 252, 235, 0.95) 0 20%, rgba(255, 252, 235, 0) 38%),
+    radial-gradient(ellipse at 55% 61%, rgba(246, 255, 240, 0.88) 0 15%, rgba(246, 255, 240, 0) 32%),
+    linear-gradient(168deg, rgba(143, 226, 214, 0.94) 0 40%, rgba(172, 236, 226, 0.96) 41% 100%);
+}
+
 /* Dark surfaces (hero only) */
 .liquid-glass-dark {
   background: rgba(255, 255, 255, 0.01);
@@ -506,17 +514,4 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   position: relative;
   overflow: hidden;
-}
-
-/* Cinematic slow zoom-out on the hero video */
-@keyframes hero-zoom-out {
-  0% {
-    transform: scale(1.15);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.hero-zoom-out {
-  animation: hero-zoom-out 20s ease-out forwards;
 }
