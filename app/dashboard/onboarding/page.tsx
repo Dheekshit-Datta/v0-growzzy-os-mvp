@@ -44,17 +44,20 @@ export default function OnboardingPage() {
     Promise.all([
       fetch("/api/auth/me", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
       fetch("/api/integrations/status", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
-    ]).then(([profile, integrations]) => {
+      fetch("/api/onboarding", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+    ]).then(([profile, integrations, onboarding]) => {
       const user = profile?.user
       const key = user?.email ? `growzzy_onboarding_${user.email}` : "growzzy_onboarding"
       setStorageKey(key)
       let restored: OnboardingState | null = null
       try { restored = JSON.parse(localStorage.getItem(key) || "null") } catch {}
       const google = integrations?.google
+      const serverStep = Number(onboarding?.onboardingStep || 0)
+      const currentStep: Step = google?.connected || serverStep >= 2 ? 3 : 2
       setState((current) => ({
         ...current,
         ...(restored || {}),
-        currentStep: google?.connected ? 3 : (restored?.currentStep || 2),
+        currentStep,
         identity: { name: user?.name || user?.email || current.identity.name, email: user?.email || "" },
         workspace: { ...current.workspace, ...(restored?.workspace || {}) },
         google: { connected: Boolean(google?.connected), accountId: google?.selectedAdAccountId || google?.accountId || "" },
@@ -106,6 +109,7 @@ export default function OnboardingPage() {
         <div className="mb-8 text-center">
           <div className="mb-3 flex items-center justify-center gap-2"><Image src="/growzzy-logo.png" alt="Growzzy" width={32} height={32} /><p className="text-[20px] font-bold text-[#111827]">Growzzy OS</p></div>
           <p className="text-[13px] text-[#6B7280]">Tell Growzzy enough to make its first campaign feel like yours.</p>
+          <p className="mt-2 text-[11.5px] text-[#9CA3AF]">Leave anytime. Growzzy brings you back to the right step until your ad account is connected.</p>
         </div>
 
         <div className="space-y-3">
