@@ -336,6 +336,7 @@ export default function NewCampaignPage() {
       const json = await res.json()
       if (!res.ok || !json?.ok) throw new Error(json?.error?.message || json?.error || "Launch failed. Please review the plan and try again.")
       setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
+      window.dispatchEvent(new Event("growzzy:onboarding-progress-updated"))
       setTimeout(() => router.push("/dashboard/ads"), 1400)
     } catch (err: any) {
       setLaunchError(err?.message || "Launch failed.")

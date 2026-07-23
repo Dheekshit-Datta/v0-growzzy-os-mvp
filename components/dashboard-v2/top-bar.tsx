@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Bell, HelpCircle, Plus, X, Loader2 } from "lucide-react"
+import { Search, Bell, MessageSquare, Plus, X, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 interface TopBarProps {
@@ -153,13 +153,14 @@ export function TopBar({ title }: TopBarProps) {
           )}
         </div>
 
-        {/* Help */}
+        {/* Feedback */}
         <button
           onClick={() => window.dispatchEvent(new Event("growzzy:open-feedback"))}
           className="w-8 h-8 flex items-center justify-center rounded-[8px] text-[#9CA3AF] hover:text-[#374151] transition-colors sku-btn"
-          aria-label="Help"
+          aria-label="Feedback"
+          title="Feedback"
         >
-          <HelpCircle size={15} />
+          <MessageSquare size={15} />
         </button>
 
         {/* Notifications */}

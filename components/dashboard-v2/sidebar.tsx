@@ -58,15 +58,24 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [promptsExpanded, setPromptsExpanded] = useState(true)
-  const [progress, setProgress] = useState(0)
+  const [progress, setProgress] = useState<number | null>(null)
   const [workspaceName, setWorkspaceName] = useState("Growzzy Workspace")
   const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(null)
 
   useEffect(() => {
-    fetch("/api/onboarding-progress", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
-      .catch(() => {})
+    const loadProgress = () => {
+      fetch("/api/onboarding-progress", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
+        .catch(() => setProgress(null))
+    }
+    loadProgress()
+    window.addEventListener("growzzy:onboarding-progress-updated", loadProgress)
+    window.addEventListener("growzzy:workspace-updated", loadProgress)
+    return () => {
+      window.removeEventListener("growzzy:onboarding-progress-updated", loadProgress)
+      window.removeEventListener("growzzy:workspace-updated", loadProgress)
+    }
   }, [])
 
   useEffect(() => {
@@ -245,12 +254,12 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <div className="px-2 pt-1 pb-2">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11.5px] font-semibold text-[#374151]">Getting Started</span>
-              <span className="text-[11px] font-bold text-[#9CA3AF] tabular">{progress}%</span>
+              <span className="text-[11px] font-bold text-[#9CA3AF] tabular">{progress === null ? "..." : `${progress}%`}</span>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden bg-[#E5E7EB]">
               <div
                 className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${progress}%`, background: "#1F57F5" }}
+                style={{ width: `${progress ?? 0}%`, background: "#1F57F5" }}
               />
             </div>
           </div>

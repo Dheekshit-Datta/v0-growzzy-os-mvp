@@ -20,9 +20,33 @@ const instrumentSerif = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://growzzyos.vercel.app"),
   title: "GROWZZY OS - Unified AI-Powered Marketing Operations Platform",
   description:
     "Create, publish, monitor, and optimize Google Ads campaigns with an AI-assisted workflow and verified campaign data.",
+  openGraph: {
+    title: "Growzzy OS - AI ad campaigns that actually launch",
+    description:
+      "Create, publish, monitor, and optimize Google Ads campaigns with an AI-assisted workflow and verified campaign data.",
+    url: "/",
+    siteName: "Growzzy OS",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Growzzy OS" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Growzzy OS - AI ad campaigns that actually launch",
+    description:
+      "Create, publish, monitor, and optimize Google Ads campaigns with an AI-assisted workflow and verified campaign data.",
+    images: ["/og.png"],
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-light-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   generator: "v0.app",
 }
 
