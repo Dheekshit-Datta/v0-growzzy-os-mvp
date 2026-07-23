@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     where: { userId, workspaceId },
     include: { _count: { select: { campaigns: true } } },
     orderBy: { createdAt: "desc" },
+    take: 100,
   })
 
   return NextResponse.json({

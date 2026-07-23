@@ -39,8 +39,10 @@ export async function GET(req: Request) {
                       syncStatus: true,
                   },
                   orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+                  take: 100,
               },
           },
+          take: 20,
       })
 
       const campaignCountsByIntegrationId = new Map<string, number>()

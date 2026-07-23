@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
         },
       },
     },
+    take: 20,
   })
 
   const requestedAdAccountId = req.nextUrl.searchParams.get("adAccountId")
@@ -145,6 +146,7 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: [{ spend: "desc" }, { updatedAt: "desc" }],
+    take: 500,
   }) : []
 
   const spend = sum(campaigns, (campaign) => campaign.spend || campaign.totalSpend)

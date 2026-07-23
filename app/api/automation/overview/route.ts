@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
         take: 100,
       },
     },
+    take: 100,
   })
 
   const allLogs = rules.flatMap((rule) => rule.logs)

@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
           adAccountId: accountScope.adAccountId,
         },
         orderBy: { createdAt: "desc" },
+        take: 200,
       })
     } catch (error) {
       if (isMissingLeadAdAccountColumn(error)) return schemaMigrationRequiredResponse()

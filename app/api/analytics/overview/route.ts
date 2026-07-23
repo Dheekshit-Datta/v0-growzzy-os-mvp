@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     const integrations = await prisma.integration.findMany({
       where: { userId, ...workspaceFilter, hasAdsAccess: true, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] } },
       select: { platform: true, selectedAdAccountName: true, lastSyncAt: true, selectedAdAccountId: true, accountId: true },
+      take: 20,
     })
     const selectedAdAccountIds = integrations
       .map((i) => i.selectedAdAccountId || i.accountId)
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
           },
         },
         orderBy: { spend: "desc" },
+        take: 500,
       }),
       prisma.lead.count({
         where: {

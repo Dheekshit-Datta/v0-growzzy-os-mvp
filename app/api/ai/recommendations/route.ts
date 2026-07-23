@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     const campaignIds = [...new Set(suggestions.map((s) => s.campaignId).filter(Boolean))] as string[]
     const campaigns = campaignIds.length
-        ? await prisma.campaign.findMany({ where: { id: { in: campaignIds }, workspaceId }, select: { id: true, name: true } })
+        ? await prisma.campaign.findMany({ where: { id: { in: campaignIds }, workspaceId }, select: { id: true, name: true }, take: 20 })
         : []
     const campaignNameById = new Map(campaigns.map((c) => [c.id, c.name]))
 

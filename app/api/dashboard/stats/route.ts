@@ -96,8 +96,10 @@ export async function GET(request: NextRequest) {
           where: { workspaceId },
           select: { externalId: true, name: true, isPrimary: true },
           orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
+          take: 100,
         },
       },
+      take: 20,
     })
 
     const connectionStates: Record<PlatformKey, ConnectionState | null> = {
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
             platform: { in: connectedPlatforms as any },
           },
           orderBy: { spend: "desc" },
+          take: 500,
         })
       : []
     const campaigns = campaignsWithAccountFilter.length > 0
@@ -168,6 +171,7 @@ export async function GET(request: NextRequest) {
               platform: { in: connectedPlatforms as any },
             },
             orderBy: { spend: "desc" },
+            take: 500,
           })
         : []
 
@@ -202,6 +206,7 @@ export async function GET(request: NextRequest) {
               ctr: true,
               cpa: true,
             },
+            take: 20000,
           })
         : []
     const previousMetrics =
@@ -229,6 +234,7 @@ export async function GET(request: NextRequest) {
                 ctr: true,
                 cpa: true,
               },
+              take: 20000,
             })
           : []
 
@@ -254,6 +260,7 @@ export async function GET(request: NextRequest) {
               conversions: true,
             },
             orderBy: { metricDate: "asc" },
+            take: 20000,
           })
         : []
     const currentMetrics =
@@ -279,6 +286,7 @@ export async function GET(request: NextRequest) {
                 conversions: true,
               },
               orderBy: { metricDate: "asc" },
+              take: 20000,
             })
           : []
 

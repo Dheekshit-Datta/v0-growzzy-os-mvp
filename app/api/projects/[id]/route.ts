@@ -25,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     where: { projectId: result.project.id },
     select: { id: true, name: true, platform: true, status: true, spend: true, totalSpend: true, roas: true },
     orderBy: { createdAt: "desc" },
+    take: 500,
   })
 
   return NextResponse.json({ ok: true, project: result.project, campaigns })

@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         const integrations = await prisma.integration.findMany({
             where: { userId, workspaceId, status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] }, hasAdsAccess: true },
             select: { id: true, selectedAdAccountId: true, accountId: true },
+            take: 20,
         })
         const integrationIds = integrations.map((item) => item.id)
         const accountIds = integrations.map((item) => item.selectedAdAccountId || item.accountId).filter(Boolean) as string[]
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest) {
                 ...verifiedMetricCampaignWhere({ userId, workspaceId }),
                 integrationId: { in: integrationIds },
                 adAccountId: { in: accountIds },
-            }
+            },
+            take: 500,
         });
 
         // Aggregate by platform natively

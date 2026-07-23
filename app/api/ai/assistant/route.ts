@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     const integrations = scope ? await prisma.integration.findMany({
       where: { userId, ...workspaceFilter, id: scope.integrationId },
       select: { platform: true, selectedAdAccountName: true, lastSyncAt: true, selectedAdAccountId: true, accountId: true },
+      take: 1,
     }) : []
     const [campaigns, recentLeads] = scope ? await Promise.all([
       prisma.campaign.findMany({

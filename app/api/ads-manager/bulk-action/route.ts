@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
     include: {
       integration: { include: { adAccounts: true } },
     },
+    take: 50,
   })
 
   const results = []

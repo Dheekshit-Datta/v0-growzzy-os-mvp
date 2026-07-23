@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
                 ...(platformName ? { platform: platformName as any } : {}),
             },
             select: { id: true, selectedAdAccountId: true, accountId: true },
+            take: 20,
         })
         const selectedAdAccountIds = integrations.map((integration) => integration.selectedAdAccountId || integration.accountId).filter(Boolean) as string[]
         if (!integrations.length || !selectedAdAccountIds.length) {
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
                 _count: { select: { creatives: true, adGroups: true } },
             },
             orderBy: { createdAt: 'desc' },
+            take: 500,
         })
 
         return NextResponse.json({ ok: true, data: { campaigns } })

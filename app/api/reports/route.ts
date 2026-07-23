@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const reports = await prisma.report.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      take: 100,
     })
 
     return NextResponse.json({ ok: true, data: { reports } })

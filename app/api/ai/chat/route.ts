@@ -47,10 +47,12 @@ export async function POST(req: Request) {
     prisma.campaign.findMany({
       where: verifiedMetricCampaignWhere({ userId, workspaceId, adAccountId: scope.adAccountId }),
       orderBy: { spend: "desc" },
+      take: 100,
     }),
     prisma.integration.findMany({
       where: { userId, workspaceId, id: scope.integrationId },
       select: { platform: true, lastSyncAt: true },
+      take: 1,
     }),
   ]) : [[], []]
 

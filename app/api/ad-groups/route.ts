@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       },
       include: { _count: { select: { keywords: true, ads: true } } },
       orderBy: { createdAt: "desc" },
+      take: 500,
     })
     return NextResponse.json({ ok: true, adGroups })
   } catch (error: any) {

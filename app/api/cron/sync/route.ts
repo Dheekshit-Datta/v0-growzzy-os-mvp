@@ -63,6 +63,8 @@ export async function GET(req: Request) {
     include: {
       adAccounts: true,
     },
+    orderBy: { updatedAt: "asc" },
+    take: 500,
   })
 
   let synced = 0
@@ -151,6 +153,8 @@ export async function GET(req: Request) {
     include: {
       user: { select: { id: true, email: true, name: true } },
     },
+    orderBy: { updatedAt: "asc" },
+    take: 500,
   })
 
   for (const schedule of schedules) {

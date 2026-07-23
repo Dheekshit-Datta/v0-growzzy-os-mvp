@@ -45,6 +45,7 @@ export async function GET() {
       },
     },
     orderBy: { workspace: { createdAt: "asc" } },
+    take: 100,
   })
 
   return NextResponse.json({

@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
     prisma.campaign.findMany({
       where: verifiedMetricCampaignWhere({ userId, workspaceId, adAccountId: scope.adAccountId }),
       include: { metricsDaily: { orderBy: { metricDate: "desc" }, take: 14 } },
+      take: 500,
     }),
   ])
   const campaignMap = new Map(

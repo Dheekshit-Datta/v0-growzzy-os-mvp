@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
         hasCreative: true,
       },
       orderBy: { spend: "desc" },
+      take: 500,
     })
 
     if (!campaigns.length) {

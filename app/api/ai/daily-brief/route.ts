@@ -48,6 +48,7 @@ async function loadGoogleCampaigns(userId: string, workspaceId: string) {
       },
     },
     orderBy: { spend: "desc" },
+    take: 100,
   })
   return { campaigns, adAccountId: selectedAdAccountId }
 }

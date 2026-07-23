@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
         platform: { in: allowedPlatforms },
       },
       select: { id: true, platform: true, selectedAdAccountId: true, accountId: true },
+      take: 20,
     })
     const connectedPlatforms = [...new Set(integrations.map((integration) => integration.platform as AnalyticsPlatform))]
     const activePlatforms =
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
       },
       include: { campaign: { select: { platform: true } } },
       orderBy: { metricDate: "asc" },
+      take: 20000,
     })
 
     const byDate = new Map<string, { timestamp: string; spend: number; impressions: number; clicks: number; conversions: number; revenue: number }>()

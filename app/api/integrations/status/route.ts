@@ -28,8 +28,10 @@ export async function GET(req: NextRequest) {
           syncStatus: true,
           lastSyncedAt: true,
         },
+        take: 100,
       },
     },
+    take: 20,
   })
 
   const campaignCountsByIntegrationId = new Map<string, number>()

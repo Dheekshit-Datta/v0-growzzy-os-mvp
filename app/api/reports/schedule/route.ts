@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     const schedules = await prisma.scheduledReport.findMany({
       where: { userId, workspaceId },
       orderBy: { createdAt: "desc" },
+      take: 100,
     })
     return NextResponse.json({ ok: true, schedules })
   } catch (error: any) {
