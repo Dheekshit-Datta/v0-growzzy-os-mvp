@@ -26,6 +26,24 @@ const InputSchema = z.object({
   }).nullable().optional(),
 })
 
+function fallbackSummary(data: z.infer<typeof InputSchema>) {
+  const answers = data.answers
+  const site = data.siteData
+  const pieces = [
+    answers.businessName && `Business: ${answers.businessName}.`,
+    answers.websiteUrl && `Website: ${answers.websiteUrl}.`,
+    answers.productDescription && `Offer: ${answers.productDescription}.`,
+    answers.idealCustomer && `Ideal customer: ${answers.idealCustomer}.`,
+    answers.differentiator && `Differentiator: ${answers.differentiator}.`,
+    answers.marketingHistory && `Marketing history: ${answers.marketingHistory}.`,
+    answers.tone && `Preferred tone: ${answers.tone}.`,
+    answers.primaryGoal && `Primary goal: ${answers.primaryGoal}.`,
+    site?.title && `Website title: ${site.title}.`,
+    site?.description && `Website description: ${site.description}.`,
+  ].filter(Boolean)
+  return pieces.join(" ").slice(0, 1000)
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
@@ -35,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Invalid business answers" }, { status: 400 })
-  if (!process.env.OPENAI_API_KEY) return NextResponse.json({ ok: false, error: "AI summary is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
+  if (!process.env.OPENAI_API_KEY) return NextResponse.json({ ok: true, summary: fallbackSummary(parsed.data), fallback: true })
   const workspaceId = await getRequestWorkspaceId(userId, req)
 
   const prompt = `Write a factual 3-4 sentence business context summary for future advertising AI. Reconcile the owner's answers with website evidence. Prioritize what is sold, ideal customer and their need, differentiation, marketing history, tone, and goal. Never invent claims, audiences, prices, or results. Return plain text only.\n\nOwner answers:\n${JSON.stringify(parsed.data.answers)}\n\nWebsite evidence:\n${JSON.stringify(parsed.data.siteData || "Not available")}`
@@ -51,9 +69,9 @@ export async function POST(req: NextRequest) {
         messages: [{ role: "user", content: prompt }],
       })
     } catch {
-      if (attempt === 1) return NextResponse.json({ ok: false, error: "Couldn't summarize your business. Please try again." }, { status: 502 })
+      if (attempt === 1) return NextResponse.json({ ok: true, summary: fallbackSummary(parsed.data), fallback: true })
     }
   }
-  if (!summary) return NextResponse.json({ ok: false, error: "Couldn't summarize your business. Please add a little more detail." }, { status: 502 })
+  if (!summary) return NextResponse.json({ ok: true, summary: fallbackSummary(parsed.data), fallback: true })
   return NextResponse.json({ ok: true, summary: summary.slice(0, 1000) })
 }
