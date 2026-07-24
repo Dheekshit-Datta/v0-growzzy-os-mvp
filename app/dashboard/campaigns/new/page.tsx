@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
+import CampaignBuilderPage from "../builder/page"
 import {
   Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
@@ -52,6 +53,13 @@ const META_OBJECTIVES = [
   { value: "APP_PROMOTION", label: "App Promotion" },
 ]
 const META_ENABLED = process.env.NEXT_PUBLIC_ENABLE_META_ADS === "true"
+
+const TEMPLATES = [
+  { label: "Leads", goal: "LEADS", budget: 1, prompt: "Generate local leads for my service. Focus on people ready to book a consultation this week." },
+  { label: "Sales", goal: "SALES", budget: 1, prompt: "Drive sales for my online store. Focus on high-intent shoppers looking for this product now." },
+  { label: "Traffic", goal: "TRAFFIC", budget: 1, prompt: "Send qualified traffic to my website. Focus on people researching this category before buying." },
+  { label: "Local service", goal: "LEADS", budget: 1, prompt: "Get calls and form leads for my local service business from nearby customers." },
+]
 
 type Tab = "campaign" | "boolean" | "creatives" | "launch"
 
@@ -171,6 +179,7 @@ export default function NewCampaignPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorPlanId = searchParams.get("id") || searchParams.get("plan")
 
   useEffect(() => {
     const s = new Set<string>()
@@ -262,6 +271,8 @@ export default function NewCampaignPage() {
       setCampaignPlanId(json.campaignPlanId)
       setCampaignName(json.plan?.campaignName || "")
       setBuilt(true)
+      window.dispatchEvent(new Event("growzzy:prompt-history-updated"))
+      router.replace(`/dashboard/campaigns/new?id=${json.campaignPlanId}`)
     } catch (err: any) {
       setBuildError(err?.message || "Something went wrong building your plan.")
     } finally {
@@ -354,6 +365,8 @@ export default function NewCampaignPage() {
   ]
   const canLaunch = built && platformConnected && !!campaignPlanId
 
+  if (editorPlanId) return <CampaignBuilderPage />
+
   return (
     <Shell title="">
       <div className="flex h-full">
@@ -433,6 +446,23 @@ export default function NewCampaignPage() {
               </div>
 
               {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                {TEMPLATES.map((template) => (
+                  <button
+                    key={template.label}
+                    type="button"
+                    onClick={() => {
+                      setPrompt(template.prompt)
+                      setGoal(template.goal)
+                      setBudget(template.budget)
+                    }}
+                    className="sku-btn h-9 rounded-[8px] text-[12px] font-semibold text-[#374151]"
+                  >
+                    {template.label}
+                  </button>
+                ))}
+              </div>
 
               {/* Real budget/location/goal — required to build a plan */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
@@ -706,7 +736,7 @@ export default function NewCampaignPage() {
                 )}
                 {launched ? (
                   <div className="mt-5 p-4 rounded-[10px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-center">
-                    <p className="text-[13px] font-semibold text-[#2E9E5B] flex items-center justify-center gap-1.5"><Check size={14} /> Published to {platformName} (paused)</p>
+                    <p className="text-[13px] font-semibold text-[#2E9E5B] flex items-center justify-center gap-1.5"><Check size={14} /> Launched to {platformName} (paused)</p>
                     <p className="text-[11.5px] text-[#374151] mt-1">Redirecting to Ads Manager…</p>
                   </div>
                 ) : (
@@ -715,7 +745,7 @@ export default function NewCampaignPage() {
                     disabled={!canLaunch || launching}
                     className={cn("mt-5 flex items-center justify-center gap-2 h-11 w-full rounded-[10px] text-[14px] font-semibold transition-colors", canLaunch && !launching ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
-                    {launching ? (<><Loader2 size={16} className="animate-spin" />Publishing…</>) : (<><Rocket size={15} />Publish to {platformName}</>)}
+                    {launching ? (<><Loader2 size={16} className="animate-spin" />Launching…</>) : (<><Rocket size={15} />Launch {platformName} Campaign</>)}
                   </button>
                 )}
               </div>

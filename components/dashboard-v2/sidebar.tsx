@@ -61,6 +61,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const [progress, setProgress] = useState<number | null>(null)
   const [workspaceName, setWorkspaceName] = useState("Growzzy Workspace")
   const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(null)
+  const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>([])
 
   useEffect(() => {
     const loadProgress = () => {
@@ -88,6 +89,21 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     loadProfile()
     window.addEventListener("growzzy:profile-updated", loadProfile)
     return () => window.removeEventListener("growzzy:profile-updated", loadProfile)
+  }, [])
+
+  useEffect(() => {
+    const loadPrompts = () => {
+      fetch("/api/ai/campaign-plans", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          const items = Array.isArray(json?.plans) ? json.plans : []
+          setRecentPrompts(items.slice(0, 3).map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName })))
+        })
+        .catch(() => setRecentPrompts([]))
+    }
+    loadPrompts()
+    window.addEventListener("growzzy:prompt-history-updated", loadPrompts)
+    return () => window.removeEventListener("growzzy:prompt-history-updated", loadPrompts)
   }, [])
 
   useEffect(() => {
@@ -184,7 +200,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
 
         {CREATE_NAV.map((item) => {
-          if (item.href === "/prompts") {
+          if (item.href === "/dashboard/prompts") {
             const active = isActive(item.href)
             const Icon = item.icon
             return (
@@ -226,7 +242,22 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 </div>
                 {!collapsed && promptsExpanded && (
                   <div className="ml-7 mt-0.5">
-                    <p className="text-[11px] text-[#9CA3AF] px-2 py-1.5 italic">No saved prompts yet</p>
+                    {recentPrompts.length ? (
+                      <div className="space-y-0.5">
+                        {recentPrompts.map((prompt) => (
+                          <Link
+                            key={prompt.id}
+                            href={{ pathname: "/dashboard/campaigns/new", query: { reuse: prompt.id } }}
+                            className="block px-2 py-1.5 rounded-[8px] text-[11px] text-[#6B7280] hover:bg-white/60 hover:text-[#111827] truncate"
+                            title={prompt.campaignName}
+                          >
+                            {prompt.campaignName}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#9CA3AF] px-2 py-1.5 italic">No saved prompts yet</p>
+                    )}
                   </div>
                 )}
               </div>

@@ -19,7 +19,7 @@ const AdGroupSchema = z.object({
   keywords: z.array(KeywordSchema).min(1).max(25),
   negativeKeywords: z.array(z.string().max(80)).max(30).optional().default([]),
   headlines: z.array(z.string().min(1).max(30)).min(3).max(15),
-  descriptions: z.array(z.string().min(1).max(90)).min(1).max(4),
+  descriptions: z.array(z.string().min(1).max(90)).min(2).max(4),
   finalUrl: z.string().url().optional(),
 })
 

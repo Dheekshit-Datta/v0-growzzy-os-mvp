@@ -47,6 +47,14 @@ interface CampaignData {
   dailyBudget?: number
   currency?: string
   duration?: number
+  locations?: string[]
+  finalUrl?: string
+  rationale?: {
+    whyThisStructure?: string
+    whyTheseKeywords?: string
+    whyThisBidding?: string
+    expectedResultsRange?: string
+  }
 }
 
 function emptyAdGroup(name = 'New Ad Group'): AdGroupEdit {
@@ -57,6 +65,14 @@ function policyCheckText(text: string) {
   if (/[A-Z]{5,}/.test(text)) return { status: 'WARN' as const, message: 'Excessive capitalization detected' }
   if (/[!]{2,}/.test(text)) return { status: 'FAIL' as const, message: 'Multiple exclamation marks not allowed' }
   return null
+}
+
+function displayHost(url?: string) {
+  try {
+    return url ? new URL(url).hostname : 'www.yoursite.com'
+  } catch {
+    return 'www.yoursite.com'
+  }
 }
 
 export default function CampaignBuilderPage() {
@@ -82,9 +98,10 @@ export default function CampaignBuilderPage() {
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
+  const [targetingOpen, setTargetingOpen] = useState(false)
 
   useEffect(() => {
-    const id = searchParams.get('id')
+    const id = searchParams.get('id') || searchParams.get('plan')
     if (!id) return
     setPlanId(id)
     setLoadingPlan(true)
@@ -106,10 +123,13 @@ export default function CampaignBuilderPage() {
         }))
         setData((prev) => ({
           ...prev,
-          prompt: plan.campaignName || prev.prompt,
+          prompt: json?.data?.briefInput?.offer || plan.campaignName || prev.prompt,
           goal: plan.objective || plan.goal || prev.goal,
           adGroups,
           dailyBudget: Number(plan.dailyBudget) || prev.dailyBudget,
+          locations: Array.isArray(plan.locations) ? plan.locations.map(String) : prev.locations,
+          finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : prev.finalUrl,
+          rationale: plan.rationale || prev.rationale,
         }))
       })
       .catch(() => {})
@@ -387,6 +407,12 @@ export default function CampaignBuilderPage() {
                       <strong>{data.adGroups.length} ad group{data.adGroups.length > 1 ? 's' : ''}</strong> in this campaign.
                     </p>
                   </div>
+                  {data.rationale?.whyThisStructure && (
+                    <div className="p-3 bg-[#EAF0FE] rounded-[8px]">
+                      <p className="text-[11px] font-semibold text-[#1F57F5] mb-1">Why this structure</p>
+                      <p className="text-[11.5px] text-[#374151] leading-relaxed">{data.rationale.whyThisStructure}</p>
+                    </div>
+                  )}
                   {data.adGroups.map((g, i) => (
                     <div key={i} className="p-3 bg-[#F0F2F5] rounded-[8px] flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -414,6 +440,17 @@ export default function CampaignBuilderPage() {
 
               <AccordionSection id="keywords">
                 <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3 p-3 bg-[#F8F9FB] rounded-[8px]">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-[#111827]">Targeting plan</p>
+                      <p className="text-[11px] text-[#6B7280] truncate">
+                        {(data.locations?.join(', ') || 'Location from your brief')} · {data.adGroups.map((g) => g.theme || g.name).filter(Boolean).slice(0, 2).join(', ') || 'Keyword themes'}
+                      </p>
+                    </div>
+                    <button onClick={() => setTargetingOpen(true)} className="sku-btn h-8 px-3 text-[11.5px] font-semibold shrink-0">
+                      View rationale
+                    </button>
+                  </div>
                   {data.adGroups.length > 1 && <AdGroupTabs />}
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -634,7 +671,9 @@ export default function CampaignBuilderPage() {
           <div className="flex-1 space-y-4">
             <div className="inline-block px-2 py-1 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-[3px]">Sponsored</div>
             <h4 className="text-[14px] font-bold text-[#1F57F5] break-words leading-snug">{activeGroup.headlines[0] || 'Your ad headline will appear here'}</h4>
-            <p className="text-[13px] text-[#1F57F5] break-all">www.yoursite.com › {activeGroup.keywords[0]?.keyword || 'campaign'}</p>
+            <p className="text-[13px] text-[#1F57F5] break-all">
+              {displayHost(data.finalUrl)} › {activeGroup.keywords[0]?.keyword || 'campaign'}
+            </p>
             <p className="text-[13px] text-[#6B7280] leading-snug break-words">{activeGroup.descriptions[0] || 'Your ad description will appear here'}</p>
 
             <div className="mt-4 pt-4 border-t border-[#DDE1E7]">
@@ -657,6 +696,48 @@ export default function CampaignBuilderPage() {
             </div>
           </div>
         </div>
+        {targetingOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+            <div className="w-full max-w-[560px] bg-white rounded-[16px] border border-[#DDE1E7] shadow-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9EBEF]">
+                <div>
+                  <p className="text-[15px] font-bold text-[#111827]">Targeting rationale</p>
+                  <p className="text-[11.5px] text-[#6B7280]">Google Search uses keywords and location, not Meta-style audience sizes.</p>
+                </div>
+                <button onClick={() => setTargetingOpen(false)} className="sku-btn w-8 h-8 flex items-center justify-center rounded-full">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Locations</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(data.locations?.length ? data.locations : ['From campaign brief']).map((location) => (
+                      <span key={location} className="px-2 py-1 rounded-full bg-[#EAF0FE] text-[#1F57F5] text-[11.5px] font-semibold">{location}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Keyword themes</p>
+                  <div className="space-y-2">
+                    {data.adGroups.map((group) => (
+                      <div key={group.name} className="p-3 rounded-[8px] bg-[#F8F9FB]">
+                        <p className="text-[12px] font-semibold text-[#111827]">{group.name}</p>
+                        <p className="text-[11.5px] text-[#6B7280] mt-0.5">{group.theme || group.keywords.slice(0, 4).map((k) => k.keyword).join(', ') || 'Theme not specified'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {data.rationale?.whyTheseKeywords && (
+                  <div className="p-3 rounded-[8px] bg-[#E6F4EC]/60">
+                    <p className="text-[11px] font-semibold text-[#2E9E5B] mb-1">Why these keywords</p>
+                    <p className="text-[12px] text-[#374151] leading-relaxed">{data.rationale.whyTheseKeywords}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Shell>
   )
