@@ -41,6 +41,14 @@ const CreativeBriefSchema = z.object({
   generateImages: z.boolean().optional(),
 })
 
+function publicAiError(error: any) {
+  const message = String(error?.message || "")
+  if (error?.status === 429 || /quota|rate limit/i.test(message)) {
+    return "AI quota is exhausted right now. Check the OpenAI billing/quota on the production API key, then try again."
+  }
+  return "AI creative generation failed. Please try again."
+}
+
 function buildImagePrompt(input: z.infer<typeof CreativeBriefSchema>, variation: any, businessContext: string) {
   return `Create a high-converting digital ad image for ${input.platform || "Google Display"}.
 Brand: ${input.businessName || input.brandName || "User brand"}
@@ -77,7 +85,7 @@ async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, var
       .filter(Boolean) as string[]
     return { urls, error: urls.length ? null : "OpenAI did not return image assets" }
   } catch (error: any) {
-    return { urls: [] as string[], error: error?.message || "Image generation failed" }
+    return { urls: [] as string[], error: publicAiError(error) }
   }
 }
 
@@ -233,6 +241,6 @@ Location: ${input.location || "Not provided"}${businessContext}`
       data: { variations: scored, imageUrls: imageResult.urls, imageError: imageResult.error },
     })
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || "Failed to generate creatives" }, { status: 500 })
+    return NextResponse.json({ success: false, code: "AI_CREATIVE_FAILED", error: publicAiError(error) }, { status: error?.status === 429 ? 429 : 500 })
   }
 }

@@ -83,6 +83,18 @@ function object(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}
 }
 
+export function parseJsonObject(content?: string | null) {
+  const text = (content || "").trim()
+  if (!text) throw new Error("EMPTY_AI_RESPONSE")
+  try {
+    return JSON.parse(text)
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/)
+    if (match) return JSON.parse(match[0])
+    throw new Error("INVALID_AI_JSON")
+  }
+}
+
 function metaTargeting(value: unknown, countryCode: string) {
   const input = object(value)
   const geo = object(input.geo_locations)
@@ -254,7 +266,12 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     messages: [{ role: "user", content: input.platform === "META" ? metaPrompt : googlePrompt }],
   })
 
-  const raw = JSON.parse(completion.choices[0]?.message?.content || "{}")
+  let raw: any
+  try {
+    raw = parseJsonObject(completion.choices[0]?.message?.content)
+  } catch {
+    return NextResponse.json({ ok: false, error: { code: "AI_PLAN_PARSE_FAILED", message: "AI could not return a valid campaign plan. Try again with a little more detail." } }, { status: 502 })
+  }
   const plan = input.platform === "META"
     ? validateMetaPlan(raw, input, object(object(integration.accountInfo).metaAssets))
     : validateGooglePlan({
