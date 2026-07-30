@@ -17,7 +17,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: limit.unavailable ? "Signup protection is temporarily unavailable. Please try again shortly." : "Too many signup attempts. Please wait a moment." }, { status: limit.unavailable ? 503 : 429, headers: { "Retry-After": String(limit.retryAfter) } })
     }
 
-    const { email, password, name } = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    }
+    const { email, password, name } = body
     const normalizedEmail = String(email || "").toLowerCase().trim()
     const displayName = String(name || "").trim()
 
