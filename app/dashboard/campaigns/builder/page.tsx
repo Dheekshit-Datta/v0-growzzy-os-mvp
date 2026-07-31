@@ -25,6 +25,14 @@ const MAX_HEADLINES = 15
 const MIN_DESCRIPTIONS = 2
 const MAX_DESCRIPTIONS = 4
 
+async function readJson(res: Response) {
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 interface KeywordEdit {
   keyword: string
   type: 'broad' | 'phrase' | 'exact'
@@ -221,7 +229,7 @@ export default function CampaignBuilderPage() {
       }),
     })
     if (!res.ok) {
-      const json = await res.json().catch(() => null)
+      const json = await readJson(res)
       setLaunchError(json?.error || 'Failed to save your edits.')
     }
     return res.ok
@@ -239,7 +247,7 @@ export default function CampaignBuilderPage() {
       const saved = await persistEdits()
       if (!saved) throw new Error(launchError || "Couldn't save your edits. Please review the fields and try again.")
       const res = await fetch(`/api/ai/campaign-plan/${planId}/launch`, { method: 'POST' })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Launch failed. Please review the plan and try again.')
       setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
       setTimeout(() => router.push('/dashboard/ads'), 1400)

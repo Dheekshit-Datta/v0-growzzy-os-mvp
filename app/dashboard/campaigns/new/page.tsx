@@ -78,6 +78,14 @@ type CreativeVariation = {
   score?: number
 }
 
+async function readJson(res: Response) {
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 function CreativeCard({
   variation,
   imageUrl,
@@ -235,7 +243,7 @@ export default function NewCampaignPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.trim() }),
       })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.enhanced) throw new Error(json?.error || "Couldn't enhance this brief.")
       setPrompt(json.enhanced)
     } catch (err: any) {
@@ -263,7 +271,7 @@ export default function NewCampaignPage() {
           metaObjective: platform === "META" ? metaObjective : undefined,
         }),
       })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.campaignPlanId) {
         const platformName = platform === "META" ? "Meta Ads" : "Google Ads"
         throw new Error(json?.error?.message || json?.error || `Couldn't build a plan. Connect ${platformName} and select an account first.`)
@@ -291,7 +299,7 @@ export default function NewCampaignPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: booleanQuery.trim() }),
       })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Couldn't translate this query.")
       setBooleanResult({ interpretation: json.interpretation, keywords: json.keywords, negativeKeywords: json.negativeKeywords })
     } catch (err: any) {
@@ -326,7 +334,7 @@ export default function NewCampaignPage() {
           generateImages: true,
         }),
       })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.success) throw new Error(json?.error || "Couldn't generate creatives.")
       setGeneratedCreatives(json.variations || [])
       setGeneratedImageUrls(json.imageUrls || [])
@@ -344,7 +352,7 @@ export default function NewCampaignPage() {
     setLaunchError("")
     try {
       const res = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
-      const json = await res.json()
+      const json = await readJson(res)
       if (!res.ok || !json?.ok) throw new Error(json?.error?.message || json?.error || "Launch failed. Please review the plan and try again.")
       setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
       window.dispatchEvent(new Event("growzzy:onboarding-progress-updated"))

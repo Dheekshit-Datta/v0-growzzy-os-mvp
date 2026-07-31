@@ -168,7 +168,15 @@ export async function POST(req: NextRequest) {
   const userId = await resolveUserId(session.user.id)
   const limit = await rateLimitPolicy(userId, "campaignPlan")
   if (!limit.allowed) return rateLimitResponse(limit)
-  const input = CampaignBuilderSchema.parse(await req.json())
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ ok: false, error: { code: "INVALID_JSON", message: "Invalid request body." } }, { status: 400 })
+  }
+  const parsed = CampaignBuilderSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ ok: false, error: { code: "INVALID_INPUT", message: parsed.error.issues[0]?.message || "Invalid campaign brief." } }, { status: 400 })
+  const input = parsed.data
   if (input.platform === "META" && process.env.ENABLE_META_ADS !== "true") {
     return NextResponse.json({ ok: false, error: { code: "META_DISABLED", message: "Meta Ads is not enabled yet." } }, { status: 404 })
   }
