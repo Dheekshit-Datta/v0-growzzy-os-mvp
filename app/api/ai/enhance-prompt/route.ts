@@ -6,14 +6,11 @@ import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { cachedUtilityCompletion } from "@/lib/ai-utility"
+import { fallbackEnhancement } from "@/lib/prompt-enhancement"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
 })
-
-function fallbackEnhancement(prompt: string) {
-  return prompt.trim()
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -54,7 +51,7 @@ export async function POST(req: NextRequest) {
         { role: "user", content: `${input.prompt}${businessContext}` },
       ],
     }).catch(() => "")
-  if (!enhanced) {
+  if (!enhanced || enhanced.trim() === input.prompt.trim()) {
     return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt), fallback: true })
   }
 
