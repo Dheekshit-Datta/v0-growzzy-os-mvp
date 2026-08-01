@@ -10,6 +10,9 @@ import { fallbackEnhancement } from "@/lib/prompt-enhancement"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
+  budget: z.coerce.number().positive().optional(),
+  location: z.string().optional(),
+  goal: z.string().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
   if (!process.env.OPENAI_API_KEY || limit.unavailable) {
-    return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt), fallback: true })
+    return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt, input), fallback: true })
   }
 
   const enhanced = await cachedUtilityCompletion({
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
       ],
     }).catch(() => "")
   if (!enhanced || enhanced.trim() === input.prompt.trim()) {
-    return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt), fallback: true })
+    return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt, input), fallback: true })
   }
 
   return NextResponse.json({ ok: true, enhanced })

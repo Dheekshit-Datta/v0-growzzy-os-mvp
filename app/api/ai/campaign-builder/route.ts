@@ -279,7 +279,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: `Connect ${input.platform === "META" ? "Meta" : "Google"} Ads and select an ad account before building a launchable campaign plan.` } }, { status: 409 })
   }
   const adAccount = await prisma.adAccount.findFirst({
-    where: { integrationId: integration.id, externalId: { in: accountIdVariants(selectedAdAccountId) } },
+    where: {
+      integrationId: integration.id,
+      OR: [
+        { externalId: { in: accountIdVariants(selectedAdAccountId) } },
+        { isPrimary: true },
+      ],
+    },
     select: { id: true, externalId: true },
   })
   if (!adAccount) return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: "Selected ad account metadata is missing." } }, { status: 409 })

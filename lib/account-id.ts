@@ -15,6 +15,9 @@ export function accountIdVariants(value?: string | null) {
   if (normalized) {
     variants.add(normalized)
     variants.add(`act_${normalized}`)
+    if (/^\d{10}$/.test(normalized)) {
+      variants.add(`${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`)
+    }
   }
   return Array.from(variants)
 }

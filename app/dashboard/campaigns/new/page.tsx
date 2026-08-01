@@ -262,14 +262,14 @@ export default function NewCampaignPage() {
       const res = await fetch("/api/ai/enhance-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: prompt.trim(), budget, location: effectiveLocation || undefined, goal }),
       })
       const json = await readJson(res)
       if (!res.ok || !json?.enhanced) throw new Error()
       setPrompt(json.enhanced)
     } catch {
-      setPrompt((current) => fallbackEnhancement(current))
-      setEnhanceError("AI is temporarily unavailable, so Growzzy structured the brief locally.")
+      setPrompt((current) => fallbackEnhancement(current, { budget, location: effectiveLocation, goal }))
+      setEnhanceError("Growzzy structured the brief locally while AI is unavailable.")
     } finally {
       setEnhancing(false)
     }
@@ -479,7 +479,7 @@ export default function NewCampaignPage() {
                 </div>
               </div>
 
-              {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
+              {enhanceError && <p className="text-[12px] text-[#6B7280] mt-2">{enhanceError}</p>}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
                 {TEMPLATES.map((template) => (
