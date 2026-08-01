@@ -25,6 +25,22 @@ type GeneratedCreative = {
   createdAt: string
 }
 
+function readSessionValue<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeSessionValue(key: string, value: unknown) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value))
+  } catch {}
+}
+
 function CreativePreview({
   imageUrl, headline, body, format, onPreview,
 }: { imageUrl: string | null; headline: string; body?: string; format: string; onPreview?: (url: string, title: string) => void }) {
@@ -76,7 +92,7 @@ export default function AdStudioPage() {
   const [imageUrls, setImageUrls] = useState<string[]>([])
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
 
-  const [library, setLibrary] = useState<GeneratedCreative[]>([])
+  const [library, setLibrary] = useState<GeneratedCreative[]>(() => readSessionValue("growzzy_studio_library", []))
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryLoaded, setLibraryLoaded] = useState(false)
   const [libraryEmptyReason, setLibraryEmptyReason] = useState<"account_required" | "empty" | null>(null)
@@ -88,14 +104,16 @@ export default function AdStudioPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (json?.accountRequired) {
-          setLibraryEmptyReason("account_required")
+          if (library.length === 0) setLibraryEmptyReason("account_required")
         } else {
-          setLibrary(json?.creatives ?? [])
-          setLibraryEmptyReason((json?.creatives ?? []).length === 0 ? "empty" : null)
+          const creatives = json?.creatives ?? []
+          setLibrary(creatives)
+          writeSessionValue("growzzy_studio_library", creatives)
+          setLibraryEmptyReason(creatives.length === 0 ? "empty" : null)
         }
       })
       .finally(() => { setLibraryLoading(false); setLibraryLoaded(true) })
-  }, [activeTab, libraryLoaded])
+  }, [activeTab, libraryLoaded, library.length])
 
   const handleGenerate = async () => {
     if (!prompt.trim() || generating) return
@@ -123,6 +141,14 @@ export default function AdStudioPage() {
       setVariations(json.variations || [])
       setImageUrls(json.imageUrls || [])
       if (json.imageError) setError(json.imageError)
+      if (json.creative) {
+        setLibrary((current) => {
+          const next = [json.creative, ...current.filter((item) => item.id !== json.creative.id)].slice(0, 50)
+          writeSessionValue("growzzy_studio_library", next)
+          return next
+        })
+        setLibraryEmptyReason(null)
+      }
       setLibraryLoaded(false)
     } catch (err: any) {
       setError(err?.message || "Something went wrong generating creatives.")
