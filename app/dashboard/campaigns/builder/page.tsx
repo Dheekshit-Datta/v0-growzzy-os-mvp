@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Shell } from '@/components/dashboard-v2/shell'
 import {
@@ -107,11 +107,15 @@ export default function CampaignBuilderPage() {
   const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
   const [targetingOpen, setTargetingOpen] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const loadedPlanRef = useRef(false)
+  const skipAutosaveRef = useRef(false)
 
   useEffect(() => {
     const id = searchParams.get('id') || searchParams.get('plan')
     if (!id) return
     setPlanId(id)
+    loadedPlanRef.current = false
     setLoadingPlan(true)
     fetch(`/api/ai/campaign-plan/${id}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -129,6 +133,7 @@ export default function CampaignBuilderPage() {
           headlines: (Array.isArray(g?.headlines) ? g.headlines : []).map((h: any) => String(h?.text || h || '')).filter(Boolean),
           descriptions: (Array.isArray(g?.descriptions) ? g.descriptions : []).map((d: any) => String(d?.text || d || '')).filter(Boolean),
         }))
+        skipAutosaveRef.current = true
         setData((prev) => ({
           ...prev,
           prompt: json?.data?.briefInput?.offer || plan.campaignName || prev.prompt,
@@ -139,6 +144,7 @@ export default function CampaignBuilderPage() {
           finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : prev.finalUrl,
           rationale: plan.rationale || prev.rationale,
         }))
+        loadedPlanRef.current = true
       })
       .catch(() => {})
       .finally(() => setLoadingPlan(false))
@@ -234,6 +240,34 @@ export default function CampaignBuilderPage() {
     }
     return res.ok
   }
+
+  const canPersistCurrentPlan = () =>
+    !!planId &&
+    !!data.dailyBudget &&
+    data.dailyBudget > 0 &&
+    data.adGroups.length > 0 &&
+    data.adGroups.every((g) => {
+      const keywords = g.keywords.filter((k) => k.keyword.trim())
+      const headlines = g.headlines.filter((h) => h.trim())
+      const descriptions = g.descriptions.filter((d) => d.trim())
+      return g.name.trim() && keywords.length > 0 && headlines.length >= MIN_HEADLINES && descriptions.length >= MIN_DESCRIPTIONS
+    })
+
+  useEffect(() => {
+    if (!planId || loadingPlan || !loadedPlanRef.current) return
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false
+      return
+    }
+    setSaveState('idle')
+    if (!canPersistCurrentPlan()) return
+    const timer = window.setTimeout(async () => {
+      setSaveState('saving')
+      const saved = await persistEdits()
+      setSaveState(saved ? 'saved' : 'error')
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [data, loadingPlan, planId])
 
   const handlePublish = async () => {
     if (launching) return
@@ -386,7 +420,17 @@ export default function CampaignBuilderPage() {
           <div className="max-w-[560px] mx-auto">
             <div className="mb-5">
               <h2 className="text-[20px] font-bold text-[#111827]">Create Campaign</h2>
-              <p className="text-[12px] text-[#6B7280]">{loadingPlan ? 'Loading your AI plan…' : 'AI proposes. You edit. Publish when it looks right.'}</p>
+              <p className="text-[12px] text-[#6B7280]">
+                {loadingPlan
+                  ? 'Loading your AI plan...'
+                  : saveState === 'saving'
+                    ? 'Saving edits...'
+                    : saveState === 'saved'
+                      ? 'Saved. Safe to refresh.'
+                      : saveState === 'error'
+                        ? 'Could not autosave yet. Fix highlighted fields before launch.'
+                        : 'AI proposes. You edit. Publish when it looks right.'}
+              </p>
             </div>
 
             <div className="space-y-3">
