@@ -49,6 +49,22 @@ const MANAGE_NAV: NavItem[] = [
 
 const SETTINGS_ITEM: NavItem = { href: "/dashboard/settings", label: "Settings", icon: Settings }
 
+function readSessionValue<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeSessionValue(key: string, value: unknown) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value))
+  } catch {}
+}
+
 interface SidebarProps {
   collapsed?: boolean
   onToggle?: () => void
@@ -58,17 +74,26 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [promptsExpanded, setPromptsExpanded] = useState(true)
-  const [progress, setProgress] = useState<number | null>(null)
-  const [workspaceName, setWorkspaceName] = useState("Growzzy Workspace")
-  const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(null)
-  const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>([])
+  const [progress, setProgress] = useState<number | null>(() => readSessionValue("growzzy_sidebar_progress", null))
+  const [workspaceName, setWorkspaceName] = useState(() => readSessionValue("growzzy_sidebar_workspace", "Growzzy Workspace"))
+  const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(() =>
+    readSessionValue("growzzy_sidebar_profile", null)
+  )
+  const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>(() =>
+    readSessionValue("growzzy_sidebar_prompts", [])
+  )
 
   useEffect(() => {
     const loadProgress = () => {
       fetch("/api/onboarding-progress", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((json) => { if (typeof json?.progress === "number") setProgress(json.progress) })
-        .catch(() => setProgress(null))
+        .then((json) => {
+          if (typeof json?.progress === "number") {
+            setProgress(json.progress)
+            writeSessionValue("growzzy_sidebar_progress", json.progress)
+          }
+        })
+        .catch(() => {})
     }
     loadProgress()
     window.addEventListener("growzzy:onboarding-progress-updated", loadProgress)
@@ -83,7 +108,12 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     const loadProfile = () => {
       fetch("/api/auth/me", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((json) => { if (json?.user) setProfile(json.user) })
+        .then((json) => {
+          if (json?.user) {
+            setProfile(json.user)
+            writeSessionValue("growzzy_sidebar_profile", json.user)
+          }
+        })
         .catch(() => {})
     }
     loadProfile()
@@ -97,9 +127,11 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           const items = Array.isArray(json?.plans) ? json.plans : []
-          setRecentPrompts(items.slice(0, 3).map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName })))
+          const prompts = items.slice(0, 3).map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
+          setRecentPrompts(prompts)
+          writeSessionValue("growzzy_sidebar_prompts", prompts)
         })
-        .catch(() => setRecentPrompts([]))
+        .catch(() => {})
     }
     loadPrompts()
     window.addEventListener("growzzy:prompt-history-updated", loadPrompts)
@@ -113,7 +145,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         const workspaces = json?.workspaces ?? []
         const activeId = window.localStorage.getItem("growzzy_active_workspace_id")
         const active = workspaces.find((workspace: { id: string }) => workspace.id === activeId) || workspaces[0]
-        if (active?.name) setWorkspaceName(active.name)
+        if (active?.name) {
+          setWorkspaceName(active.name)
+          writeSessionValue("growzzy_sidebar_workspace", active.name)
+        }
       })
       .catch(() => {})
   }, [])
