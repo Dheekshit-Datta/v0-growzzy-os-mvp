@@ -9,6 +9,7 @@ import { recordActivity } from "@/lib/activity-log"
 import { accountIdVariants, normalizeAccountId } from "@/lib/account-id"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { parseGoogleSearchPlan } from "@/lib/google-plan-quality"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -25,131 +26,21 @@ const CampaignBuilderSchema = z.object({
   imageUrl: z.string().url().optional().or(z.literal("")),
   metaObjective: z.enum(["AWARENESS", "TRAFFIC", "ENGAGEMENT", "LEADS", "SALES", "APP_PROMOTION"]).optional(),
   objectStoreUrl: z.string().url().optional().or(z.literal("")),
+  enhancedBrief: z.object({
+    enhancedText: z.string().min(20).max(2000),
+    productOrOffer: z.string().min(2).max(300),
+    targetCustomer: z.string().min(2).max(500),
+    painPoints: z.array(z.string().max(200)).max(4),
+    differentiators: z.array(z.string().max(200)).max(4),
+    proofPoints: z.array(z.string().max(200)).max(4),
+    geography: z.string().max(120),
+    goal: z.string().max(80),
+    tone: z.string().max(80),
+    restrictions: z.array(z.string().max(200)).max(4),
+    missingQuestions: z.array(z.string().max(180)).max(3),
+  }).optional(),
+  clarifications: z.array(z.object({ question: z.string().max(180), answer: z.string().min(1).max(500) })).max(3).optional(),
 })
-
-function validateGooglePlan(plan: any) {
-  const adGroups = Array.isArray(plan?.adGroups) ? plan.adGroups : []
-  return {
-    platform: "GOOGLE",
-    campaignType: "SEARCH",
-    objective: String(plan?.objective || "CONVERSIONS"),
-    campaignName: String(plan?.campaignName || "AI Google Search Campaign").slice(0, 120),
-    biddingStrategy: ["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA", "TARGET_ROAS"].includes(String(plan?.biddingStrategy))
-      ? String(plan.biddingStrategy)
-      : "MAXIMIZE_CONVERSIONS",
-    targetCpa: plan?.targetCpa ? Number(plan.targetCpa) : null,
-    targetRoas: plan?.targetRoas ? Number(plan.targetRoas) : null,
-    dailyBudget: Number(plan?.dailyBudget || 0),
-    locations: Array.isArray(plan?.locations) ? plan.locations : [],
-    languages: Array.isArray(plan?.languages) ? plan.languages : ["English"],
-    landingPageSuggestions: Array.isArray(plan?.landingPageSuggestions) ? plan.landingPageSuggestions.slice(0, 5) : [],
-    launchReadinessScore: Math.max(0, Math.min(100, Number(plan?.launchReadinessScore || 70))),
-    risks: Array.isArray(plan?.risks) ? plan.risks.slice(0, 5) : [],
-    finalUrl: typeof plan?.finalUrl === "string" && /^https?:\/\//.test(plan.finalUrl) ? plan.finalUrl : undefined,
-    rationale: {
-      whyThisStructure: String(plan?.rationale?.whyThisStructure || "").slice(0, 600),
-      whyTheseKeywords: String(plan?.rationale?.whyTheseKeywords || "").slice(0, 600),
-      whyThisBidding: String(plan?.rationale?.whyThisBidding || "").slice(0, 600),
-      expectedResultsRange: String(plan?.rationale?.expectedResultsRange || "").slice(0, 300),
-    },
-    adGroups: adGroups.slice(0, 6).map((group: any) => ({
-      name: String(group?.name || "Core Ad Group").slice(0, 80),
-      theme: String(group?.theme || ""),
-      keywords: (Array.isArray(group?.keywords) ? group.keywords : []).slice(0, 20).map((keyword: any) => ({
-        text: String(keyword?.text || keyword || "").slice(0, 80),
-        matchType: ["BROAD", "PHRASE", "EXACT"].includes(String(keyword?.matchType)) ? String(keyword.matchType) : "PHRASE",
-        intent: String(keyword?.intent || "high"),
-      })),
-      negativeKeywords: (Array.isArray(group?.negativeKeywords) ? group.negativeKeywords : [])
-        .slice(0, 30)
-        .map((keyword: any) => String(keyword?.text || keyword || "").slice(0, 80))
-        .filter(Boolean),
-      headlines: (Array.isArray(group?.headlines) ? group.headlines : []).slice(0, 15).map((headline: any) => String(headline?.text || headline || "").slice(0, 30)),
-      descriptions: (Array.isArray(group?.descriptions) ? group.descriptions : []).slice(0, 4).map((description: any) => String(description?.text || description || "").slice(0, 90)),
-    })),
-  }
-}
-
-export function fallbackGooglePlan(input: z.infer<typeof CampaignBuilderSchema>) {
-  const offer = input.offer.trim().replace(/\s+/g, " ")
-  const shortOffer = offer.slice(0, 28) || "Your Offer"
-  const location = input.location || "United States"
-  const baseKeywords = [
-    shortOffer,
-    `${shortOffer} ${location}`,
-    `${shortOffer} near me`,
-    `${shortOffer} pricing`,
-    `${shortOffer} service`,
-    `best ${shortOffer}`,
-    `${shortOffer} consultation`,
-    `${shortOffer} online`,
-    `${shortOffer} offers`,
-    `${shortOffer} quote`,
-  ]
-  return {
-    campaignName: `${shortOffer} - Search`,
-    campaignType: "SEARCH",
-    objective: input.goal,
-    biddingStrategy: input.goal === "TRAFFIC" ? "MAXIMIZE_CLICKS" : "MAXIMIZE_CONVERSIONS",
-    dailyBudget: input.budget,
-    finalUrl: input.landingPageUrl || "https://example.com",
-    locations: [location],
-    languages: ["English"],
-    adGroups: [
-      {
-        name: "Core Search",
-        theme: "High-intent searches for the offer",
-        keywords: baseKeywords.map((text) => ({ text, matchType: "PHRASE", intent: "high" })),
-        negativeKeywords: ["free", "jobs", "diy", "course", "definition"],
-        headlines: [
-          shortOffer,
-          `Try ${shortOffer}`,
-          `${shortOffer} Today`,
-          `Book ${shortOffer}`,
-          `${location} ${shortOffer}`.slice(0, 30),
-          `Trusted ${shortOffer}`,
-          `Get ${shortOffer}`,
-          `${shortOffer} Deals`,
-        ],
-        descriptions: [
-          `Promote ${shortOffer} with clear, lead-focused search ads.`,
-          `Reach people in ${location} who are already looking for this offer.`,
-          `Start paused, review the campaign, then enable when ready.`,
-        ],
-      },
-      {
-        name: "Problem Aware",
-        theme: "People comparing options before they decide",
-        keywords: baseKeywords.map((text) => ({ text: `${text} help`.slice(0, 80), matchType: "BROAD", intent: "medium" })),
-        negativeKeywords: ["free", "jobs", "diy", "course", "definition"],
-        headlines: [
-          `Need ${shortOffer}?`,
-          `${shortOffer} Help`,
-          `Compare ${shortOffer}`,
-          `Start With ${shortOffer}`,
-          `Easy ${shortOffer}`,
-          `${shortOffer} Support`,
-          `Find ${shortOffer}`,
-          `Local ${shortOffer}`,
-        ],
-        descriptions: [
-          `Use this draft as a starting point and edit any targeting before launch.`,
-          `Growzzy kept the plan conservative because AI output was unavailable.`,
-          `Launch paused first so nothing spends until you approve it.`,
-        ],
-      },
-    ],
-    rationale: {
-      whyThisStructure: "This fallback draft separates direct high-intent searches from broader problem-aware searches so you can review them safely.",
-      whyTheseKeywords: "Keywords are derived directly from the offer and location supplied by the user.",
-      whyThisBidding: "A conservative automated bidding strategy is used for a new campaign with limited history.",
-      expectedResultsRange: "Estimate unavailable until Google syncs real account data.",
-    },
-    landingPageSuggestions: ["Add a final landing page URL before enabling spend."],
-    launchReadinessScore: input.landingPageUrl ? 70 : 55,
-    risks: ["This plan was generated from a deterministic fallback because AI output was unavailable or invalid. Review before launch."],
-  }
-}
 
 const META_OBJECTIVES = {
   AWARENESS: { objective: "OUTCOME_AWARENESS", optimizationGoal: "REACH", billingEvent: "IMPRESSIONS" },
@@ -291,13 +182,15 @@ export async function POST(req: NextRequest) {
   const adAccountId = adAccount.id
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
-  if (!process.env.OPENAI_API_KEY && input.platform === "META") {
-    return NextResponse.json({ ok: false, error: "AI Campaign Builder is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
   }
 
   const googlePrompt = `You are a senior Google Ads media buyer. Build a safe, reviewable Google Ads campaign plan.
 
 Business offer: ${input.offer}
+Structured brief: ${JSON.stringify(input.enhancedBrief || "Not generated")}
+User clarifications: ${JSON.stringify(input.clarifications || [])}
 Landing page: ${input.landingPageUrl || "Not provided"}
 Target customer: ${input.targetCustomer}
 Budget: $${input.budget}/day
@@ -317,7 +210,7 @@ Return ONLY JSON:
   "biddingStrategy": "MAXIMIZE_CONVERSIONS|MAXIMIZE_CLICKS|TARGET_CPA",
   "targetCpa": "number or null - only if biddingStrategy is TARGET_CPA",
   "dailyBudget": number,
-  "finalUrl": "${input.landingPageUrl || "https://example.com"}",
+  "finalUrl": ${input.landingPageUrl ? `"${input.landingPageUrl}"` : "null"},
   "locations": ["..."],
   "languages": ["English"],
   "adGroups": [
@@ -354,32 +247,59 @@ ${businessContext}
 Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (Meta targeting object with geo_locations), placements (publisher_platforms and facebook_positions/instagram_positions when appropriate), creative { name, primaryText, headline, description, callToAction }, rationale, launchReadinessScore, and risks. Do not invent a Page, Pixel, app, destination URL, or image URL.`
 
   let raw: any
-  if (!process.env.OPENAI_API_KEY && input.platform === "GOOGLE") {
-    raw = fallbackGooglePlan(input)
-  } else {
+  let generationError: unknown
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
         temperature: 0.35,
         response_format: { type: "json_object" },
-        messages: [{ role: "user", content: input.platform === "META" ? metaPrompt : googlePrompt }],
+        messages: [{
+          role: "user",
+          content: `${input.platform === "META" ? metaPrompt : googlePrompt}${attempt ? "\n\nThe previous response was invalid. Return complete JSON matching every required field and character limit." : ""}`,
+        }],
       })
       raw = parseJsonObject(completion.choices[0]?.message?.content)
-    } catch {
-      if (input.platform === "META") {
-        return NextResponse.json({ ok: false, error: { code: "AI_PLAN_PARSE_FAILED", message: "AI could not return a valid Meta campaign plan. Try again with a little more detail." } }, { status: 502 })
-      }
-      raw = fallbackGooglePlan(input)
+      if (input.platform === "META") break
+      const candidate = parseGoogleSearchPlan({
+        ...raw,
+        platform: "GOOGLE",
+        campaignType: "SEARCH",
+        dailyBudget: input.budget,
+        finalUrl: input.landingPageUrl || raw?.finalUrl || undefined,
+        locations: raw?.locations || [input.location],
+      })
+      if (candidate.plan) break
+      generationError = candidate.error
+      raw = undefined
+    } catch (error) {
+      generationError = error
     }
   }
+  if (!raw) {
+    return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 502 })
+  }
+
+  let quality: ReturnType<typeof parseGoogleSearchPlan>["quality"] | undefined
   const plan = input.platform === "META"
     ? validateMetaPlan(raw, input, object(object(integration.accountInfo).metaAssets))
-    : validateGooglePlan({
-        ...raw,
-        dailyBudget: input.budget,
-        finalUrl: raw.finalUrl || input.landingPageUrl || undefined,
-        locations: raw.locations || [input.location],
-      })
+    : (() => {
+        const result = parseGoogleSearchPlan({
+          ...raw,
+          platform: "GOOGLE",
+          campaignType: "SEARCH",
+          dailyBudget: input.budget,
+          finalUrl: input.landingPageUrl || raw?.finalUrl || undefined,
+          locations: raw?.locations || [input.location],
+        })
+        if (!result.plan) return null
+        quality = result.quality
+        return { ...result.plan, qualityCheck: result.quality }
+      })()
+
+  if (!plan) {
+    return NextResponse.json({ ok: false, error: { code: "PLAN_QUALITY_FAILED", message: String(generationError || "The generated plan did not meet Growzzy's safety and quality checks.") } }, { status: 422 })
+  }
 
   const campaignPlan = await prisma.campaignPlan.create({
     data: {
@@ -399,6 +319,9 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
         landingPageUrl: input.landingPageUrl || undefined,
         imageUrl: input.imageUrl || undefined,
         metaObjective: input.metaObjective,
+        enhancedBrief: input.enhancedBrief,
+        clarifications: input.clarifications,
+        ...(input.platform === "GOOGLE" ? { qualityCheck: quality } : {}),
       },
       status: "DRAFT",
     },

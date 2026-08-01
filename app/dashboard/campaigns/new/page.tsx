@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import CampaignBuilderPage from "../builder/page"
-import { fallbackEnhancement } from "@/lib/prompt-enhancement"
 import {
   Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
@@ -77,6 +76,20 @@ type CreativeVariation = {
   description?: string
   cta?: string
   score?: number
+}
+
+type EnhancedBrief = {
+  enhancedText: string
+  productOrOffer: string
+  targetCustomer: string
+  painPoints: string[]
+  differentiators: string[]
+  proofPoints: string[]
+  geography: string
+  goal: string
+  tone: string
+  restrictions: string[]
+  missingQuestions: string[]
 }
 
 async function readJson(res: Response) {
@@ -155,12 +168,15 @@ export default function NewCampaignPage() {
   const [prompt, setPrompt] = useState("")
   const [budget, setBudget] = useState(50)
   const [location, setLocation] = useState("")
+  const [landingPageUrl, setLandingPageUrl] = useState("")
   const [goal, setGoal] = useState("LEADS")
   const [platform, setPlatform] = useState("GOOGLE")
   const [metaObjective, setMetaObjective] = useState("")
   const [detected, setDetected] = useState<Set<string>>(new Set())
   const [enhancing, setEnhancing] = useState(false)
   const [enhanceError, setEnhanceError] = useState("")
+  const [enhancedBrief, setEnhancedBrief] = useState<EnhancedBrief | null>(null)
+  const [clarifications, setClarifications] = useState<string[]>([])
   const [building, setBuilding] = useState(false)
   const [built, setBuilt] = useState(false)
   const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
@@ -225,7 +241,12 @@ export default function NewCampaignPage() {
         if (brief.offer) setPrompt(brief.offer)
         if (brief.budget) setBudget(brief.budget)
         if (brief.location) setLocation(brief.location)
+        if (brief.landingPageUrl) setLandingPageUrl(brief.landingPageUrl)
         if (brief.goal) setGoal(brief.goal)
+        if (brief.enhancedBrief) {
+          setEnhancedBrief(brief.enhancedBrief)
+          setClarifications(Array.isArray(brief.clarifications) ? brief.clarifications.map((item: any) => String(item?.answer || "")) : [])
+        }
         if (brief.platform === "META" && META_ENABLED) setPlatform("META")
         if (brief.metaObjective) setMetaObjective(brief.metaObjective)
       })
@@ -265,11 +286,12 @@ export default function NewCampaignPage() {
         body: JSON.stringify({ prompt: prompt.trim(), budget, location: effectiveLocation || undefined, goal }),
       })
       const json = await readJson(res)
-      if (!res.ok || !json?.enhanced) throw new Error()
+      if (!res.ok || !json?.enhanced || !json?.brief) throw new Error(json?.error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
       setPrompt(json.enhanced)
-    } catch {
-      setPrompt((current) => fallbackEnhancement(current, { budget, location: effectiveLocation, goal }))
-      setEnhanceError("Growzzy structured the brief locally while AI is unavailable.")
+      setEnhancedBrief(json.brief)
+      setClarifications((json.brief.missingQuestions || []).map(() => ""))
+    } catch (error: any) {
+      setEnhanceError(error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
     } finally {
       setEnhancing(false)
     }
@@ -289,10 +311,13 @@ export default function NewCampaignPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           offer: prompt.trim(),
-          targetCustomer: prompt.trim().slice(0, 200),
+          targetCustomer: enhancedBrief?.targetCustomer || prompt.trim().slice(0, 200),
           budget,
           location: buildLocation,
           goal,
+          landingPageUrl: landingPageUrl.trim() || undefined,
+          enhancedBrief: enhancedBrief || undefined,
+          clarifications: enhancedBrief?.missingQuestions.map((question, index) => ({ question, answer: clarifications[index]?.trim() || "" })).filter((item) => item.answer) || undefined,
           platform,
           metaObjective: platform === "META" ? metaObjective : undefined,
         }),
@@ -454,7 +479,11 @@ export default function NewCampaignPage() {
                 <textarea
                   ref={textareaRef}
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={(e) => {
+                    setPrompt(e.target.value)
+                    setEnhancedBrief(null)
+                    setClarifications([])
+                  }}
                   placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
                   rows={6}
                   className="w-full px-4 pt-4 pb-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-transparent resize-none outline-none leading-relaxed"
@@ -479,7 +508,39 @@ export default function NewCampaignPage() {
                 </div>
               </div>
 
-              {enhanceError && <p className="text-[12px] text-[#6B7280] mt-2">{enhanceError}</p>}
+              {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
+
+              {enhancedBrief && (
+                <div className="sku-card mt-4 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold text-[#111827]">What Growzzy understood</p>
+                      <p className="text-[11px] text-[#6B7280] mt-0.5">Offer: {enhancedBrief.productOrOffer} · Audience: {enhancedBrief.targetCustomer}</p>
+                    </div>
+                    <span className="text-[10px] font-semibold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded-full">AI enhanced</span>
+                  </div>
+                  {enhancedBrief.missingQuestions.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[11px] font-semibold text-[#374151]">A few details would make the plan stronger</p>
+                      {enhancedBrief.missingQuestions.map((question, index) => (
+                        <label key={question} className="block">
+                          <span className="block text-[11px] text-[#6B7280] mb-1">{question}</span>
+                          <input
+                            value={clarifications[index] || ""}
+                            onChange={(event) => setClarifications((current) => {
+                              const next = [...current]
+                              next[index] = event.target.value
+                              return next
+                            })}
+                            placeholder="Optional answer"
+                            className="sku-input w-full h-9 text-[12px]"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
                 {TEMPLATES.map((template) => (
@@ -553,6 +614,18 @@ export default function NewCampaignPage() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-4">
+                <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Landing page URL</label>
+                <input
+                  type="url"
+                  placeholder="https://yourwebsite.com/offer"
+                  value={landingPageUrl}
+                  onChange={(event) => setLandingPageUrl(event.target.value)}
+                  className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
+                />
+                <p className="text-[10.5px] text-[#9CA3AF] mt-1">You can build without it, but a real URL is required before launch.</p>
+              </div>
 
               <div className="flex justify-end mt-3">
                 <button
