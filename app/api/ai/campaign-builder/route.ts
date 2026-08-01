@@ -10,6 +10,7 @@ import { accountIdVariants, normalizeAccountId } from "@/lib/account-id"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { parseGoogleSearchPlan } from "@/lib/google-plan-quality"
+import { checkPlanPolicy } from "@/lib/services/policy-check"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -299,6 +300,15 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
 
   if (!plan) {
     return NextResponse.json({ ok: false, error: { code: "PLAN_QUALITY_FAILED", message: String(generationError || "The generated plan did not meet Growzzy's safety and quality checks.") } }, { status: 422 })
+  }
+
+  if (input.platform === "GOOGLE") {
+    const policyCheck = await checkPlanPolicy((plan as any).adGroups.map((group: any) => ({
+      name: group.name,
+      headlines: group.headlines,
+      descriptions: group.descriptions,
+    })))
+    Object.assign(plan, { policyCheck, policyAcknowledged: policyCheck.status === "PASS" })
   }
 
   const campaignPlan = await prisma.campaignPlan.create({

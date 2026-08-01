@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       result.code === "NOT_FOUND" ? 404 :
       result.code === "ALREADY_LIVE" || result.code === "PUBLISH_IN_PROGRESS" || result.code === "BUDGET_CEILING" ? 409 :
       result.code === "AUTH_REQUIRED" ? 401 :
-      result.code === "VALIDATION_FAILED" || result.code === "PREFLIGHT_BLOCK" || result.code === "POLICY_BLOCK" ? 400 :
+      result.code === "VALIDATION_FAILED" || result.code === "PREFLIGHT_BLOCK" || result.code === "POLICY_BLOCK" || result.code === "POLICY_REQUIRED" || result.code === "POLICY_ACK_REQUIRED" ? 400 :
       502
     return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status })
   }

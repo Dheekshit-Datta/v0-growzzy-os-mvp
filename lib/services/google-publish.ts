@@ -11,6 +11,7 @@ import { getIntegrationAccessToken } from "@/lib/integration-tokens"
 import { recordActivity } from "@/lib/activity-log"
 import { log } from "@/lib/logger"
 import { ensureFreshGoogleToken } from "@/lib/sync-engine"
+import { assessGoogleSearchPlan, GoogleSearchPlanSchema } from "@/lib/google-plan-quality"
 
 export type LaunchResult = {
   ok: boolean
@@ -41,6 +42,12 @@ type ValidatedPlan = {
 }
 
 export function validatePlanForLaunch(plan: any, fallbackFinalUrl?: string | null): { plan?: ValidatedPlan; error?: string } {
+  const candidate = { ...plan, finalUrl: plan?.finalUrl || fallbackFinalUrl || undefined }
+  const parsed = GoogleSearchPlanSchema.safeParse(candidate)
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message || "Campaign plan is invalid" }
+  const quality = assessGoogleSearchPlan(parsed.data, { requireFinalUrl: true })
+  if (quality.status === "FAIL") return { error: quality.errors[0] }
+
   const campaignName = String(plan?.campaignName || "").trim()
   if (!campaignName) return { error: "Plan is missing a campaign name" }
   const dailyBudget = Number(plan?.dailyBudget)
@@ -132,8 +139,14 @@ export async function launchPlanToGoogle(params: {
 
   // Hard policy block
   const policyCheck = (planRow.plan as any)?.policyCheck
+  if (!policyCheck?.checkedAt) {
+    return { ok: false, error: "Run the policy check before launching", code: "POLICY_REQUIRED" }
+  }
   if (policyCheck?.status === "FAIL") {
     return { ok: false, error: "This plan contains prohibited content and cannot be launched", code: "POLICY_BLOCK" }
+  }
+  if (policyCheck?.status === "WARN" && !(planRow.plan as any)?.policyAcknowledged) {
+    return { ok: false, error: "Review and acknowledge the policy warnings before launching", code: "POLICY_ACK_REQUIRED" }
   }
 
   // Workspace budget ceiling — enforced server-side, never UI-only

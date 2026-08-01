@@ -8,7 +8,7 @@ export const GoogleKeywordSchema = z.object({
 
 export const GoogleAdGroupSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  theme: z.string().trim().min(1).max(200),
+  theme: z.string().trim().max(200).default(""),
   keywords: z.array(GoogleKeywordSchema).min(1).max(25),
   negativeKeywords: z.array(z.string().trim().min(1).max(80)).max(30),
   headlines: z.array(z.string().trim().min(1).max(30)).min(3).max(15),
@@ -109,6 +109,7 @@ export function assessGoogleSearchPlan(plan: unknown, options: { requireFinalUrl
   if (value.adGroups.length < 2) warnings.push("Use at least two distinct ad groups when the offer has multiple search intents.")
   for (const [index, group] of value.adGroups.entries()) {
     const label = `Ad group ${index + 1} (${group.name})`
+    if (!group.theme) warnings.push(`${label} is missing a distinct search-intent theme.`)
     if (duplicateIndexes(group.keywords.map((keyword) => keyword.text)).length) errors.push(`${label} contains duplicate keywords.`)
     if (duplicateIndexes(group.headlines).length) errors.push(`${label} contains duplicate headlines.`)
     if (duplicateIndexes(group.descriptions).length) errors.push(`${label} contains duplicate descriptions.`)

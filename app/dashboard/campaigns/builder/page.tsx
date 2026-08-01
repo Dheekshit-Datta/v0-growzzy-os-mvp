@@ -4,17 +4,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Shell } from '@/components/dashboard-v2/shell'
 import {
-  Check, Trash2, AlertCircle, CheckCircle2, ChevronDown, Loader2, Plus, X,
+  Check, Trash2, AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, Loader2, Plus, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Section = 'goal' | 'plan' | 'keywords' | 'ads' | 'budget' | 'policy'
+type Section = 'goal' | 'plan' | 'keywords' | 'ads' | 'destination' | 'budget' | 'policy'
 
 const SECTIONS: { id: Section; label: string; desc: string }[] = [
   { id: 'goal', label: 'Set Your Goal', desc: 'Campaign objective' },
   { id: 'plan', label: 'Plan Review', desc: 'Ad groups' },
   { id: 'keywords', label: 'Keywords', desc: 'Keyword list' },
   { id: 'ads', label: 'Ads', desc: 'Headlines & copy' },
+  { id: 'destination', label: 'Targeting', desc: 'Location & landing page' },
   { id: 'budget', label: 'Budget', desc: 'Spend settings' },
   { id: 'policy', label: 'Policy Check', desc: 'Verify compliance' },
 ]
@@ -48,6 +49,7 @@ interface AdGroupEdit {
 }
 
 interface CampaignData {
+  campaignName?: string
   prompt: string
   detectedChips: string[]
   goal?: string
@@ -57,6 +59,9 @@ interface CampaignData {
   duration?: number
   locations?: string[]
   finalUrl?: string
+  languages?: string[]
+  biddingStrategy?: 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CLICKS' | 'TARGET_CPA' | 'TARGET_ROAS'
+  targetCpa?: number | null
   rationale?: {
     whyThisStructure?: string
     whyTheseKeywords?: string
@@ -69,17 +74,23 @@ function emptyAdGroup(name = 'New Ad Group'): AdGroupEdit {
   return { name, theme: '', keywords: [], negativeKeywords: [], headlines: [''], descriptions: [''] }
 }
 
-function policyCheckText(text: string) {
-  if (/[A-Z]{5,}/.test(text)) return { status: 'WARN' as const, message: 'Excessive capitalization detected' }
-  if (/[!]{2,}/.test(text)) return { status: 'FAIL' as const, message: 'Multiple exclamation marks not allowed' }
-  return null
+type PolicyCheck = {
+  status: 'PASS' | 'WARN' | 'FAIL'
+  checkedAt: string
+  flags: Array<{ text: string; adGroupName: string; field: string; reason: string; suggestion: string }>
+}
+
+type QualityCheck = { status: 'PASS' | 'WARN' | 'FAIL'; errors: string[]; warnings: string[] }
+
+function apiError(json: any, fallback: string) {
+  return json?.error?.message || (typeof json?.error === 'string' ? json.error : '') || json?.message || fallback
 }
 
 function displayHost(url?: string) {
   try {
-    return url ? new URL(url).hostname : 'www.yoursite.com'
+    return url ? new URL(url).hostname : 'Add landing page'
   } catch {
-    return 'www.yoursite.com'
+    return 'Add landing page'
   }
 }
 
@@ -91,10 +102,13 @@ export default function CampaignBuilderPage() {
     prompt: '',
     detectedChips: [],
     goal: 'Sales',
+    campaignName: '',
     adGroups: [emptyAdGroup('Core Campaign')],
     dailyBudget: 50,
     currency: 'USD',
     duration: 30,
+    languages: ['English'],
+    biddingStrategy: 'MAXIMIZE_CONVERSIONS',
   })
   const [activeGroupIdx, setActiveGroupIdx] = useState(0)
   const [newKeyword, setNewKeyword] = useState('')
@@ -107,6 +121,12 @@ export default function CampaignBuilderPage() {
   const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
   const [targetingOpen, setTargetingOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [policyCheck, setPolicyCheck] = useState<PolicyCheck | null>(null)
+  const [qualityCheck, setQualityCheck] = useState<QualityCheck | null>(null)
+  const [policyAcknowledged, setPolicyAcknowledged] = useState(false)
+  const [checkingPolicy, setCheckingPolicy] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const loadedPlanRef = useRef(false)
   const skipAutosaveRef = useRef(false)
@@ -137,13 +157,20 @@ export default function CampaignBuilderPage() {
         setData((prev) => ({
           ...prev,
           prompt: json?.data?.briefInput?.offer || plan.campaignName || prev.prompt,
+          campaignName: plan.campaignName || prev.campaignName,
           goal: plan.objective || plan.goal || prev.goal,
           adGroups,
           dailyBudget: Number(plan.dailyBudget) || prev.dailyBudget,
           locations: Array.isArray(plan.locations) ? plan.locations.map(String) : prev.locations,
           finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : prev.finalUrl,
+          languages: Array.isArray(plan.languages) ? plan.languages.map(String) : prev.languages,
+          biddingStrategy: plan.biddingStrategy || prev.biddingStrategy,
+          targetCpa: plan.targetCpa ?? prev.targetCpa,
           rationale: plan.rationale || prev.rationale,
         }))
+        setPolicyCheck(plan.policyCheck?.checkedAt ? plan.policyCheck : null)
+        setQualityCheck(plan.qualityCheck || null)
+        setPolicyAcknowledged(plan.policyAcknowledged === true)
         loadedPlanRef.current = true
       })
       .catch(() => {})
@@ -151,8 +178,16 @@ export default function CampaignBuilderPage() {
   }, [searchParams])
 
   const activeGroup = data.adGroups[activeGroupIdx] || data.adGroups[0]
+  const previewHeadlines = activeGroup.headlines.filter(Boolean)
+  const previewDescriptions = activeGroup.descriptions.filter(Boolean)
+  const previewCount = Math.max(1, Math.ceil(previewHeadlines.length / 3), previewDescriptions.length)
+  const safePreviewIndex = previewIndex % previewCount
+  const previewHeadline = previewHeadlines.slice((safePreviewIndex * 3) % Math.max(1, previewHeadlines.length), (safePreviewIndex * 3) % Math.max(1, previewHeadlines.length) + 3).join(' | ') || 'Your ad headline will appear here'
+  const previewDescription = previewDescriptions[safePreviewIndex % Math.max(1, previewDescriptions.length)] || 'Your ad description will appear here'
 
   const updateGroup = (idx: number, patch: Partial<AdGroupEdit>) => {
+    setPolicyCheck(null)
+    setPolicyAcknowledged(false)
     setData((prev) => ({
       ...prev,
       adGroups: prev.adGroups.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
@@ -161,12 +196,16 @@ export default function CampaignBuilderPage() {
 
   const addAdGroup = () => {
     if (data.adGroups.length >= MAX_AD_GROUPS) return
+    setPolicyCheck(null)
+    setPolicyAcknowledged(false)
     setData((prev) => ({ ...prev, adGroups: [...prev.adGroups, emptyAdGroup(`Ad Group ${prev.adGroups.length + 1}`)] }))
     setActiveGroupIdx(data.adGroups.length)
   }
 
   const removeAdGroup = (idx: number) => {
     if (data.adGroups.length <= 1) return
+    setPolicyCheck(null)
+    setPolicyAcknowledged(false)
     setData((prev) => ({ ...prev, adGroups: prev.adGroups.filter((_, i) => i !== idx) }))
     setActiveGroupIdx((prev) => Math.max(0, prev >= idx ? prev - 1 : prev))
   }
@@ -230,13 +269,24 @@ export default function CampaignBuilderPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        campaignName: data.campaignName,
+        objective: data.goal,
         dailyBudget: data.dailyBudget && data.dailyBudget > 0 ? data.dailyBudget : undefined,
+        biddingStrategy: data.biddingStrategy,
+        targetCpa: data.biddingStrategy === 'TARGET_CPA' ? data.targetCpa : null,
+        finalUrl: data.finalUrl || '',
+        locations: data.locations,
+        languages: data.languages,
         adGroups,
+        policyAcknowledged,
       }),
     })
+    const json = await readJson(res)
     if (!res.ok) {
-      const json = await readJson(res)
-      setLaunchError(json?.error || 'Failed to save your edits.')
+      setLaunchError(apiError(json, 'Failed to save your edits.'))
+    } else {
+      setQualityCheck(json?.data?.plan?.qualityCheck || null)
+      setPolicyCheck(json?.data?.plan?.policyCheck?.checkedAt ? json.data.plan.policyCheck : null)
     }
     return res.ok
   }
@@ -275,6 +325,21 @@ export default function CampaignBuilderPage() {
       setLaunchError("This plan can't be launched — start from New Campaign so it's saved first.")
       return
     }
+    if (!data.finalUrl) {
+      setLaunchError('Add the real landing page URL before launch.')
+      setOpenSection('destination')
+      return
+    }
+    if (!policyCheck?.checkedAt) {
+      setLaunchError('Run the policy check before launch.')
+      setOpenSection('policy')
+      return
+    }
+    if (policyCheck.status === 'FAIL' || (policyCheck.status === 'WARN' && !policyAcknowledged)) {
+      setLaunchError(policyCheck.status === 'FAIL' ? 'Fix the blocking policy issues before launch.' : 'Acknowledge the policy warnings before launch.')
+      setOpenSection('policy')
+      return
+    }
     setLaunching(true)
     setLaunchError('')
     try {
@@ -282,7 +347,7 @@ export default function CampaignBuilderPage() {
       if (!saved) throw new Error(launchError || "Couldn't save your edits. Please review the fields and try again.")
       const res = await fetch(`/api/ai/campaign-plan/${planId}/launch`, { method: 'POST' })
       const json = await readJson(res)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Launch failed. Please review the plan and try again.')
+      if (!res.ok || !json?.ok) throw new Error(apiError(json, 'Launch failed. Please review the plan and try again.'))
       setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
       setTimeout(() => router.push('/dashboard/ads'), 1400)
     } catch (err: any) {
@@ -291,20 +356,34 @@ export default function CampaignBuilderPage() {
     }
   }
 
-  // Policy check across all ad groups
-  const policyIssues = data.adGroups.flatMap((g, gi) => {
-    const issues: { group: number; text: string; message: string }[] = []
-    for (const h of g.headlines) {
-      const p = policyCheckText(h)
-      if (p) issues.push({ group: gi, text: h, message: p.message })
+  const runPolicyCheck = async () => {
+    if (!planId || checkingPolicy) return
+    setCheckingPolicy(true)
+    setLaunchError('')
+    try {
+      if (!(await persistEdits())) throw new Error('Save the plan before checking policy.')
+      const res = await fetch('/api/ai/policy-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignPlanId: planId }),
+      })
+      const json = await readJson(res)
+      if (!res.ok || !json?.ok) throw new Error(apiError(json, 'Policy check failed.'))
+      setPolicyCheck(json.data)
+      setPolicyAcknowledged(json.data.status === 'PASS')
+    } catch (error: any) {
+      setLaunchError(error?.message || 'Policy check failed.')
+    } finally {
+      setCheckingPolicy(false)
     }
-    for (const d of g.descriptions) {
-      const p = policyCheckText(d)
-      if (p) issues.push({ group: gi, text: d, message: p.message })
-    }
-    return issues
-  })
-  const policyStatus = policyIssues.length > 0 ? 'WARN' : 'PASS'
+  }
+
+  const policyStatus = policyCheck?.status || 'NOT_CHECKED'
+  const policyIssues = (policyCheck?.flags || []).map((flag) => ({
+    group: Math.max(0, data.adGroups.findIndex((group) => group.name === flag.adGroupName)),
+    text: flag.text,
+    message: `${flag.reason} Suggested fix: ${flag.suggestion}`,
+  }))
 
   const groupIsValidForAds = (g: AdGroupEdit) => {
     const validHeadlines = g.headlines.filter((h) => h.trim().length > 0 && h.length <= 30)
@@ -320,7 +399,8 @@ export default function CampaignBuilderPage() {
       case 'keywords': return data.adGroups.every((g) => g.keywords.length > 0)
       case 'ads': return data.adGroups.every(groupIsValidForAds)
       case 'budget': return !!data.dailyBudget && data.dailyBudget > 0
-      case 'policy': return policyStatus === 'PASS'
+      case 'destination': return !!data.finalUrl && !!data.locations?.length
+      case 'policy': return policyStatus === 'PASS' || (policyStatus === 'WARN' && policyAcknowledged)
       default: return false
     }
   }
@@ -387,7 +467,7 @@ export default function CampaignBuilderPage() {
   return (
     <Shell>
       <div className="flex h-screen bg-[#F6F7F9] overflow-hidden">
-        <div className="w-[240px] bg-white border-r border-[#DDE1E7] p-4 flex flex-col overflow-y-auto">
+        <div className="w-[240px] bg-white border-r border-[#DDE1E7] p-4 hidden lg:flex flex-col overflow-y-auto">
           <h3 className="text-[12px] font-semibold text-[#6B7280] uppercase tracking-wider">Campaign Flow</h3>
           <p className="text-[11px] text-[#9CA3AF] mb-4">Complete all steps before publish</p>
           <div className="space-y-1 flex-1">
@@ -416,9 +496,10 @@ export default function CampaignBuilderPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
           <div className="max-w-[560px] mx-auto">
-            <div className="mb-5">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
               <h2 className="text-[20px] font-bold text-[#111827]">Create Campaign</h2>
               <p className="text-[12px] text-[#6B7280]">
                 {loadingPlan
@@ -431,11 +512,17 @@ export default function CampaignBuilderPage() {
                         ? 'Could not autosave yet. Fix highlighted fields before launch.'
                         : 'AI proposes. You edit. Publish when it looks right.'}
               </p>
+              </div>
+              <button onClick={() => setPreviewOpen(true)} className="sku-btn xl:hidden h-9 px-3 text-[11px] font-semibold flex items-center gap-1.5"><Eye size={13} /> Preview</button>
             </div>
 
             <div className="space-y-3">
               <AccordionSection id="goal">
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#111827] mb-2">Campaign Name</label>
+                    <input value={data.campaignName || ''} onChange={(e) => setData({ ...data, campaignName: e.target.value.slice(0, 120) })} className="sku-input w-full" />
+                  </div>
                   <div>
                     <label className="block text-[12px] font-semibold text-[#111827] mb-2">Campaign Goal</label>
                     <select value={data.goal || 'Sales'} onChange={(e) => setData({ ...data, goal: e.target.value })} className="sku-input w-full">
@@ -635,8 +722,37 @@ export default function CampaignBuilderPage() {
                 </div>
               </AccordionSection>
 
+              <AccordionSection id="destination">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#111827] mb-2">Target locations</label>
+                    <input value={data.locations?.join(', ') || ''} onChange={(e) => setData({ ...data, locations: e.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} placeholder="e.g. Mumbai, Delhi" className="sku-input w-full" />
+                    <p className="text-[10.5px] text-[#6B7280] mt-1">Separate multiple locations with commas.</p>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#111827] mb-2">Language</label>
+                    <input value={data.languages?.join(', ') || 'English'} onChange={(e) => setData({ ...data, languages: e.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} className="sku-input w-full" />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#111827] mb-2">Landing page URL</label>
+                    <input type="url" value={data.finalUrl || ''} onChange={(e) => setData({ ...data, finalUrl: e.target.value })} placeholder="https://yourwebsite.com/offer" className="sku-input w-full" />
+                    <p className="text-[10.5px] text-[#6B7280] mt-1">Required before launch. Placeholder domains are rejected.</p>
+                  </div>
+                </div>
+              </AccordionSection>
+
               <AccordionSection id="budget">
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#111827] mb-2">Bidding strategy</label>
+                    <select value={data.biddingStrategy || 'MAXIMIZE_CONVERSIONS'} onChange={(e) => setData({ ...data, biddingStrategy: e.target.value as CampaignData['biddingStrategy'] })} className="sku-input w-full">
+                      <option value="MAXIMIZE_CONVERSIONS">Maximize conversions</option>
+                      <option value="MAXIMIZE_CLICKS">Maximize clicks</option>
+                      <option value="TARGET_CPA">Target CPA</option>
+                    </select>
+                    {data.biddingStrategy === 'TARGET_CPA' && <input type="number" min="0.01" value={data.targetCpa || ''} onChange={(e) => setData({ ...data, targetCpa: Number(e.target.value) || null })} placeholder="Target CPA" className="sku-input w-full mt-2" />}
+                    {data.rationale?.whyThisBidding && <p className="text-[11px] text-[#6B7280] mt-1">{data.rationale.whyThisBidding}</p>}
+                  </div>
                   <div>
                     <label className="block text-[12px] font-semibold text-[#111827] mb-2">Daily Budget</label>
                     <div className="flex gap-2">
@@ -667,7 +783,7 @@ export default function CampaignBuilderPage() {
                     <div className="min-w-0">
                       <p className="text-[12px] font-semibold text-[#111827]">{policyStatus}</p>
                       {policyIssues.length === 0 ? (
-                        <p className="text-[11px] text-[#6B7280] mt-0.5">All policies passed</p>
+                        <p className="text-[11px] text-[#6B7280] mt-0.5">{policyStatus === 'NOT_CHECKED' ? 'Run the real policy check before launch.' : 'No likely policy issues were found.'}</p>
                       ) : (
                         <div className="mt-1 space-y-1">
                           {policyIssues.map((issue, i) => (
@@ -679,6 +795,16 @@ export default function CampaignBuilderPage() {
                       )}
                     </div>
                   </div>
+                  {qualityCheck?.warnings.map((warning, i) => <p key={i} className="text-[11px] text-[#B8892B] mt-2">{warning}</p>)}
+                  {policyStatus === 'WARN' && (
+                    <label className="flex items-center gap-2 mt-3 text-[11px] text-[#374151]">
+                      <input type="checkbox" checked={policyAcknowledged} onChange={(e) => setPolicyAcknowledged(e.target.checked)} />
+                      I reviewed these warnings and want to continue.
+                    </label>
+                  )}
+                  <button onClick={runPolicyCheck} disabled={checkingPolicy} className="sku-btn mt-3 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60">
+                    {checkingPolicy ? 'Checking...' : policyCheck ? 'Check again' : 'Run policy check'}
+                  </button>
                 </div>
               </AccordionSection>
             </div>
@@ -716,19 +842,24 @@ export default function CampaignBuilderPage() {
           </div>
         </div>
 
-        <div className="w-[300px] bg-white border-l border-[#DDE1E7] p-6 overflow-y-auto hidden lg:flex flex-col">
+        <div className="w-[300px] bg-white border-l border-[#DDE1E7] p-6 overflow-y-auto hidden xl:flex flex-col">
           <h3 className="text-[12px] font-semibold text-[#6B7280] mb-4 uppercase">Google Search Preview</h3>
           <p className="text-[10px] text-[#9CA3AF] -mt-3 mb-3">Showing: {activeGroup.name || `Ad Group ${activeGroupIdx + 1}`}</p>
 
           <div className="flex-1 space-y-4">
             <div className="inline-block px-2 py-1 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-[3px]">Sponsored</div>
-            <h4 className="text-[14px] font-bold text-[#1F57F5] break-words leading-snug">{activeGroup.headlines[0] || 'Your ad headline will appear here'}</h4>
+            <h4 className="text-[14px] font-bold text-[#1F57F5] break-words leading-snug">{previewHeadline}</h4>
             <p className="text-[13px] text-[#1F57F5] break-all">
               {displayHost(data.finalUrl)} › {activeGroup.keywords[0]?.keyword || 'campaign'}
             </p>
-            <p className="text-[13px] text-[#6B7280] leading-snug break-words">{activeGroup.descriptions[0] || 'Your ad description will appear here'}</p>
+            <p className="text-[13px] text-[#6B7280] leading-snug break-words">{previewDescription}</p>
+            <div className="flex items-center justify-between pt-2">
+              <button aria-label="Previous ad combination" onClick={() => setPreviewIndex((value) => (value - 1 + previewCount) % previewCount)} className="sku-btn w-8 h-8 flex items-center justify-center"><ChevronLeft size={14} /></button>
+              <span className="text-[10px] text-[#6B7280]">{safePreviewIndex + 1} of {previewCount}</span>
+              <button aria-label="Next ad combination" onClick={() => setPreviewIndex((value) => (value + 1) % previewCount)} className="sku-btn w-8 h-8 flex items-center justify-center"><ChevronRight size={14} /></button>
+            </div>
 
-            <div className="mt-4 pt-4 border-t border-[#DDE1E7]">
+            <div className="hidden">
               <p className="text-[10px] font-semibold text-[#6B7280] mb-2">All headlines ({activeGroup.headlines.filter(Boolean).length})</p>
               <div className="space-y-1">
                 {activeGroup.headlines.filter(Boolean).map((h, idx) => (
@@ -737,7 +868,7 @@ export default function CampaignBuilderPage() {
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-[#DDE1E7]">
+            <div className="hidden">
               <p className="text-[10px] font-semibold text-[#6B7280] mb-2">Keywords ({activeGroup.keywords.length})</p>
               <div className="space-y-1">
                 {activeGroup.keywords.slice(0, 5).map((k, idx) => (
@@ -748,6 +879,25 @@ export default function CampaignBuilderPage() {
             </div>
           </div>
         </div>
+        {previewOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label="Google Search ad preview">
+            <div className="w-full max-w-[420px] bg-white rounded-[12px] border border-[#DDE1E7] shadow-xl p-5">
+              <div className="flex items-center justify-between mb-5">
+                <div><p className="text-[13px] font-semibold text-[#111827]">Google Search preview</p><p className="text-[10px] text-[#6B7280]">{activeGroup.name}</p></div>
+                <button aria-label="Close preview" onClick={() => setPreviewOpen(false)} className="sku-btn w-8 h-8 flex items-center justify-center"><X size={14} /></button>
+              </div>
+              <span className="inline-block px-2 py-1 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-[3px]">Sponsored</span>
+              <h4 className="text-[16px] font-semibold text-[#1F57F5] mt-3 leading-snug">{previewHeadline}</h4>
+              <p className="text-[12px] text-[#1F57F5] mt-2 break-all">{displayHost(data.finalUrl)}</p>
+              <p className="text-[13px] text-[#6B7280] mt-2 leading-relaxed">{previewDescription}</p>
+              <div className="flex items-center justify-between mt-5">
+                <button aria-label="Previous ad combination" onClick={() => setPreviewIndex((value) => (value - 1 + previewCount) % previewCount)} className="sku-btn w-9 h-9 flex items-center justify-center"><ChevronLeft size={14} /></button>
+                <span className="text-[11px] text-[#6B7280]">Combination {safePreviewIndex + 1} of {previewCount}</span>
+                <button aria-label="Next ad combination" onClick={() => setPreviewIndex((value) => (value + 1) % previewCount)} className="sku-btn w-9 h-9 flex items-center justify-center"><ChevronRight size={14} /></button>
+              </div>
+            </div>
+          </div>
+        )}
         {targetingOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
             <div className="w-full max-w-[560px] bg-white rounded-[16px] border border-[#DDE1E7] shadow-xl overflow-hidden">

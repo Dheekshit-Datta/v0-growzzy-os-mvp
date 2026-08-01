@@ -7,7 +7,7 @@ import CampaignBuilderPage from "../builder/page"
 import {
   Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
-  Download, Copy, Wand2, Check, ExternalLink, Loader2,
+  Download, Copy, Wand2, Check, ExternalLink, Loader2, X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -104,10 +104,12 @@ function CreativeCard({
   variation,
   imageUrl,
   ratio,
+  onPreview,
 }: {
   variation: CreativeVariation
   imageUrl: string | null
   ratio: string
+  onPreview: (url: string) => void
 }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
@@ -126,7 +128,9 @@ function CreativeCard({
       >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={variation.headline} className="w-full h-full object-cover" />
+          <button type="button" onClick={() => onPreview(imageUrl)} className="w-full h-full cursor-zoom-in" aria-label={`Preview ${variation.headline}`}>
+            <img src={imageUrl} alt={variation.headline} className="w-full h-full object-cover" />
+          </button>
         ) : (
           <div className="flex flex-col items-center gap-1.5 p-4 text-center">
             <ImageIcon size={20} className="text-[#D1D5DB]" />
@@ -203,6 +207,7 @@ export default function NewCampaignPage() {
   const [generatingCreatives, setGeneratingCreatives] = useState(false)
   const [creativesError, setCreativesError] = useState("")
   const [generatedCreatives, setGeneratedCreatives] = useState<CreativeVariation[]>([])
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([])
   const [creativesCount, setCreativesCount] = useState(4)
 
@@ -790,14 +795,17 @@ export default function NewCampaignPage() {
               {generatedCreatives.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[13.5px] font-semibold text-[#111827]">{generatedCreatives.length} creative{generatedCreatives.length > 1 ? "s" : ""} generated</p>
+                    <div>
+                      <p className="text-[13.5px] font-semibold text-[#111827]">{generatedCreatives.length} creative{generatedCreatives.length > 1 ? "s" : ""} generated and saved</p>
+                      <p className="text-[10.5px] text-[#6B7280]">Visual assets stay in Ad Studio; Google Search campaigns publish text ads only.</p>
+                    </div>
                     <button onClick={handleGenerateCreatives} className="flex items-center gap-1 text-[12px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">
                       <RefreshCw size={12} /> Regenerate
                     </button>
                   </div>
                   <div className={cn("grid gap-4", generatedCreatives.length === 1 ? "grid-cols-1 max-w-[280px]" : generatedCreatives.length === 2 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
                     {generatedCreatives.map((c, i) => (
-                      <CreativeCard key={i} variation={c} imageUrl={generatedImageUrls[i] || null} ratio={selectedRatio} />
+                      <CreativeCard key={i} variation={c} imageUrl={generatedImageUrls[i] || null} ratio={selectedRatio} onPreview={setPreviewImageUrl} />
                     ))}
                   </div>
                   <div className="mt-4">
@@ -855,6 +863,14 @@ export default function NewCampaignPage() {
                     {launching ? (<><Loader2 size={16} className="animate-spin" />Launching…</>) : (<><Rocket size={15} />Launch {platformName} Campaign</>)}
                   </button>
                 )}
+              </div>
+            </div>
+          )}
+          {previewImageUrl && (
+            <div className="fixed inset-0 z-50 bg-black/70 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Creative preview" onClick={() => setPreviewImageUrl(null)}>
+              <div className="relative max-w-[92vw] max-h-[92vh]" onClick={(event) => event.stopPropagation()}>
+                <button type="button" aria-label="Close preview" onClick={() => setPreviewImageUrl(null)} className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full bg-white shadow flex items-center justify-center text-[#111827]"><X size={16} /></button>
+                <img src={previewImageUrl} alt="Generated creative preview" className="max-w-[92vw] max-h-[88vh] object-contain rounded-[8px]" />
               </div>
             </div>
           )}

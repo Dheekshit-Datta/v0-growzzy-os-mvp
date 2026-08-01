@@ -4,34 +4,22 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { assessGoogleSearchPlan, GoogleAdGroupSchema } from "@/lib/google-plan-quality"
 
 export const dynamic = "force-dynamic"
 
-const KeywordSchema = z.object({
-  text: z.string().min(1).max(80),
-  matchType: z.enum(["BROAD", "PHRASE", "EXACT"]),
-  intent: z.string().optional(),
-})
-
-const AdGroupSchema = z.object({
-  name: z.string().min(1).max(80),
-  theme: z.string().max(200).optional().default(""),
-  keywords: z.array(KeywordSchema).min(1).max(25),
-  negativeKeywords: z.array(z.string().max(80)).max(30).optional().default([]),
-  headlines: z.array(z.string().min(1).max(30)).min(3).max(15),
-  descriptions: z.array(z.string().min(1).max(90)).min(2).max(4),
-  finalUrl: z.string().url().optional(),
-})
-
 const PlanPatchSchema = z.object({
   campaignName: z.string().min(1).max(120).optional(),
+  objective: z.string().min(1).max(40).optional(),
   dailyBudget: z.coerce.number().positive().max(100000).optional(),
   biddingStrategy: z.enum(["MAXIMIZE_CONVERSIONS", "MAXIMIZE_CLICKS", "TARGET_CPA", "TARGET_ROAS"]).optional(),
   targetCpa: z.coerce.number().positive().optional().nullable(),
   targetRoas: z.coerce.number().positive().optional().nullable(),
-  finalUrl: z.string().url().optional(),
+  finalUrl: z.string().url().or(z.literal("")).optional(),
   locations: z.array(z.string().max(120)).max(20).optional(),
-  adGroups: z.array(AdGroupSchema).min(1).max(6).optional(),
+  languages: z.array(z.string().min(2).max(40)).min(1).max(10).optional(),
+  adGroups: z.array(GoogleAdGroupSchema).min(1).max(6).optional(),
+  policyAcknowledged: z.boolean().optional(),
 })
 
 const MetaPlanPatchSchema = z.object({
@@ -107,21 +95,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const updates: any = parsed.data
   const mergedPlan: Record<string, unknown> = { ...existingPlan }
   if (updates.campaignName !== undefined) mergedPlan.campaignName = updates.campaignName
+  if (updates.objective !== undefined) mergedPlan.objective = updates.objective
   if (updates.dailyBudget !== undefined) mergedPlan.dailyBudget = updates.dailyBudget
   if (updates.biddingStrategy !== undefined) mergedPlan.biddingStrategy = updates.biddingStrategy
   if (updates.targetCpa !== undefined) mergedPlan.targetCpa = updates.targetCpa
   if (updates.targetRoas !== undefined) mergedPlan.targetRoas = updates.targetRoas
-  if (updates.finalUrl !== undefined) mergedPlan.finalUrl = updates.finalUrl
+  if (updates.finalUrl !== undefined) {
+    if (updates.finalUrl) mergedPlan.finalUrl = updates.finalUrl
+    else delete mergedPlan.finalUrl
+  }
   if (updates.locations !== undefined) mergedPlan.locations = updates.locations
+  if (updates.languages !== undefined) mergedPlan.languages = updates.languages
+  if (updates.policyAcknowledged !== undefined) mergedPlan.policyAcknowledged = updates.policyAcknowledged
   if (updates.adGroups !== undefined) {
+    const adTextChanged = JSON.stringify(existingPlan.adGroups) !== JSON.stringify(updates.adGroups)
     mergedPlan.adGroups = updates.adGroups
     // Ad text changed — any previous policy check is stale
-    delete mergedPlan.policyCheck
+    if (adTextChanged) {
+      delete mergedPlan.policyCheck
+      mergedPlan.policyAcknowledged = false
+    }
   }
   for (const key of ["adSetName", "targeting", "placements", "pageId", "instagramActorId", "pixelId", "appId", "objectStoreUrl", "creative"] as const) {
     if (updates[key] !== undefined) mergedPlan[key] = updates[key]
   }
   if (updates.creative !== undefined) delete mergedPlan.policyCheck
+
+  if (planRow.platform === "GOOGLE") {
+    const qualityCheck = assessGoogleSearchPlan(mergedPlan)
+    mergedPlan.qualityCheck = qualityCheck
+  }
 
   const updated = await prisma.campaignPlan.update({
     where: { id: planRow.id },

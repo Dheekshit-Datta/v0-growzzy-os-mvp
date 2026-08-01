@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { assessGoogleSearchPlan } from "@/lib/google-plan-quality"
 
 export const dynamic = "force-dynamic"
 
@@ -14,9 +15,10 @@ export async function GET(req: NextRequest) {
   const workspaceId = await getRequestWorkspaceId(userId, req)
 
   const plans = await prisma.campaignPlan.findMany({
-    where: { userId, workspaceId, briefInput: { not: Prisma.JsonNull } },
+    where: { userId, workspaceId, status: { not: "FAILED" }, briefInput: { not: Prisma.JsonNull } },
     select: {
       id: true,
+      platform: true,
       status: true,
       plan: true,
       briefInput: true,
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    plans: plans.map((p) => ({
+    plans: plans.filter((p) => p.platform !== "GOOGLE" || assessGoogleSearchPlan(p.plan).status !== "FAIL").map((p) => ({
       id: p.id,
       status: p.status,
       campaignName: (p.plan as any)?.campaignName || "Untitled campaign",
