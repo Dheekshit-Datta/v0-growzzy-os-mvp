@@ -68,11 +68,11 @@ export async function GET(req: NextRequest) {
       integration.adAccounts.find((account) => selectedAccountIds.includes(account.externalId)) ||
       integration.adAccounts.find((account) => account.isPrimary) ||
       null
-    const hasSelectedAccount = Boolean(integration.hasAdsAccess && selectedAccount)
+    const hasSelectedAccount = Boolean(selectedAccount)
     result[key] = {
       connected: true,
       hasAdsAccount: hasSelectedAccount,
-      hasAdsAccess: integration.hasAdsAccess,
+      hasAdsAccess: integration.hasAdsAccess || hasSelectedAccount,
       status: integration.status,
       accountId: integration.accountId,
       accountName: integration.accountName,

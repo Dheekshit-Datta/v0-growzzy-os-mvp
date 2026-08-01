@@ -269,16 +269,10 @@ export async function POST(req: NextRequest) {
       platform: input.platform,
       status: { in: ["OAUTH_GRANTED", "ACCOUNT_SELECTED", "INITIAL_SYNC_RUNNING", "ACTIVE", "SYNC_FAILED"] },
     },
-    select: { id: true, selectedAdAccountId: true, accountId: true, hasAdsAccess: true, accountInfo: true },
+    select: { id: true, selectedAdAccountId: true, accountId: true, accountInfo: true },
   })
   const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null
-  if (input.adAccountId && normalizeAccountId(input.adAccountId) !== normalizeAccountId(selectedAdAccountId)) {
-    return NextResponse.json({ ok: false, error: { code: "ACCOUNT_SCOPE_MISMATCH", message: `The selected ${input.platform === "META" ? "Meta" : "Google"} Ads account is not active in this workspace.` } }, { status: 403 })
-  }
-  if (!selectedAdAccountId || !integration?.hasAdsAccess) {
-    return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: `Connect ${input.platform === "META" ? "Meta" : "Google"} Ads and select an ad account before building a launchable campaign plan.` } }, { status: 409 })
-  }
-  const adAccount = await prisma.adAccount.findFirst({
+  const adAccount = integration ? await prisma.adAccount.findFirst({
     where: {
       integrationId: integration.id,
       OR: [
@@ -287,8 +281,13 @@ export async function POST(req: NextRequest) {
       ],
     },
     select: { id: true, externalId: true },
-  })
-  if (!adAccount) return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: "Selected ad account metadata is missing." } }, { status: 409 })
+  }) : null
+  if (input.adAccountId && normalizeAccountId(input.adAccountId) !== normalizeAccountId(adAccount?.externalId || selectedAdAccountId)) {
+    return NextResponse.json({ ok: false, error: { code: "ACCOUNT_SCOPE_MISMATCH", message: `The selected ${input.platform === "META" ? "Meta" : "Google"} Ads account is not active in this workspace.` } }, { status: 403 })
+  }
+  if (!integration || !selectedAdAccountId || !adAccount) {
+    return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: `Connect ${input.platform === "META" ? "Meta" : "Google"} Ads and select an ad account before building a launchable campaign plan.` } }, { status: 409 })
+  }
   const adAccountId = adAccount.id
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
