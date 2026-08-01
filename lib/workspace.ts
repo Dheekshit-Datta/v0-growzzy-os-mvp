@@ -64,30 +64,37 @@ export async function getPrimaryWorkspaceId(userId: string) {
 }
 
 export async function getRequestWorkspaceId(userId: string, request?: NextRequest | Request | null) {
-  const requestedWorkspaceId = getRequestedWorkspaceIdFromRequest(request)
+  const explicitWorkspaceId = getWorkspaceIdFromUrl(request)
+  const requestedWorkspaceId = explicitWorkspaceId || getWorkspaceIdFromCookie(request)
 
-  const workspace = await assertWorkspaceMember(userId, requestedWorkspaceId)
-  return workspace.id
+  try {
+    const workspace = await assertWorkspaceMember(userId, requestedWorkspaceId)
+    return workspace.id
+  } catch (error) {
+    if (explicitWorkspaceId) throw error
+    return getPrimaryWorkspaceId(userId)
+  }
 }
 
-function getRequestedWorkspaceIdFromRequest(request?: NextRequest | Request | null) {
+function getWorkspaceIdFromUrl(request?: NextRequest | Request | null) {
   if (!request) return null
 
-  // NextRequest path (preferred when available)
   const fromNextUrl = (request as NextRequest)?.nextUrl?.searchParams?.get?.("workspaceId")
   if (fromNextUrl) return fromNextUrl
 
-  const fromNextCookie = (request as NextRequest)?.cookies?.get?.(ACTIVE_WORKSPACE_COOKIE)?.value
-  if (fromNextCookie) return fromNextCookie
-
-  // Standard Request fallback (many route handlers use `Request`, not `NextRequest`)
   try {
     const url = new URL(request.url)
-    const fromUrl = url.searchParams.get("workspaceId")
-    if (fromUrl) return fromUrl
+    return url.searchParams.get("workspaceId")
   } catch {
-    // Ignore invalid URL parsing and continue to cookie parsing fallback.
+    return null
   }
+}
+
+function getWorkspaceIdFromCookie(request?: NextRequest | Request | null) {
+  if (!request) return null
+
+  const fromNextCookie = (request as NextRequest)?.cookies?.get?.(ACTIVE_WORKSPACE_COOKIE)?.value
+  if (fromNextCookie) return fromNextCookie
 
   const cookieHeader = request.headers?.get?.("cookie") || ""
   if (!cookieHeader) return null
