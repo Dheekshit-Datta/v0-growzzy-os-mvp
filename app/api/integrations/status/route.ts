@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { prisma } from "@/lib/prisma"
-import { getRequestWorkspaceId } from "@/lib/workspace"
+import { accountIdVariants } from "@/lib/account-id"
+import { getPrimaryWorkspaceId, getRequestWorkspaceId } from "@/lib/workspace"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -13,7 +14,12 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = await resolveUserId(session.user.id)
-  const workspaceId = await getRequestWorkspaceId(userId, req)
+  let workspaceId: string
+  try {
+    workspaceId = await getRequestWorkspaceId(userId, req)
+  } catch {
+    workspaceId = await getPrimaryWorkspaceId(userId)
+  }
 
   const integrations = await prisma.integration.findMany({
     where: { userId, workspaceId },
@@ -57,8 +63,9 @@ export async function GET(req: NextRequest) {
 
     const lastSyncedAt = integration.lastSyncAt || integration.lastSyncedAt
     const stale = lastSyncedAt ? Date.now() - new Date(lastSyncedAt).getTime() > 24 * 60 * 60 * 1000 : true
+    const selectedAccountIds = accountIdVariants(integration.selectedAdAccountId)
     const selectedAccount =
-      integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId) ||
+      integration.adAccounts.find((account) => selectedAccountIds.includes(account.externalId)) ||
       integration.adAccounts.find((account) => account.isPrimary) ||
       null
     const hasSelectedAccount = Boolean(integration.hasAdsAccess && selectedAccount)

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
 import CampaignBuilderPage from "../builder/page"
+import { fallbackEnhancement } from "@/lib/prompt-enhancement"
 import {
   Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown, RefreshCw,
@@ -264,19 +265,22 @@ export default function NewCampaignPage() {
         body: JSON.stringify({ prompt: prompt.trim() }),
       })
       const json = await readJson(res)
-      if (!res.ok || !json?.enhanced) throw new Error(json?.error || "Couldn't enhance this brief.")
+      if (!res.ok || !json?.enhanced) throw new Error()
       setPrompt(json.enhanced)
-    } catch (err: any) {
-      setEnhanceError(err?.message || "Something went wrong enhancing your brief.")
+    } catch {
+      setPrompt((current) => fallbackEnhancement(current))
+      setEnhanceError("AI is temporarily unavailable, so Growzzy structured the brief locally.")
     } finally {
       setEnhancing(false)
     }
   }
 
   const effectiveLocation = location.trim() || inferLocation(prompt)
+  const buildLocation = effectiveLocation || "United States"
+  const canBuildPlan = !!prompt.trim() && !building && (platform !== "META" || !!metaObjective)
 
   const handleBuild = async () => {
-    if (!prompt.trim() || !effectiveLocation || building) return
+    if (!canBuildPlan) return
     setBuilding(true)
     setBuildError("")
     try {
@@ -287,7 +291,7 @@ export default function NewCampaignPage() {
           offer: prompt.trim(),
           targetCustomer: prompt.trim().slice(0, 200),
           budget,
-          location: effectiveLocation,
+          location: buildLocation,
           goal,
           platform,
           metaObjective: platform === "META" ? metaObjective : undefined,
@@ -553,10 +557,10 @@ export default function NewCampaignPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleBuild}
-                  disabled={!prompt.trim() || !effectiveLocation || building || (platform === "META" && !metaObjective)}
+                  disabled={!canBuildPlan}
                   className={cn(
                     "flex items-center gap-1.5 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors",
-                    prompt.trim() && effectiveLocation && !building && (platform !== "META" || metaObjective) ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                    canBuildPlan ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                   )}
                 >
                   {building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>)}

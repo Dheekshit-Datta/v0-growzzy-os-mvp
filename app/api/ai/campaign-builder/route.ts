@@ -70,6 +70,87 @@ function validateGooglePlan(plan: any) {
   }
 }
 
+export function fallbackGooglePlan(input: z.infer<typeof CampaignBuilderSchema>) {
+  const offer = input.offer.trim().replace(/\s+/g, " ")
+  const shortOffer = offer.slice(0, 28) || "Your Offer"
+  const location = input.location || "United States"
+  const baseKeywords = [
+    shortOffer,
+    `${shortOffer} ${location}`,
+    `${shortOffer} near me`,
+    `${shortOffer} pricing`,
+    `${shortOffer} service`,
+    `best ${shortOffer}`,
+    `${shortOffer} consultation`,
+    `${shortOffer} online`,
+    `${shortOffer} offers`,
+    `${shortOffer} quote`,
+  ]
+  return {
+    campaignName: `${shortOffer} - Search`,
+    campaignType: "SEARCH",
+    objective: input.goal,
+    biddingStrategy: input.goal === "TRAFFIC" ? "MAXIMIZE_CLICKS" : "MAXIMIZE_CONVERSIONS",
+    dailyBudget: input.budget,
+    finalUrl: input.landingPageUrl || "https://example.com",
+    locations: [location],
+    languages: ["English"],
+    adGroups: [
+      {
+        name: "Core Search",
+        theme: "High-intent searches for the offer",
+        keywords: baseKeywords.map((text) => ({ text, matchType: "PHRASE", intent: "high" })),
+        negativeKeywords: ["free", "jobs", "diy", "course", "definition"],
+        headlines: [
+          shortOffer,
+          `Try ${shortOffer}`,
+          `${shortOffer} Today`,
+          `Book ${shortOffer}`,
+          `${location} ${shortOffer}`.slice(0, 30),
+          `Trusted ${shortOffer}`,
+          `Get ${shortOffer}`,
+          `${shortOffer} Deals`,
+        ],
+        descriptions: [
+          `Promote ${shortOffer} with clear, lead-focused search ads.`,
+          `Reach people in ${location} who are already looking for this offer.`,
+          `Start paused, review the campaign, then enable when ready.`,
+        ],
+      },
+      {
+        name: "Problem Aware",
+        theme: "People comparing options before they decide",
+        keywords: baseKeywords.map((text) => ({ text: `${text} help`.slice(0, 80), matchType: "BROAD", intent: "medium" })),
+        negativeKeywords: ["free", "jobs", "diy", "course", "definition"],
+        headlines: [
+          `Need ${shortOffer}?`,
+          `${shortOffer} Help`,
+          `Compare ${shortOffer}`,
+          `Start With ${shortOffer}`,
+          `Easy ${shortOffer}`,
+          `${shortOffer} Support`,
+          `Find ${shortOffer}`,
+          `Local ${shortOffer}`,
+        ],
+        descriptions: [
+          `Use this draft as a starting point and edit any targeting before launch.`,
+          `Growzzy kept the plan conservative because AI output was unavailable.`,
+          `Launch paused first so nothing spends until you approve it.`,
+        ],
+      },
+    ],
+    rationale: {
+      whyThisStructure: "This fallback draft separates direct high-intent searches from broader problem-aware searches so you can review them safely.",
+      whyTheseKeywords: "Keywords are derived directly from the offer and location supplied by the user.",
+      whyThisBidding: "A conservative automated bidding strategy is used for a new campaign with limited history.",
+      expectedResultsRange: "Estimate unavailable until Google syncs real account data.",
+    },
+    landingPageSuggestions: ["Add a final landing page URL before enabling spend."],
+    launchReadinessScore: input.landingPageUrl ? 70 : 55,
+    risks: ["This plan was generated from a deterministic fallback because AI output was unavailable or invalid. Review before launch."],
+  }
+}
+
 const META_OBJECTIVES = {
   AWARENESS: { objective: "OUTCOME_AWARENESS", optimizationGoal: "REACH", billingEvent: "IMPRESSIONS" },
   TRAFFIC: { objective: "OUTCOME_TRAFFIC", optimizationGoal: "LINK_CLICKS", billingEvent: "IMPRESSIONS" },
@@ -205,7 +286,7 @@ export async function POST(req: NextRequest) {
   const adAccountId = adAccount.id
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY && input.platform === "META") {
     return NextResponse.json({ ok: false, error: "AI Campaign Builder is unavailable because OPENAI_API_KEY is not configured." }, { status: 503 })
   }
 
@@ -267,18 +348,24 @@ ${businessContext}
 
 Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (Meta targeting object with geo_locations), placements (publisher_platforms and facebook_positions/instagram_positions when appropriate), creative { name, primaryText, headline, description, callToAction }, rationale, launchReadinessScore, and risks. Do not invent a Page, Pixel, app, destination URL, or image URL.`
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
-    temperature: 0.35,
-    response_format: { type: "json_object" },
-    messages: [{ role: "user", content: input.platform === "META" ? metaPrompt : googlePrompt }],
-  })
-
   let raw: any
-  try {
-    raw = parseJsonObject(completion.choices[0]?.message?.content)
-  } catch {
-    return NextResponse.json({ ok: false, error: { code: "AI_PLAN_PARSE_FAILED", message: "AI could not return a valid campaign plan. Try again with a little more detail." } }, { status: 502 })
+  if (!process.env.OPENAI_API_KEY && input.platform === "GOOGLE") {
+    raw = fallbackGooglePlan(input)
+  } else {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
+        temperature: 0.35,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: input.platform === "META" ? metaPrompt : googlePrompt }],
+      })
+      raw = parseJsonObject(completion.choices[0]?.message?.content)
+    } catch {
+      if (input.platform === "META") {
+        return NextResponse.json({ ok: false, error: { code: "AI_PLAN_PARSE_FAILED", message: "AI could not return a valid Meta campaign plan. Try again with a little more detail." } }, { status: 502 })
+      }
+      raw = fallbackGooglePlan(input)
+    }
   }
   const plan = input.platform === "META"
     ? validateMetaPlan(raw, input, object(object(integration.accountInfo).metaAssets))

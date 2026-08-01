@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const userId = await resolveUserId(session.user.id)
 
   const limit = await rateLimitPolicy(userId, "aiUtility")
-  if (!limit.allowed) return rateLimitResponse(limit)
+  if (!limit.allowed && !limit.unavailable) return rateLimitResponse(limit)
 
   let body: unknown
   try {
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const workspaceId = await getRequestWorkspaceId(userId, req)
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY || limit.unavailable) {
     return NextResponse.json({ ok: true, enhanced: fallbackEnhancement(input.prompt), fallback: true })
   }
 
