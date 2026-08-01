@@ -37,7 +37,7 @@ async function redis(command: string[]) {
 
 export async function cachedUtilityCompletion(call: UtilityCall) {
   const startedAt = Date.now()
-  const model = UTILITY_MODEL
+  let model = UTILITY_MODEL
   const key = utilityCacheKey(call.operation, call.workspaceId, call.input)
 
   try {
@@ -59,11 +59,22 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
     // Cache is a cost optimization; route rate limits remain fail-closed separately.
   }
 
-  const completion = await openai.chat.completions.create({
-    model,
-    messages: call.messages,
-    ...(call.json ? { response_format: { type: "json_object" as const } } : {}),
-  })
+  let completion: OpenAI.Chat.Completions.ChatCompletion
+  try {
+    completion = await openai.chat.completions.create({
+      model,
+      messages: call.messages,
+      ...(call.json ? { response_format: { type: "json_object" as const } } : {}),
+    })
+  } catch (error) {
+    if (model === "gpt-4o-mini") throw error
+    model = "gpt-4o-mini"
+    completion = await openai.chat.completions.create({
+      model,
+      messages: call.messages,
+      ...(call.json ? { response_format: { type: "json_object" as const } } : {}),
+    })
+  }
   const content = completion.choices[0]?.message?.content?.trim() || ""
 
   if (content) {

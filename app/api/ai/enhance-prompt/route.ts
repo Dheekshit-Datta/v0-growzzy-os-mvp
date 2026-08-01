@@ -12,9 +12,7 @@ const EnhanceSchema = z.object({
 })
 
 function fallbackEnhancement(prompt: string) {
-  return `${prompt.trim()}
-
-Use this as the campaign brief. Keep the ad focused on the offer above, target people most likely to need it, and use clear lead-focused copy. Add the exact location, daily budget, landing page, and audience details before launch if they are missing.`
+  return prompt.trim()
 }
 
 export async function POST(req: NextRequest) {

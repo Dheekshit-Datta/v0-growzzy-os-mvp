@@ -141,6 +141,14 @@ function CreativeCard({
   )
 }
 
+function inferLocation(text: string) {
+  const value = text.toLowerCase()
+  if (/\bindia|mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|kolkata|pune\b/.test(value)) return "India"
+  if (/\buk|united kingdom|london|england\b/.test(value)) return "United Kingdom"
+  if (/\bus|usa|united states|america|new york|california\b/.test(value)) return "United States"
+  return ""
+}
+
 export default function NewCampaignPage() {
   const [activeTab, setActiveTab] = useState<Tab>("campaign")
   const [prompt, setPrompt] = useState("")
@@ -159,8 +167,16 @@ export default function NewCampaignPage() {
   const [buildError, setBuildError] = useState("")
 
   // Google connection + workspace brand (real context for AI Creatives)
-  const [googleConnected, setGoogleConnected] = useState(false)
-  const [metaConnected, setMetaConnected] = useState(false)
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null
+    const cached = window.sessionStorage.getItem("growzzy_google_connected")
+    return cached === null ? null : cached === "true"
+  })
+  const [metaConnected, setMetaConnected] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null
+    const cached = window.sessionStorage.getItem("growzzy_meta_connected")
+    return cached === null ? null : cached === "true"
+  })
   const [brand, setBrand] = useState<{ name?: string; industry?: string; toneOfVoice?: string; productDescription?: string } | null>(null)
 
   // Creatives state
@@ -220,8 +236,12 @@ export default function NewCampaignPage() {
     fetch("/api/integrations/status", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        setGoogleConnected(!!json?.google?.connected && !!json?.google?.hasAdsAccount)
-        setMetaConnected(!!json?.meta?.connected && !!json?.meta?.hasAdsAccount)
+        const google = !!json?.google?.connected && !!json?.google?.hasAdsAccount
+        const meta = !!json?.meta?.connected && !!json?.meta?.hasAdsAccount
+        setGoogleConnected(google)
+        setMetaConnected(meta)
+        window.sessionStorage.setItem("growzzy_google_connected", String(google))
+        window.sessionStorage.setItem("growzzy_meta_connected", String(meta))
       })
       .catch(() => {})
     fetch("/api/workspaces", { cache: "no-store" })
@@ -253,8 +273,10 @@ export default function NewCampaignPage() {
     }
   }
 
+  const effectiveLocation = location.trim() || inferLocation(prompt)
+
   const handleBuild = async () => {
-    if (!prompt.trim() || !location.trim() || building) return
+    if (!prompt.trim() || !effectiveLocation || building) return
     setBuilding(true)
     setBuildError("")
     try {
@@ -265,7 +287,7 @@ export default function NewCampaignPage() {
           offer: prompt.trim(),
           targetCustomer: prompt.trim().slice(0, 200),
           budget,
-          location: location.trim(),
+          location: effectiveLocation,
           goal,
           platform,
           metaObjective: platform === "META" ? metaObjective : undefined,
@@ -480,7 +502,7 @@ export default function NewCampaignPage() {
                 </div>
                 <div>
                   <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Target location</label>
-                  <input type="text" placeholder="e.g. United Kingdom" value={location} onChange={(e) => setLocation(e.target.value)} className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input" />
+                  <input type="text" placeholder={effectiveLocation || "e.g. United Kingdom"} value={location} onChange={(e) => setLocation(e.target.value)} className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input" />
                 </div>
                 <div>
                   <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Goal</label>
@@ -531,10 +553,10 @@ export default function NewCampaignPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleBuild}
-                  disabled={!prompt.trim() || !location.trim() || building || (platform === "META" && !metaObjective)}
+                  disabled={!prompt.trim() || !effectiveLocation || building || (platform === "META" && !metaObjective)}
                   className={cn(
                     "flex items-center gap-1.5 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors",
-                    prompt.trim() && location.trim() && !building && (platform !== "META" || metaObjective) ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                    prompt.trim() && effectiveLocation && !building && (platform !== "META" || metaObjective) ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                   )}
                 >
                   {building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>)}
@@ -726,12 +748,12 @@ export default function NewCampaignPage() {
                 )}
                 <div className="space-y-3">
                   {launchChecklist.map(({ label, done, optional }) => (
-                    <div key={label} className="flex items-center gap-3 p-3 rounded-[10px]" style={{ background: done ? '#E6F4EC' : 'linear-gradient(145deg, #f8f9fb 0%, #f0f2f5 100%)' }}>
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={done ? { background: 'linear-gradient(135deg, #34c471 0%, #2E9E5B 100%)', color: 'white' } : { background: 'linear-gradient(145deg, #e8eaed 0%, #f4f5f7 100%)', color: '#9CA3AF' }}>
+                    <div key={label} className="flex items-center gap-3 p-3 rounded-[10px]" style={{ background: done === true ? '#E6F4EC' : 'linear-gradient(145deg, #f8f9fb 0%, #f0f2f5 100%)' }}>
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={done === true ? { background: 'linear-gradient(135deg, #34c471 0%, #2E9E5B 100%)', color: 'white' } : { background: 'linear-gradient(145deg, #e8eaed 0%, #f4f5f7 100%)', color: '#9CA3AF' }}>
                         {done ? <Check size={13} /> : <Circle size={12} />}
                       </div>
-                      <span className={cn("text-[13px]", done ? "font-semibold text-[#2E9E5B]" : "font-medium text-[#4B5563]")}>{label}</span>
-                      {!done && !optional && label === `${platformName} connected` && (
+                      <span className={cn("text-[13px]", done === true ? "font-semibold text-[#2E9E5B]" : "font-medium text-[#4B5563]")}>{done === null ? "Checking connection..." : label}</span>
+                      {done === false && !optional && label === `${platformName} connected` && (
                         <a href={platform === "META" ? "/api/integrations/meta/connect" : "/api/integrations/google/connect"} className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">Connect →</a>
                       )}
                     </div>
