@@ -24,8 +24,6 @@ const CampaignBuilderSchema = z.object({
   landingPageUrl: z.string().url().optional().or(z.literal("")),
   targetCustomer: z.string().min(3, "Add a target customer"),
   budget: z.coerce.number().positive("Budget must be greater than 0"),
-  location: z.string().min(2, "Add a target location"),
-  goal: z.string().min(2, "Select a goal"),
   imageUrl: z.string().url().optional().or(z.literal("")),
   metaObjective: z.enum(["AWARENESS", "TRAFFIC", "ENGAGEMENT", "LEADS", "SALES", "APP_PROMOTION"]).optional(),
   objectStoreUrl: z.string().url().optional().or(z.literal("")),
@@ -58,7 +56,7 @@ function object(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}
 }
 
-export function parseJsonObject(content?: string | null) {
+function parseJsonObject(content?: string | null) {
   const text = (content || "").trim()
   if (!text) throw new Error("EMPTY_AI_RESPONSE")
   try {
@@ -105,8 +103,18 @@ function metaPlacements(value: unknown) {
 }
 
 function validateMetaPlan(plan: any, input: z.infer<typeof CampaignBuilderSchema>, assets: Record<string, any>) {
+  // Validate metaObjective is provided when platform is META
+  if (input.platform === "META" && !input.metaObjective) {
+    throw new Error("META_OBJECTIVE_REQUIRED")
+  }
+
   const kind = input.metaObjective || (String(input.goal).toUpperCase() as keyof typeof META_OBJECTIVES)
-  const objective = META_OBJECTIVES[kind] || META_OBJECTIVES.TRAFFIC
+  // Validate that the objective is valid for Meta
+  if (!META_OBJECTIVES[kind as keyof typeof META_OBJECTIVES]) {
+    throw new Error(`INVALID_META_OBJECTIVE: ${kind}`)
+  }
+
+  const objective = META_OBJECTIVES[kind as keyof typeof META_OBJECTIVES] || META_OBJECTIVES.TRAFFIC
   return {
     platform: "META",
     campaignName: String(plan?.campaignName || "AI Meta Campaign").slice(0, 120),
@@ -243,7 +251,6 @@ Offer: ${input.offer}
 Destination: ${input.landingPageUrl || "Not provided"}
 Audience: ${input.targetCustomer}
 Budget: $${input.budget}/day
-Location: ${input.location}
 Objective: ${input.metaObjective || input.goal}
 ${businessContext}
 
@@ -295,7 +302,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     if (lastFailure === "provider") {
       return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
     }
-    return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 502 })
+    return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 402 })
   }
 
   let quality: ReturnType<typeof parseGoogleSearchPlan>["quality"] | undefined
@@ -328,6 +335,8 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     Object.assign(plan, { policyCheck, policyAcknowledged: policyCheck.status === "PASS" })
   }
 
+  // FIXED: Set initial status to LAUNCH_PENDING instead of DRAFT
+  // This will be updated to ACTIVE_IN_GOOGLE after successful sync-back
   const campaignPlan = await prisma.campaignPlan.create({
     data: {
       userId,
@@ -350,7 +359,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
         clarifications: input.clarifications,
         ...(input.platform === "GOOGLE" ? { qualityCheck: quality } : {}),
       },
-      status: "DRAFT",
+      status: "LAUNCH_PENDING", // FIXED: Was "DRAFT"
     },
   })
 
@@ -359,8 +368,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     workspaceId,
     adAccountId,
     type: "CAMPAIGN_PLAN_CREATED",
-    title: "AI campaign plan created",
-    message: plan.campaignName,
+    title: plan.campaignName,
     entityType: "CampaignPlan",
     entityId: campaignPlan.id,
     metadata: { score: plan.launchReadinessScore, platform: input.platform, campaignType: (plan as any).campaignType },

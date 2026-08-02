@@ -81,9 +81,9 @@ Return only JSON matching:
   "missingQuestions": ["up to three concise questions"]
 }
 
-User request: ${input.prompt}
-Confirmed form inputs: ${JSON.stringify({ budget: input.budget, location: input.location, goal: input.goal })}
-Saved business context: ${businessContext || "None"}`
+User request: \${input.prompt}
+Confirmed form inputs: \${JSON.stringify({ budget: input.budget, location: input.location, goal: input.goal })}
+Saved business context: \${businessContext || "None"}`
 
   let lastError = ""
   let lastFailure: "provider" | "output" = "output"
@@ -96,7 +96,7 @@ Saved business context: ${businessContext || "None"}`
         workspaceId,
         input: { ...input, attempt },
         json: true,
-        messages: [{ role: "user", content: `${prompt}${attempt ? "\nThe previous response was invalid. Return complete JSON only." : ""}` }],
+        messages: [{ role: "user", content: \`\${prompt}\${attempt ? "\\nThe previous response was invalid. Return complete JSON only." : ""}\` }],
       })
       const brief = parseBrief(content)
       if (brief.success) return NextResponse.json({ ok: true, enhanced: brief.data.enhancedText, brief: brief.data })
@@ -109,8 +109,61 @@ Saved business context: ${businessContext || "None"}`
     }
   }
 
+  // FIXED: Distinguish between safety blocks and transient errors
   if (lastFailure === "provider") {
-    return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI Enhance is temporarily unavailable. Your original brief has not been changed; try again shortly." } }, { status: 503 })
+    // Provider/transient error - return 503 with Retry-After hint
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "AI_UNAVAILABLE",
+          message: "AI Enhance is temporarily unavailable. Your original brief has not been changed; try again shortly."
+        }
+      },
+      {
+        status: 503,
+        headers: {
+          "Retry-After": "60"
+        }
+      }
+    )
   }
-  return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not enhance this brief safely. Your original brief has not been changed; try again shortly." }, detail: lastError }, { status: 502 })
+
+  // Output/parsing error - check if it's a safety block
+  const safetyBlockKeywords = ["medical", "financial", "legal", "pharmaceutical", "weapon", "adult", "political", "controversial", "unsafe", "harmful", "dangerous", "illegal", "restricted", "prohibited"];
+  const isSafetyBlock = safetyBlockKeywords.some(keyword => lastError.toLowerCase().includes(keyword));
+
+  if (isSafetyBlock) {
+    // Safety block - return 400 with specific guidance
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "AI_SAFETY_BLOCK",
+          message: "Your request contains content that violates our advertising policies. Please review your input for any restricted topics (e.g., medical claims, financial services, adult content) and try again with a revised brief."
+        }
+      },
+      {
+        status: 400
+      }
+    )
+  }
+
+  // Transient output error - return 502 with Retry-After
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "AI_INVALID_OUTPUT",
+        message: "AI could not enhance this brief safely due to a temporary issue. Your original brief has not been changed; please try again in a moment."
+      },
+      detail: lastError
+    },
+    {
+      status: 502,
+      headers: {
+        "Retry-After": "30"
+      }
+    }
+  )
 }
