@@ -94,8 +94,8 @@ export async function getBusinessContextForWorkspace(workspaceId: string): Promi
     workspace.toneOfVoice && `Preferred voice: ${workspace.toneOfVoice}`,
     workspace.primaryGoal && `Primary goal: ${workspace.primaryGoal}`,
     workspace.currencyCode && `Currency: ${workspace.currencyCode}`,
-    timezone && `Timezone: ${timezone}`,
-    dailyBudgetCeiling && `Approved daily budget ceiling: ${dailyBudgetCeiling}`,
+    workspace.timezone && `Timezone: ${workspace.timezone}`,
+    workspace.dailyBudgetCeiling && `Approved daily budget ceiling: ${workspace.dailyBudgetCeiling}`,
   ].filter(Boolean)
 
   const formattedContext = details.length ? `\nThis business has confirmed the following context. Use it when relevant and never invent facts beyond it:\n${details.join("\n")}` : ""

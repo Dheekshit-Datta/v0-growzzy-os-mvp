@@ -386,7 +386,7 @@ export default function NewCampaignPage() {
           goal,
           landingPageUrl: landingPageUrl.trim() || undefined,
           enhancedBrief: enhancedBrief || undefined,
-          clarifications: enhancedBrief?.missingQuestions.map((question, index) => ({ question, answer: clarifications[index]?.trim() || "" })).filter((item) => item.answer) || undefined,
+          clarifications: enhancedBrief?.missingQuestions?.map((question, index) => ({ question, answer: clarifications[index]?.trim() || "" })).filter((item) => item.answer) || undefined,
           platform,
           metaObjective: platform === "META" ? metaObjective : undefined,
         }),
