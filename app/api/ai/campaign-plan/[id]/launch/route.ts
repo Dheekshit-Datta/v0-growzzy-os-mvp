@@ -5,7 +5,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { checkPlanPolicy } from "@/lib/services/policy-check"
-import { log } from "@/lib/logger/logger"
+import { log } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60

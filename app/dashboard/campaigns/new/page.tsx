@@ -114,7 +114,7 @@ function CreativeCard({
 }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
-    navigator.clipboard.writeText([variation.headline, variableDescription || "").filter(Boolean).join("\n")).catch(() => {})
+    navigator.clipboard.writeText([variation.headline, variation.body || variation.description || ""].filter(Boolean).join("\n")).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
