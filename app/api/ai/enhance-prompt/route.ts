@@ -5,7 +5,8 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
-import { cachedUtilityCompletion } from "@/lib/ai-utility"
+import { aiErrorMetadata, cachedUtilityCompletion } from "@/lib/ai-utility"
+import { log } from "@/lib/logger"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
@@ -101,9 +102,10 @@ Saved business context: ${businessContext || "None"}`
       if (brief.success) return NextResponse.json({ ok: true, enhanced: brief.data.enhancedText, brief: brief.data })
       lastFailure = "output"
       lastError = brief.error.issues[0]?.message || "Invalid enhanced brief"
-    } catch {
+    } catch (error) {
       lastFailure = "provider"
       lastError = "AI provider unavailable"
+      log("error", "ai/enhance-prompt", "OpenAI provider request failed", aiErrorMetadata(error))
     }
   }
 

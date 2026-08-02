@@ -16,6 +16,15 @@ type UtilityCall = {
   json?: boolean
 }
 
+export function aiErrorMetadata(error: unknown) {
+  const value = error && typeof error === "object" ? error as Record<string, unknown> : {}
+  return {
+    status: typeof value.status === "number" ? value.status : null,
+    code: typeof value.code === "string" ? value.code.slice(0, 80) : null,
+    type: typeof value.type === "string" ? value.type.slice(0, 80) : error instanceof Error ? error.name : "UnknownError",
+  }
+}
+
 export function utilityCacheKey(operation: string, workspaceId: string, input: unknown) {
   const digest = createHash("sha256").update(JSON.stringify({ operation, workspaceId, input })).digest("hex")
   return `growzzy:ai-cache:${operation}:${digest}`

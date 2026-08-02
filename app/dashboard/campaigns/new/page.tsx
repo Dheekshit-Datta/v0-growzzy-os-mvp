@@ -292,7 +292,6 @@ export default function NewCampaignPage() {
       })
       const json = await readJson(res)
       if (!res.ok || !json?.enhanced || !json?.brief) throw new Error(json?.error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
-      setPrompt(json.enhanced)
       setEnhancedBrief(json.brief)
       setClarifications((json.brief.missingQuestions || []).map(() => ""))
     } catch (error: any) {
@@ -524,6 +523,14 @@ export default function NewCampaignPage() {
                     </div>
                     <span className="text-[10px] font-semibold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded-full">AI enhanced</span>
                   </div>
+                  <textarea
+                    value={enhancedBrief.enhancedText}
+                    onChange={(event) => setEnhancedBrief((current) => current ? { ...current, enhancedText: event.target.value } : current)}
+                    maxLength={2000}
+                    rows={5}
+                    aria-label="Enhanced campaign brief"
+                    className="sku-input w-full mt-3 px-3 py-2 text-[12px] leading-relaxed resize-y"
+                  />
                   {enhancedBrief.missingQuestions.length > 0 && (
                     <div className="mt-3 space-y-2">
                       <p className="text-[11px] font-semibold text-[#374151]">A few details would make the plan stronger</p>
