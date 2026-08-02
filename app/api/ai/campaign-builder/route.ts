@@ -249,7 +249,9 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
 
   let raw: any
   let generationError: unknown
+  let lastFailure: "provider" | "output" = "output"
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    let content: string | null | undefined
     try {
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
@@ -260,7 +262,14 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
           content: `${input.platform === "META" ? metaPrompt : googlePrompt}${attempt ? "\n\nThe previous response was invalid. Return complete JSON matching every required field and character limit." : ""}`,
         }],
       })
-      raw = parseJsonObject(completion.choices[0]?.message?.content)
+      content = completion.choices[0]?.message?.content
+    } catch (error) {
+      generationError = error
+      lastFailure = "provider"
+      continue
+    }
+    try {
+      raw = parseJsonObject(content)
       if (input.platform === "META") break
       const candidate = parseGoogleSearchPlan({
         ...raw,
@@ -272,12 +281,17 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
       })
       if (candidate.plan) break
       generationError = candidate.error
+      lastFailure = "output"
       raw = undefined
     } catch (error) {
       generationError = error
+      lastFailure = "output"
     }
   }
   if (!raw) {
+    if (lastFailure === "provider") {
+      return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
+    }
     return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 502 })
   }
 

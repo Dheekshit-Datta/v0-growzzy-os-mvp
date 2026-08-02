@@ -85,6 +85,7 @@ Confirmed form inputs: ${JSON.stringify({ budget: input.budget, location: input.
 Saved business context: ${businessContext || "None"}`
 
   let lastError = ""
+  let lastFailure: "provider" | "output" = "output"
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const content = await cachedUtilityCompletion({
@@ -98,11 +99,16 @@ Saved business context: ${businessContext || "None"}`
       })
       const brief = parseBrief(content)
       if (brief.success) return NextResponse.json({ ok: true, enhanced: brief.data.enhancedText, brief: brief.data })
+      lastFailure = "output"
       lastError = brief.error.issues[0]?.message || "Invalid enhanced brief"
     } catch {
+      lastFailure = "provider"
       lastError = "AI provider unavailable"
     }
   }
 
+  if (lastFailure === "provider") {
+    return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI Enhance is temporarily unavailable. Your original brief has not been changed; try again shortly." } }, { status: 503 })
+  }
   return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not enhance this brief safely. Your original brief has not been changed; try again shortly." }, detail: lastError }, { status: 502 })
 }
