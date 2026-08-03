@@ -93,11 +93,6 @@ type EnhancedBrief = {
   missingQuestions: string[]
 }
 
-type ChatMessage = {
-  role: "assistant" | "user"
-  text: string
-}
-
 async function readJson(res: Response) {
   try {
     return await res.json()
@@ -192,10 +187,6 @@ export default function NewCampaignPage() {
   const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
   const [campaignName, setCampaignName] = useState("")
   const [buildError, setBuildError] = useState("")
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "assistant", text: "Tell me what you want to launch. I will ask only for the details needed to build a real Google Search plan." },
-  ])
-  const [chatInput, setChatInput] = useState("")
 
   // Google connection + workspace brand (real context for AI Creatives)
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(() => {
@@ -398,24 +389,6 @@ export default function NewCampaignPage() {
     return "Perfect. I have the core launch inputs. Build the plan and I will turn this into editable ad groups, keywords, and RSA copy."
   }
 
-  const handleChatSend = () => {
-    const text = chatInput.trim() || (!chatMessages.some((message) => message.role === "user") ? promptText : "")
-    if (!text) return
-    const locationGuess = inferLocation(text)
-    const budgetGuess = text.match(/(?:\$|usd\s*)?(\d+(?:\.\d+)?)\s*(?:\/day|per day|daily|budget|dollars?)/i)
-    const urlGuess = text.match(/https?:\/\/[^\s]+/i)?.[0]
-    const nextPrompt = promptText || text
-    const nextLocation = location.trim() || locationGuess
-    const nextBudget = budgetGuess ? Number(budgetGuess[1]) : budget
-    const nextUrl = landingPageUrl.trim() || urlGuess || ""
-    if (!promptText) setPrompt(text)
-    if (!location.trim() && locationGuess) setLocation(locationGuess)
-    if (budgetGuess) setBudget(Number(budgetGuess[1]))
-    if (!landingPageUrl.trim() && urlGuess) setLandingPageUrl(urlGuess)
-    setChatMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: assistantReplyFor(nextPrompt, nextLocation, nextBudget, nextUrl) }])
-    setChatInput("")
-  }
-
   const handleBuild = async () => {
     if (!canBuildPlan) return
     setBuilding(true)
@@ -568,7 +541,7 @@ export default function NewCampaignPage() {
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0 overflow-y-auto">
-          <div className="w-full max-w-[1040px] text-center mb-8">
+          <div className="w-full max-w-[760px] text-center mb-8">
             <h1 className="text-[30px] text-[#111827] leading-tight mb-2 tracking-tight text-balance" style={{ fontWeight: 500 }}>
               {built ? "Campaign plan ready." : "Run ad campaigns in minutes."}
             </h1>
@@ -598,67 +571,11 @@ export default function NewCampaignPage() {
 
           {/* Campaign tab */}
           {activeTab === "campaign" && (
-            <div className="w-full max-w-[1040px] grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-              <div className="sku-card p-4 text-left">
-                <p className="text-[12px] font-semibold text-[#111827] mb-3">Campaign chat</p>
-                <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                  {chatMessages.map((message, index) => (
-                    <div key={`${message.role}-${index}`} className={cn("rounded-[12px] px-3 py-2 text-[12.5px] leading-relaxed", message.role === "assistant" ? "bg-[#F3F6FB] text-[#374151]" : "bg-[#1F57F5] text-white ml-10")}>
-                      {message.text}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault()
-                        handleChatSend()
-                      }
-                    }}
-                    placeholder="Answer Growzzy or add more campaign details..."
-                    className="sku-input h-10 flex-1 text-[13px]"
-                  />
-                  <button type="button" onClick={handleChatSend} className="sku-btn-primary h-10 px-4 rounded-[10px] text-[13px] font-semibold">
-                    Send
-                  </button>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
-                  {[
-                    ["Offer", !!promptText],
-                    ["Location", !!effectiveLocation],
-                    ["Budget", hasBudget],
-                    ["Account", platformConnected === true],
-                  ].map(([label, done]) => (
-                    <div key={String(label)} className={cn("rounded-[8px] border px-2.5 py-2", done ? "border-[#BFE6CD] bg-[#F1FBF5] text-[#2E9E5B]" : "border-[#E5E7EB] bg-white text-[#6B7280]")}>
-                      {done ? "Ready" : "Needed"}: {label}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="sku-card p-4 text-left xl:sticky xl:top-4">
-                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#6B7280]">Live Google preview</p>
-                <div className="mt-4 rounded-[14px] border border-[#E5E7EB] p-4 bg-white">
-                  <span className="text-[10px] font-bold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded">Sponsored</span>
-                  <p className="mt-3 text-[17px] leading-snug font-semibold text-[#1a0dab]">
-                    {enhancedBrief?.productOrOffer || promptText.slice(0, 42) || "Your offer"} | {goal === "SALES" ? "Shop Now" : "Get Started"}
-                  </p>
-                  <p className="mt-1 text-[12px] text-[#006621]">{landingPageUrl.trim() || "yourwebsite.com"}</p>
-                  <p className="mt-2 text-[13px] text-[#4B5563]">
-                    {enhancedBrief?.enhancedText?.slice(0, 130) || promptText.slice(0, 130) || "Growzzy will preview the ad copy here as your plan takes shape."}
-                  </p>
-                </div>
-                <div className="mt-4 space-y-2 text-[12px] text-[#374151]">
-                  <div className="flex justify-between"><span>Location</span><strong>{effectiveLocation || "Needed"}</strong></div>
-                  <div className="flex justify-between"><span>Budget</span><strong>{hasBudget ? `$${budget}/day` : "Needed"}</strong></div>
-                  <div className="flex justify-between"><span>Platform</span><strong>{platformName}</strong></div>
-                  <div className="flex justify-between"><span>Status</span><strong>{missingEssentials.length ? "Needs details" : "Ready to build"}</strong></div>
-                </div>
-              </div>
-              <div className="xl:col-span-2">
+            <div className="w-full max-w-[760px]">
               <div className="bg-white rounded-[16px] overflow-hidden" style={{ border: '2px solid #1F57F5', boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
+                <div className="px-4 py-3 border-b border-[#E9EBEF] bg-[#F8FAFF]">
+                  <p className="text-[12.5px] font-medium text-[#374151]">{assistantReplyFor()}</p>
+                </div>
                 <textarea
                   ref={textareaRef}
                   value={prompt}
@@ -856,7 +773,6 @@ export default function NewCampaignPage() {
                     </div>
                   </div>
                 )}
-              </div>
               </div>
             </div>
           )}
