@@ -81,9 +81,9 @@ Return only JSON matching:
   "missingQuestions": ["up to three concise questions"]
 }
 
-User request: \${input.prompt}
-Confirmed form inputs: \${JSON.stringify({ budget: input.budget, location: input.location, goal: input.goal })}
-Saved business context: \${businessContext || "None"}`
+User request: ${input.prompt}
+Confirmed form inputs: ${JSON.stringify({ budget: input.budget, location: input.location, goal: input.goal })}
+Saved business context: ${businessContext || "None"}`
 
   let lastError = ""
   let lastFailure: "provider" | "output" = "output"

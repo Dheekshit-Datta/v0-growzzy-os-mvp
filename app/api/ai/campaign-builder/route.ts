@@ -261,18 +261,28 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
   let raw: any
   let generationError: unknown
   let lastFailure: "provider" | "output" = "output"
+  let model = process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o"
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let content: string | null | undefined
     try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o",
+      const request = {
+        model,
         temperature: 0.35,
-        response_format: { type: "json_object" },
+        response_format: { type: "json_object" as const },
         messages: [{
-          role: "user",
+          role: "user" as const,
           content: `${input.platform === "META" ? metaPrompt : googlePrompt}${attempt ? "\n\nThe previous response was invalid. Return complete JSON matching every required field and character limit." : ""}`,
         }],
-      })
+      }
+      let completion: OpenAI.Chat.Completions.ChatCompletion
+      try {
+        completion = await openai.chat.completions.create(request)
+      } catch (error) {
+        if (model === "gpt-4o-mini") throw error
+        log("warn", "ai/campaign-builder", "Configured campaign model failed; retrying fallback model", aiErrorMetadata(error))
+        model = "gpt-4o-mini"
+        completion = await openai.chat.completions.create({ ...request, model })
+      }
       content = completion.choices[0]?.message?.content
     } catch (error) {
       generationError = error
@@ -304,7 +314,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     if (lastFailure === "provider") {
       return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
     }
-    return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 402 })
+    return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 502 })
   }
 
   let quality: ReturnType<typeof parseGoogleSearchPlan>["quality"] | undefined
