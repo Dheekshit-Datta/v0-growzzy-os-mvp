@@ -96,7 +96,7 @@ Saved business context: \${businessContext || "None"}`
         workspaceId,
         input: { ...input, attempt },
         json: true,
-        messages: [{ role: "user", content: \`\${prompt}\${attempt ? "\\nThe previous response was invalid. Return complete JSON only." : ""}\` }],
+        messages: [{ role: "user", content: `${prompt}${attempt ? "\nThe previous response was invalid. Return complete JSON only." : ""}` }],
       })
       const brief = parseBrief(content)
       if (brief.success) return NextResponse.json({ ok: true, enhanced: brief.data.enhancedText, brief: brief.data })

@@ -93,6 +93,11 @@ type EnhancedBrief = {
   missingQuestions: string[]
 }
 
+type ChatMessage = {
+  role: "assistant" | "user"
+  text: string
+}
+
 async function readJson(res: Response) {
   try {
     return await res.json()
@@ -147,7 +152,7 @@ function CreativeCard({
               <Download size={14} />
             </a>
           )}
-        }
+        </div>
       </div>
       <div className="px-3 py-2.5">
         <p className="text-[12px] font-semibold text-[#111827] leading-snug line-clamp-2">{variation.headline}</p>
@@ -187,6 +192,10 @@ export default function NewCampaignPage() {
   const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
   const [campaignName, setCampaignName] = useState("")
   const [buildError, setBuildError] = useState("")
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: "assistant", text: "Tell me what you want to launch. I will ask only for the details needed to build a real Google Search plan." },
+  ])
+  const [chatInput, setChatInput] = useState("")
 
   // Google connection + workspace brand (real context for AI Creatives)
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(() => {
@@ -230,7 +239,7 @@ export default function NewCampaignPage() {
 
   // Track if there are unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const unsavedChangesRef = useRef(false)
+  const unsavedChangesRef = useRef<{ lastValue: string } | null>(null)
 
   useEffect(() => {
     const s = new Set<string>()
@@ -289,7 +298,6 @@ export default function NewCampaignPage() {
   useEffect(() => {
     // Track changes to form fields
     const handleChange = () => {
-      unsavedChangesRef.current = true
       setHasUnsavedChanges(true)
     }
 
@@ -309,7 +317,7 @@ export default function NewCampaignPage() {
 
     // Simple change detection - in a real app you might use a more sophisticated approach
     if (inputString !== unsavedChangesRef.current?.lastValue) {
-      unsavedChangesRef.current = { lastValue: inputString, timestamp: Date.now() }
+      unsavedChangesRef.current = { lastValue: inputString }
       handleChange()
     }
   }, [prompt, budget, location, landingPageUrl, goal, platform, metaObjective,
@@ -357,7 +365,7 @@ export default function NewCampaignPage() {
       setEnhancedBrief(json.brief)
       setClarifications((json.brief.missingQuestions || []).map(() => ""))
       // Reset unsaved flags when enhancement succeeds
-      unsavedChangesRef.current = false
+      unsavedChangesRef.current = null
       setHasUnsavedChanges(false)
     } catch (error: any) {
       setEnhanceError(error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
@@ -367,8 +375,46 @@ export default function NewCampaignPage() {
   }
 
   const effectiveLocation = location.trim() || inferLocation(prompt)
-  const buildLocation = effectiveLocation || "United States"
-  const canBuildPlan = !!prompt.trim() && !building && (platform !== "META" || !!metaObjective)
+  const promptText = prompt.trim()
+  const hasBudget = Number.isFinite(budget) && budget > 0
+  const missingEssentials = [
+    !promptText ? "offer" : "",
+    !effectiveLocation ? "location" : "",
+    !hasBudget ? "daily budget" : "",
+    platform === "META" && !metaObjective ? "Meta objective" : "",
+  ].filter(Boolean)
+  const canBuildPlan = !building && missingEssentials.length === 0
+
+  const assistantReplyFor = (
+    nextPrompt = promptText,
+    nextLocation = effectiveLocation,
+    nextBudget = budget,
+    nextUrl = landingPageUrl,
+  ) => {
+    if (!nextPrompt.trim()) return "Start with one sentence about what you sell, who it is for, and what outcome you want."
+    if (!nextLocation) return "I understand the offer. What location should this campaign target?"
+    if (!Number.isFinite(nextBudget) || nextBudget <= 0) return "Good. What daily budget are you comfortable testing?"
+    if (!nextUrl.trim()) return "This is enough to build the draft. Add a landing page before launch so the campaign can go live safely."
+    return "Perfect. I have the core launch inputs. Build the plan and I will turn this into editable ad groups, keywords, and RSA copy."
+  }
+
+  const handleChatSend = () => {
+    const text = chatInput.trim() || (!chatMessages.some((message) => message.role === "user") ? promptText : "")
+    if (!text) return
+    const locationGuess = inferLocation(text)
+    const budgetGuess = text.match(/(?:\$|usd\s*)?(\d+(?:\.\d+)?)\s*(?:\/day|per day|daily|budget|dollars?)/i)
+    const urlGuess = text.match(/https?:\/\/[^\s]+/i)?.[0]
+    const nextPrompt = promptText || text
+    const nextLocation = location.trim() || locationGuess
+    const nextBudget = budgetGuess ? Number(budgetGuess[1]) : budget
+    const nextUrl = landingPageUrl.trim() || urlGuess || ""
+    if (!promptText) setPrompt(text)
+    if (!location.trim() && locationGuess) setLocation(locationGuess)
+    if (budgetGuess) setBudget(Number(budgetGuess[1]))
+    if (!landingPageUrl.trim() && urlGuess) setLandingPageUrl(urlGuess)
+    setChatMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: assistantReplyFor(nextPrompt, nextLocation, nextBudget, nextUrl) }])
+    setChatInput("")
+  }
 
   const handleBuild = async () => {
     if (!canBuildPlan) return
@@ -382,7 +428,7 @@ export default function NewCampaignPage() {
           offer: prompt.trim(),
           targetCustomer: enhancedBrief?.targetCustomer || prompt.trim().slice(0, 200),
           budget,
-          location: buildLocation,
+          location: effectiveLocation,
           goal,
           landingPageUrl: landingPageUrl.trim() || undefined,
           enhancedBrief: enhancedBrief || undefined,
@@ -402,7 +448,7 @@ export default function NewCampaignPage() {
       window.dispatchEvent(new Event("growzzy:prompt-history-updated"))
       router.replace(`/dashboard/campaigns/new?id=${json.campaignPlanId}`)
       // Reset unsaved flags when build succeeds
-      unsavedChangesRef.current = false
+      unsavedChangesRef.current = null
       setHasUnsavedChanges(false)
     } catch (err: any) {
       setBuildError(err?.message || "Something went wrong building your plan.")
@@ -463,7 +509,7 @@ export default function NewCampaignPage() {
       setGeneratedImageUrls(json.imageUrls || [])
       if (json.imageError) setCreativesError(json.imageError)
       // Reset unsaved flags when creatives are generated
-      unsavedChangesRef.current = false
+      unsavedChangesRef.current = null
       setHasUnsavedChanges(false)
     } catch (err: any) {
       setCreativesError(err?.message || "Something went wrong generating creatives.")
@@ -484,7 +530,7 @@ export default function NewCampaignPage() {
       window.dispatchEvent(new Event("growzzy:onboarding-progress-updated"))
       setTimeout(() => router.push("/dashboard/ads"), 1400)
       // Reset unsaved flags when launch succeeds
-      unsavedChangesRef.current = false
+      unsavedChangesRef.current = null
       setHasUnsavedChanges(false)
     } catch (err: any) {
       setLaunchError(err?.message || "Launch failed.")
@@ -522,7 +568,7 @@ export default function NewCampaignPage() {
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0 overflow-y-auto">
-          <div className="w-full max-w-[680px] text-center mb-8">
+          <div className="w-full max-w-[1040px] text-center mb-8">
             <h1 className="text-[30px] text-[#111827] leading-tight mb-2 tracking-tight text-balance" style={{ fontWeight: 500 }}>
               {built ? "Campaign plan ready." : "Run ad campaigns in minutes."}
             </h1>
@@ -552,7 +598,66 @@ export default function NewCampaignPage() {
 
           {/* Campaign tab */}
           {activeTab === "campaign" && (
-            <div className="w-full max-w-[680px]">
+            <div className="w-full max-w-[1040px] grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
+              <div className="sku-card p-4 text-left">
+                <p className="text-[12px] font-semibold text-[#111827] mb-3">Campaign chat</p>
+                <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                  {chatMessages.map((message, index) => (
+                    <div key={`${message.role}-${index}`} className={cn("rounded-[12px] px-3 py-2 text-[12.5px] leading-relaxed", message.role === "assistant" ? "bg-[#F3F6FB] text-[#374151]" : "bg-[#1F57F5] text-white ml-10")}>
+                      {message.text}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        handleChatSend()
+                      }
+                    }}
+                    placeholder="Answer Growzzy or add more campaign details..."
+                    className="sku-input h-10 flex-1 text-[13px]"
+                  />
+                  <button type="button" onClick={handleChatSend} className="sku-btn-primary h-10 px-4 rounded-[10px] text-[13px] font-semibold">
+                    Send
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
+                  {[
+                    ["Offer", !!promptText],
+                    ["Location", !!effectiveLocation],
+                    ["Budget", hasBudget],
+                    ["Account", platformConnected === true],
+                  ].map(([label, done]) => (
+                    <div key={String(label)} className={cn("rounded-[8px] border px-2.5 py-2", done ? "border-[#BFE6CD] bg-[#F1FBF5] text-[#2E9E5B]" : "border-[#E5E7EB] bg-white text-[#6B7280]")}>
+                      {done ? "Ready" : "Needed"}: {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="sku-card p-4 text-left xl:sticky xl:top-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#6B7280]">Live Google preview</p>
+                <div className="mt-4 rounded-[14px] border border-[#E5E7EB] p-4 bg-white">
+                  <span className="text-[10px] font-bold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded">Sponsored</span>
+                  <p className="mt-3 text-[17px] leading-snug font-semibold text-[#1a0dab]">
+                    {enhancedBrief?.productOrOffer || promptText.slice(0, 42) || "Your offer"} | {goal === "SALES" ? "Shop Now" : "Get Started"}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[#006621]">{landingPageUrl.trim() || "yourwebsite.com"}</p>
+                  <p className="mt-2 text-[13px] text-[#4B5563]">
+                    {enhancedBrief?.enhancedText?.slice(0, 130) || promptText.slice(0, 130) || "Growzzy will preview the ad copy here as your plan takes shape."}
+                  </p>
+                </div>
+                <div className="mt-4 space-y-2 text-[12px] text-[#374151]">
+                  <div className="flex justify-between"><span>Location</span><strong>{effectiveLocation || "Needed"}</strong></div>
+                  <div className="flex justify-between"><span>Budget</span><strong>{hasBudget ? `$${budget}/day` : "Needed"}</strong></div>
+                  <div className="flex justify-between"><span>Platform</span><strong>{platformName}</strong></div>
+                  <div className="flex justify-between"><span>Status</span><strong>{missingEssentials.length ? "Needs details" : "Ready to build"}</strong></div>
+                </div>
+              </div>
+              <div className="xl:col-span-2">
               <div className="bg-white rounded-[16px] overflow-hidden" style={{ border: '2px solid #1F57F5', boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
                 <textarea
                   ref={textareaRef}
@@ -721,9 +826,14 @@ export default function NewCampaignPage() {
                       canBuildPlan ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                     )}
                   >
-                    {building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>}
+                    {(building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>))}
                   </button>
                 </div>
+                {missingEssentials.length > 0 && (
+                  <p className="mt-2 text-[11.5px] text-[#D3564C]">
+                    Needed before Build Plan: {missingEssentials.join(", ")}.
+                  </p>
+                )}
 
                 {buildError && (
                   <div className="mt-4 p-3 rounded-[12px] border border-[#D3564C]/30 bg-[#FBE7E5]">
@@ -746,6 +856,7 @@ export default function NewCampaignPage() {
                     </div>
                   </div>
                 )}
+              </div>
               </div>
             </div>
           )}
@@ -778,7 +889,7 @@ export default function NewCampaignPage() {
                     disabled={!booleanQuery.trim() || booleanLoading}
                     className={cn("flex items-center gap-1.5 h-9 px-5 rounded-[8px] text-[13px] font-semibold transition-colors", booleanQuery.trim() && !booleanLoading ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
-                    {booleanLoading ? (<><Loader2 size={13} className="animate-spin" />Translating…</>) : (<><Search size={13} />Search audience</>}
+                    {(booleanLoading ? (<><Loader2 size={13} className="animate-spin" />Translating…</>) : (<><Search size={13} />Search audience</>))}
                   </button>
                   {booleanError && <p className="text-[12px] text-[#D3564C]">{booleanError}</p>}
                 </div>
@@ -855,7 +966,7 @@ export default function NewCampaignPage() {
                     <div>
                       <label className="block text-[12px] font-semibold text-[374151] mb-1.5">No. of variants</label>
                       <div className="relative">
-                        <select value={creativesCount} onChange={(e) => setCretivesCount(Number(e.target.value))} className="w-full h-9 pl-3 pr-8 text-[12.5px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
+                        <select value={creativesCount} onChange={(e) => setCreativesCount(Number(e.target.value))} className="w-full h-9 pl-3 pr-8 text-[12.5px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
                           {[1, 2, 3, 4].map((n) => (<option key={n} value={n}>{n} variant{n > 1 ? "s" : ""}</option>))}
                         </select>
                         <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-effects-none" />
@@ -867,7 +978,7 @@ export default function NewCampaignPage() {
                     disabled={generatingCreatives || !creativesPrompt.trim()}
                     className={cn("flex items-center justify-center gap-2 h-10 w-full rounded-[10px] text-[13.5px] font-semibold transition-colors", !generatingCreatives && creativesPrompt.trim() ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
-                    {generatingCreatives ? (<><Loader2 size={16} className="animate-spin" />Generating creatives…</>) : (<><Sparkles size={14} />Generate {creativesCount} AI creative{creativesCount > 1 ? "s" : ""}</>}
+                    {(generatingCreatives ? (<><Loader2 size={16} className="animate-spin" />Generating creatives…</>) : (<><Sparkles size={14} />Generate {creativesCount} AI creative{creativesCount > 1 ? "s" : ""}</>))}
                   </button>
                   {creativesError && <p className="text-[12px] text-[#D3564C]">{creativesError}</p>}
                 </div>
@@ -923,7 +1034,7 @@ export default function NewCampaignPage() {
                         <a href={platform === "META" ? "/api/integrations/meta/connect" : "/api/integrations/google/connect"} className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">Connect →</a>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
                 {launchError && (
                   <div className="mt-4 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
@@ -941,7 +1052,7 @@ export default function NewCampaignPage() {
                     disabled={!canLaunch || launching}
                     className={cn("mt-5 flex items-center justify-center gap-2 h-11 w-full rounded-[10px] text-[14px] font-semibold transition-colors", canLaunch && !launching ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
-                    {launching ? (<><Loader2 size={16} className="animate-spin" />Launching…</>) : (<><Rocket size={15} />Launch {platformName} Campaign</>}
+                    {(launching ? (<><Loader2 size={16} className="animate-spin" />Launching…</>) : (<><Rocket size={15} />Launch {platformName} Campaign</>))}
                   </button>
                 )}
               </div>

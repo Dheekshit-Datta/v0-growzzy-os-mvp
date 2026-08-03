@@ -1,11 +1,9 @@
-import type { IntegrationProtocol } from "@prisma/client"
-
 export type CampaignSignal = {
   id: string
   externalId?: string | null
   name: string
   status?: string | null
-  platform?: IntegrationProtocol | string | null
+  platform?: string | null
   spend?: number | null
   budgetAmount?: number | null
   impressions?: number | null
@@ -309,7 +307,50 @@ export function scoreCreativeVariation(input: {
     score: total,
     status: total < needsRevisionThreshold ? "Needs revision" : total >= 85 ? "Strong" : "Good",
     breakdown: { clarity, relevance, differentiation, ctaStrength },
-    // NEW: Include threshold for debugging/transparency
-    _threshold: needsRevisionThreshold
+  }
+}
+
+export function calculateAuditScores(campaigns: CampaignSignal[], averages = calculateAccountAverages(campaigns)) {
+  const analyzed = analyzeCampaigns(campaigns, averages)
+  const waste = analyzed.reduce((sum, campaign) => sum + campaign.wasteScore, 0) / Math.max(1, analyzed.length)
+  const creativeRisk = analyzed.reduce((sum, campaign) => sum + campaign.creativeRiskScore, 0) / Math.max(1, analyzed.length)
+  const budgetEfficiency = Math.max(0, Math.min(100, 100 - waste))
+  const creativeHealth = Math.max(0, Math.min(100, 100 - creativeRisk))
+  const biddingStrategy = Math.max(0, Math.min(100, averages.avgCpa > 0 || averages.avgRoas > 0 ? 75 : 55))
+  const campaignStructure = Math.max(0, Math.min(100, campaigns.length ? 70 : 0))
+  const overallScore = Math.round((budgetEfficiency + creativeHealth + biddingStrategy + campaignStructure) / 4)
+
+  return {
+    overallScore,
+    scores: {
+      budgetEfficiency: Math.round(budgetEfficiency),
+      creativeHealth: Math.round(creativeHealth),
+      biddingStrategy: Math.round(biddingStrategy),
+      campaignStructure: Math.round(campaignStructure),
+    },
+  }
+}
+
+export function scoreLeadFit(lead: {
+  source?: string | null
+  value?: number | string | null
+  email?: string | null
+  phone?: string | null
+  company?: string | null
+  notes?: string | null
+  status?: string | null
+}) {
+  let score = 35
+  if (lead.email) score += 15
+  if (lead.phone) score += 15
+  if (lead.company) score += 10
+  if (Number(lead.value || 0) > 0) score += 15
+  if (/book|demo|quote|pricing|consult/i.test(`${lead.notes || ""} ${lead.source || ""}`)) score += 10
+  if (/lost|spam|invalid/i.test(String(lead.status || ""))) score -= 25
+
+  score = Math.max(0, Math.min(100, Math.round(score)))
+  return {
+    score,
+    reasoning: `Lead fit ${score}/100 based on contact completeness, company/value signals, and intent notes.`,
   }
 }

@@ -34,6 +34,11 @@ export async function getBusinessContextForWorkspace(workspaceId: string): Promi
     },
   })
 
+  if (!workspace) {
+    contextCache[workspaceId] = { data: "", timestamp: Date.now() };
+    return "";
+  }
+
   let context = "";
 
   if (workspace?.productDescription) {
