@@ -5,7 +5,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
-import { aiErrorMetadata, cachedUtilityCompletion } from "@/lib/ai-utility"
+import { aiErrorMetadata, aiUnavailableMessage, cachedUtilityCompletion } from "@/lib/ai-utility"
 import { log } from "@/lib/logger"
 
 const EnhanceSchema = z.object({
@@ -106,6 +106,7 @@ Saved business context: ${businessContext || "None"}`
       lastFailure = "provider"
       lastError = "AI provider unavailable"
       log("error", "ai/enhance-prompt", "OpenAI provider request failed", aiErrorMetadata(error))
+      lastError = aiUnavailableMessage(error)
     }
   }
 
@@ -117,7 +118,7 @@ Saved business context: ${businessContext || "None"}`
         ok: false,
         error: {
           code: "AI_UNAVAILABLE",
-          message: "AI Enhance is temporarily unavailable. Your original brief has not been changed; try again shortly."
+          message: lastError || "AI Enhance is temporarily unavailable. Your original brief has not been changed; try again shortly."
         }
       },
       {

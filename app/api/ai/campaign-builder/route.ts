@@ -11,7 +11,7 @@ import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { parseGoogleSearchPlan } from "@/lib/google-plan-quality"
 import { checkPlanPolicy } from "@/lib/services/policy-check"
-import { aiErrorMetadata } from "@/lib/ai-utility"
+import { aiErrorMetadata, aiUnavailableMessage } from "@/lib/ai-utility"
 import { log } from "@/lib/logger"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
@@ -312,7 +312,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
   }
   if (!raw) {
     if (lastFailure === "provider") {
-      return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
+      return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: aiUnavailableMessage(generationError) } }, { status: 503 })
     }
     return NextResponse.json({ ok: false, error: { code: "AI_INVALID_OUTPUT", message: "AI could not produce a safe campaign plan. Add more specific offer and audience details, then retry." } }, { status: 502 })
   }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import OpenAI from "openai"
+import { aiErrorMetadata, aiUnavailableMessage, UTILITY_MODEL } from "@/lib/ai-utility"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 10
@@ -15,15 +17,18 @@ export async function GET() {
 
   try {
     const start = Date.now()
-    const res = await fetch("https://api.openai.com/v1/models", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(5000),
+    const openai = new OpenAI({ apiKey, timeout: 5000 })
+    const completion = await openai.chat.completions.create({
+      model: UTILITY_MODEL,
+      messages: [{ role: "user", content: "Return this JSON exactly: {\"ok\":true}" }],
+      response_format: { type: "json_object" },
     })
     const latencyMs = Date.now() - start
 
-    if (res.ok) {
+    if (completion.choices[0]?.message?.content) {
       return NextResponse.json({
         status: "ok",
+        model: UTILITY_MODEL,
         latencyMs,
         timestamp: new Date().toISOString(),
       })
@@ -32,16 +37,18 @@ export async function GET() {
     return NextResponse.json(
       {
         status: "error",
-        detail: `OpenAI returned HTTP ${res.status}. API key may be invalid or expired.`,
+        detail: "OpenAI chat generation returned an empty response.",
         timestamp: new Date().toISOString(),
       },
       { status: 503 }
     )
   } catch (err: any) {
+    const meta = aiErrorMetadata(err)
     return NextResponse.json(
       {
         status: "error",
-        detail: `OpenAI health check failed: ${err.message}`,
+        detail: aiUnavailableMessage(err),
+        openai: meta,
         timestamp: new Date().toISOString(),
       },
       { status: 503 }

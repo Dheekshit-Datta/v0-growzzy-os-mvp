@@ -25,6 +25,14 @@ export function aiErrorMetadata(error: unknown) {
   }
 }
 
+export function aiUnavailableMessage(error?: unknown) {
+  const meta = aiErrorMetadata(error)
+  if (meta.status === 429 && meta.code === "insufficient_quota") {
+    return "OpenAI quota is exhausted for this API key. Add billing/credits in OpenAI, then redeploy."
+  }
+  return "AI is temporarily unavailable. Your brief is safe; try again shortly."
+}
+
 export function utilityCacheKey(operation: string, workspaceId: string, input: unknown) {
   const digest = createHash("sha256").update(JSON.stringify({ operation, workspaceId, input })).digest("hex")
   return `growzzy:ai-cache:${operation}:${digest}`
