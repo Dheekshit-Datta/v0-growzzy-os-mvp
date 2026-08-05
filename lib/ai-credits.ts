@@ -27,6 +27,11 @@ export function estimatedCredits(model: string) {
   return creditsForUsage(model, 2000, 1000).credits
 }
 
+export function creditResetDate(year: number, month: number, day: number) {
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  return new Date(year, month, Math.min(Math.max(day, 1), lastDay))
+}
+
 export async function assertCreditsAvailable(workspaceId: string, estimated: number) {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
@@ -106,9 +111,8 @@ export async function resetDueWorkspaceCredits(now = new Date()) {
   })
   let count = 0
   for (const workspace of workspaces) {
-    const day = Math.min(Math.max(workspace.creditResetDay, 1), 28)
-    const resetThisMonth = new Date(now.getFullYear(), now.getMonth(), day)
-    const resetAt = now >= resetThisMonth ? resetThisMonth : new Date(now.getFullYear(), now.getMonth() - 1, day)
+    const resetThisMonth = creditResetDate(now.getFullYear(), now.getMonth(), workspace.creditResetDay)
+    const resetAt = now >= resetThisMonth ? resetThisMonth : creditResetDate(now.getFullYear(), now.getMonth() - 1, workspace.creditResetDay)
     if (workspace.creditResetAt && workspace.creditResetAt >= resetAt) continue
     const result = await prisma.workspace.updateMany({
       where: { id: workspace.id, creditResetAt: workspace.creditResetAt },

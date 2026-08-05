@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { prisma } from "@/lib/prisma"
+import { creditResetDate } from "@/lib/ai-credits"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,8 @@ export async function GET(req: NextRequest) {
   if (!workspace) return NextResponse.json({ ok: false, error: { code: "WORKSPACE_NOT_FOUND", message: "Workspace not found" } }, { status: 404 })
 
   const now = new Date()
-  const resetDate = new Date(now.getFullYear(), now.getMonth() + (now.getDate() >= workspace.creditResetDay ? 1 : 0), workspace.creditResetDay)
+  const resetMonth = now.getDate() >= workspace.creditResetDay ? now.getMonth() + 1 : now.getMonth()
+  const resetDate = creditResetDate(now.getFullYear(), resetMonth, workspace.creditResetDay)
   return NextResponse.json({
     ok: true,
     data: {
