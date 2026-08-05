@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       apiSuccess: true,
       apiError: true,
       campaignId: true,
+      undoneAt: true,
     },
   })
 

@@ -30,6 +30,7 @@ type LogEntry = {
   apiSuccess: boolean
   apiError: string | null
   campaignId: string | null
+  undoneAt?: string | null
 }
 
 const AUTOMATION_MODES = [
@@ -205,6 +206,22 @@ export default function OptimizationPage() {
     }
   }
 
+  const undo = async (logId: string) => {
+    setActionError(null)
+    try {
+      const res = await fetch("/api/ai/apply-optimization/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optimizationLogId: logId }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to undo this action.")
+      setLogs((prev) => prev.map((entry) => entry.id === logId ? { ...entry, status: "UNDONE", undoneAt: new Date().toISOString() } : entry))
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to undo this action.")
+    }
+  }
+
   const insightLabel = (insightType: string) => {
     switch (insightType) {
       case "pause": return "Pause"
@@ -351,7 +368,12 @@ export default function OptimizationPage() {
                           {log.apiError && <span className="text-[#D3564C]"> — {log.apiError}</span>}
                         </p>
                       </div>
-                      <span className="text-[11px] text-[#9CA3AF] shrink-0">{new Date(log.appliedAt).toLocaleString()}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {log.status === "APPLIED" && !log.undoneAt && (
+                          <button onClick={() => undo(log.id)} className="h-7 px-3 text-[11.5px] font-semibold text-[#6B7280] rounded-[7px] sku-btn">Undo</button>
+                        )}
+                        <span className="text-[11px] text-[#9CA3AF]">{new Date(log.appliedAt).toLocaleString()}</span>
+                      </div>
                     </div>
                   ))}
                 </div>

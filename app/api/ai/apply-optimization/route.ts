@@ -56,6 +56,10 @@ export async function POST(req: NextRequest) {
     })
     if (!campaign) return NextResponse.json({ error: "Campaign not found", correlationId, code: "NOT_FOUND" }, { status: 404 })
 
+    if (!["BUDGET_INCREASE", "BUDGET_DECREASE", "PAUSE", "ENABLE", "CREATIVE_REFRESH"].includes(type)) {
+      return NextResponse.json({ error: "Unsupported optimization action.", correlationId, code: "UNSUPPORTED_ACTION" }, { status: 400 })
+    }
+
     const integration = campaign.integration
     if (!previewLog) {
       return NextResponse.json({ error: "Preview approval is required before applying an optimization.", correlationId, code: "APPROVAL_REQUIRED" }, { status: 409 })
@@ -103,6 +107,19 @@ export async function POST(req: NextRequest) {
         : type === "PAUSE" || type === "ENABLE"
           ? String(campaign.status)
           : String(campaign.cpc || 0)
+
+    if (type === "BUDGET_INCREASE" || type === "BUDGET_DECREASE") {
+      const amount = parseNumericValue(recommendedValue)
+      const current = Number(campaign.budgetAmount || 0)
+      const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { dailyBudgetCeiling: true, maxDailyBudgetShiftPct: true } })
+      const maxShift = workspace?.maxDailyBudgetShiftPct ?? 0.2
+      if (amount <= 0 || (current > 0 && Math.abs(amount - current) / current > maxShift + 0.0001)) {
+        return NextResponse.json({ error: `Budget changes are limited to ${Math.round(maxShift * 100)}% per action.`, correlationId, code: "BUDGET_GUARDRAIL" }, { status: 400 })
+      }
+      if (workspace?.dailyBudgetCeiling != null && amount > workspace.dailyBudgetCeiling) {
+        return NextResponse.json({ error: "This change exceeds the workspace daily budget ceiling.", correlationId, code: "BUDGET_CEILING" }, { status: 400 })
+      }
+    }
 
     let apiSuccess = false
     let apiError: string | null = null

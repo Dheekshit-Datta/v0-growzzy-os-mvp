@@ -238,6 +238,8 @@ export async function syncGoogleAdsCampaigns(
     // Separate query segmented by date, only for campaigns that synced above.
     if (localCampaignIdByExternalId.size > 0) {
       try {
+        const todayUtc = new Date().toISOString().slice(0, 10)
+        const todaySpendByCampaign = new Map<string, number>()
         const dailyQuery = `
           SELECT
             campaign.id,
@@ -300,6 +302,43 @@ export async function syncGoogleAdsCampaigns(
               roas: derived.roas,
             },
           })
+          if (dateStr === todayUtc) todaySpendByCampaign.set(localCampaignId, spend)
+        }
+
+        // ponytail: one persisted alert per campaign/day; move to a scheduler if sync frequency needs sub-minute pacing.
+        if (workspaceId && todaySpendByCampaign.size) {
+          const campaigns = await prisma.campaign.findMany({
+            where: { id: { in: [...todaySpendByCampaign.keys()] }, workspaceId },
+            select: { id: true, name: true, budgetAmount: true, dailyBudget: true },
+          })
+          for (const campaign of campaigns) {
+            const dailyBudget = Number(campaign.dailyBudget ?? campaign.budgetAmount ?? 0)
+            const spendToday = todaySpendByCampaign.get(campaign.id) || 0
+            if (!dailyBudget || spendToday <= 0) continue
+            const hour = new Date().getUTCHours() + new Date().getUTCMinutes() / 60
+            const projectedDailySpend = spendToday / Math.max(hour / 24, 1 / 24)
+            if (projectedDailySpend < dailyBudget * 0.9) continue
+            const sourceEntityId = `pacing:${campaign.id}:${todayUtc}`
+            const existing = await prisma.optimizationSuggestion.findFirst({ where: { workspaceId, sourceEntityId } })
+            if (!existing) {
+              await prisma.optimizationSuggestion.create({
+                data: {
+                  workspaceId,
+                  userId,
+                  campaignId: campaign.id,
+                  sourceEntityId,
+                  sourceType: "SYNC_PACING",
+                  insightType: "pacing_alert",
+                  actionType: "BUDGET_DECREASE",
+                  recommendedValue: String(Math.max(1, Math.round(dailyBudget * 0.8 * 100) / 100)),
+                  title: `Review pacing for ${campaign.name}`,
+                  message: `Projected spend is $${projectedDailySpend.toFixed(2)}/day against a $${dailyBudget.toFixed(2)} budget. Review delivery before enabling more spend.`,
+                  confidence: 90,
+                  evidence: { spendToday, dailyBudget, projectedDailySpend, metricDate: todayUtc },
+                },
+              })
+            }
+          }
         }
       } catch (dailyError: any) {
         // Non-fatal - the aggregate campaign sync above already succeeded and
