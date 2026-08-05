@@ -109,6 +109,32 @@ type WorkspaceData = {
   timezone: string | null
   dailyBudgetCeiling: number | null
   productDescription: string | null
+  monthlyCredits: number
+  creditResetDay: number
+}
+
+function CreditUsageCard() {
+  const [data, setData] = useState<{ allocatedCredits: number; usedCredits: number; remainingCredits: number; resetDate: string } | null>(null)
+
+  useEffect(() => {
+    fetch("/api/ai/credit-balance", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => setData(json?.data || null))
+      .catch(() => {})
+  }, [])
+
+  if (!data) return null
+  const usedPercent = Math.min(100, Math.round((data.usedCredits / Math.max(1, data.allocatedCredits)) * 100))
+  return (
+    <div className="rounded-[10px] border border-[#DDE1E7] bg-[#F8FAFF] p-4">
+      <div className="flex items-center justify-between">
+        <div><p className="text-[13px] font-semibold text-[#111827]">AI credits</p><p className="text-[11.5px] text-[#6B7280]">Resets {new Date(data.resetDate).toLocaleDateString()}</p></div>
+        <p className="text-[13px] font-semibold text-[#1F57F5]">{data.remainingCredits.toLocaleString()} left</p>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#E5E7EB]"><div className="h-full rounded-full bg-[#2F61F5] transition-all" style={{ width: `${usedPercent}%` }} /></div>
+      <p className="mt-2 text-[11.5px] text-[#6B7280]">{data.usedCredits.toLocaleString()} used of {data.allocatedCredits.toLocaleString()} credits</p>
+    </div>
+  )
 }
 
 /* ─── Controlled skeuomorphic input ─── */
@@ -288,6 +314,8 @@ function GeneralTab() {
           timezone: ws.timezone || undefined,
           dailyBudgetCeiling: ws.dailyBudgetCeiling ?? undefined,
           productDescription: ws.productDescription || "",
+          monthlyCredits: ws.monthlyCredits ?? undefined,
+          creditResetDay: ws.creditResetDay ?? undefined,
         }),
       })
     } finally {
@@ -318,6 +346,8 @@ function GeneralTab() {
           value={ws.dailyBudgetCeiling != null ? String(ws.dailyBudgetCeiling) : ""}
           onChange={(v) => set({ dailyBudgetCeiling: v ? Number(v) : null })}
         />
+        <SkuInput label="Monthly AI credits" type="number" placeholder="1000" helper="Shared by this workspace for AI features." value={ws.monthlyCredits != null ? String(ws.monthlyCredits) : ""} onChange={(v) => set({ monthlyCredits: v ? Number(v) : 0 })} />
+        <SkuInput label="Credit reset day" type="number" placeholder="1" helper="Day of month from 1 to 31." value={ws.creditResetDay != null ? String(ws.creditResetDay) : "1"} onChange={(v) => set({ creditResetDay: v ? Number(v) : 1 })} />
         <div className="col-span-2 space-y-1.5">
           <label className="block text-[12.5px] font-semibold text-[#374151]">Product description</label>
           <textarea
@@ -333,6 +363,7 @@ function GeneralTab() {
       <div className="flex justify-end mt-5">
         <SaveButton onSave={save} saving={saving} />
       </div>
+      <div className="mt-5 border-t border-[#DDE1E7] pt-5"><CreditUsageCard /></div>
     </SectionCard>
   )
 }

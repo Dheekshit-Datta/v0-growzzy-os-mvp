@@ -7,6 +7,7 @@ import { getRequestWorkspaceId } from "@/lib/workspace"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { aiErrorMetadata, aiUnavailableMessage, cachedUtilityCompletion } from "@/lib/ai-utility"
 import { log } from "@/lib/logger"
+import { CreditQuotaError } from "@/lib/ai-credits"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
@@ -103,6 +104,9 @@ Saved business context: ${businessContext || "None"}`
       lastFailure = "output"
       lastError = brief.error.issues[0]?.message || "Invalid enhanced brief"
     } catch (error) {
+      if (error instanceof CreditQuotaError) {
+        return NextResponse.json({ ok: false, error: { code: error.code, message: "Monthly credit quota exceeded. Try again after the workspace credits reset." } }, { status: 402 })
+      }
       lastFailure = "provider"
       lastError = "AI provider unavailable"
       log("error", "ai/enhance-prompt", "OpenAI provider request failed", aiErrorMetadata(error))

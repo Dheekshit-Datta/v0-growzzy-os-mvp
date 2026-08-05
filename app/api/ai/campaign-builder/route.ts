@@ -12,6 +12,7 @@ import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { parseGoogleSearchPlan } from "@/lib/google-plan-quality"
 import { checkPlanPolicy } from "@/lib/services/policy-check"
 import { aiErrorMetadata, aiUnavailableMessage } from "@/lib/ai-utility"
+import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
 import { log } from "@/lib/logger"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
@@ -198,6 +199,13 @@ export async function POST(req: NextRequest) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ ok: false, error: { code: "AI_UNAVAILABLE", message: "AI campaign generation is temporarily unavailable. Your brief is safe; try again shortly." } }, { status: 503 })
   }
+  const estimated = estimatedCredits(process.env.OPENAI_CAMPAIGN_BUILDER_MODEL || "gpt-4o")
+  try {
+    await assertCreditsAvailable(workspaceId, estimated)
+  } catch (error) {
+    if (error instanceof CreditQuotaError) return NextResponse.json({ ok: false, error: { code: error.code, message: "Monthly credit quota exceeded. Try again after the workspace credits reset." } }, { status: 402 })
+    throw error
+  }
 
   const googlePrompt = `You are a senior Google Ads media buyer. Build a safe, reviewable Google Ads campaign plan.
 
@@ -283,8 +291,17 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
         model = "gpt-4o-mini"
         completion = await openai.chat.completions.create({ ...request, model })
       }
+      await recordCreditUsage({
+        workspaceId,
+        userId,
+        route: "/api/ai/campaign-builder",
+        model,
+        inputTokens: completion.usage?.prompt_tokens,
+        outputTokens: completion.usage?.completion_tokens,
+      })
       content = completion.choices[0]?.message?.content
     } catch (error) {
+      if (error instanceof CreditQuotaError) return NextResponse.json({ ok: false, error: { code: error.code, message: "Monthly credit quota exceeded. Try again after the workspace credits reset." } }, { status: 402 })
       generationError = error
       lastFailure = "provider"
       log("error", "ai/campaign-builder", "OpenAI provider request failed", aiErrorMetadata(error))

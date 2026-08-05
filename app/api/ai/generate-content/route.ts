@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth"
 import OpenAI from "openai"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { getRequestWorkspaceId } from "@/lib/workspace"
+import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -13,6 +15,7 @@ export async function POST(req: Request) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
+    const workspaceId = await getRequestWorkspaceId(userId, req as any)
     const limit = await rateLimitPolicy(userId, "creativeText")
     if (!limit.allowed) return rateLimitResponse(limit)
 
@@ -27,6 +30,12 @@ export async function POST(req: Request) {
         { status: 503 }
       )
     }
+    try {
+      await assertCreditsAvailable(workspaceId, estimatedCredits("gpt-4o"))
+    } catch (error) {
+      if (error instanceof CreditQuotaError) return NextResponse.json({ ok: false, error: "Monthly credit quota exceeded. Try again after the workspace credits reset." }, { status: 402 })
+      throw error
+    }
 
     const systemPrompt = getSystemPrompt(contentType, tone)
     const response = await openai.chat.completions.create({
@@ -38,6 +47,12 @@ export async function POST(req: Request) {
       temperature: 0.7,
       max_tokens: 2500,
     })
+    try {
+      await recordCreditUsage({ workspaceId, userId, route: "/api/ai/generate-content", model: "gpt-4o", inputTokens: response.usage?.prompt_tokens, outputTokens: response.usage?.completion_tokens })
+    } catch (error) {
+      if (error instanceof CreditQuotaError) return NextResponse.json({ ok: false, error: "Monthly credit quota exceeded. Try again after the workspace credits reset." }, { status: 402 })
+      throw error
+    }
 
     const content = response.choices[0]?.message?.content || ""
     if (!content) {

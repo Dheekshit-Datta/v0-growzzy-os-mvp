@@ -7,6 +7,7 @@ import { log, reportError } from "@/lib/logger"
 import { validateEnv } from "@/lib/env"
 import { normalizeReportType, renderReportHtml } from "@/lib/report-template-renderer"
 import { getIntegrationAccessToken } from "@/lib/integration-tokens"
+import { resetDueWorkspaceCredits } from "@/lib/ai-credits"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now()
   log("info", "cron/sync", "Cron sync started")
+  const creditReset = await resetDueWorkspaceCredits()
 
   const enabledPlatforms = process.env.ENABLE_META_ADS === "true" ? ["GOOGLE", "META"] as const : ["GOOGLE"] as const
   const integrations = await prisma.integration.findMany({
@@ -194,6 +196,7 @@ export async function GET(req: Request) {
     failed: errors.length,
     errors,
     runAt: new Date().toISOString(),
+    creditResetCount: creditReset.count,
     durationMs: Date.now() - startedAt,
   }
 

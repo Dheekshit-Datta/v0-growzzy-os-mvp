@@ -9,6 +9,7 @@ import { scoreCreativeVariation } from "@/lib/marketing-logic"
 import { recordActivity } from "@/lib/activity-log"
 import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
+import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, recordFixedCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -137,6 +138,11 @@ export async function POST(request: Request) {
         { status: 503 }
       )
     }
+    const textModel = process.env.OPENAI_CREATIVE_MODEL || "gpt-4o"
+    const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1"
+    const imageCount = input.generateImages === false ? 0 : Math.min(3, requestedCount)
+    const imageCredits = Number(process.env.AI_IMAGE_CREDITS || 100)
+    await assertCreditsAvailable(workspaceId, estimatedCredits(textModel) + imageCount * imageCredits)
 
     let variations: any[] = []
 
@@ -168,7 +174,7 @@ Audience: ${input.targetPersona || input.targetAudience || "Not provided"}
 Location: ${input.location || "Not provided"}${businessContext}`
 
       const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_CREATIVE_MODEL || "gpt-4o",
+        model: textModel,
         temperature: 0.65,
         response_format: { type: "json_object" },
         messages: [
@@ -176,6 +182,7 @@ Location: ${input.location || "Not provided"}${businessContext}`
           { role: "user", content: user },
         ],
       })
+      await recordCreditUsage({ workspaceId, userId, route: "/api/ai/generate-creatives", model: textModel, inputTokens: completion.usage?.prompt_tokens, outputTokens: completion.usage?.completion_tokens })
 
       const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}")
       if (Array.isArray(parsed.variations) && parsed.variations.length) variations = parsed.variations
@@ -200,6 +207,9 @@ Location: ${input.location || "Not provided"}${businessContext}`
     })
 
     const imageResult = await generateImageUrls(input, scored, businessContext)
+    if (imageResult.urls.length) {
+      await recordFixedCreditUsage({ workspaceId, userId, route: "/api/ai/generate-creatives", model: imageModel, credits: imageResult.urls.length * imageCredits })
+    }
 
     const creative = await prisma.generatedCreative.create({
       data: {
@@ -241,6 +251,7 @@ Location: ${input.location || "Not provided"}${businessContext}`
       data: { variations: scored, imageUrls: imageResult.urls, imageError: imageResult.error },
     })
   } catch (error: any) {
+    if (error instanceof CreditQuotaError) return NextResponse.json({ success: false, code: error.code, error: "Monthly credit quota exceeded. Try again after the workspace credits reset." }, { status: 402 })
     return NextResponse.json({ success: false, code: "AI_CREATIVE_FAILED", error: publicAiError(error) }, { status: error?.status === 429 ? 429 : 500 })
   }
 }

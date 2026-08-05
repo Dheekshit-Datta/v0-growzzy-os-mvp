@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import OpenAI from "openai"
 import { log } from "@/lib/logger"
+import { assertCreditsAvailable, estimatedCredits, recordCreditUsage } from "@/lib/ai-credits"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 const CACHE_TTL_SECONDS = 24 * 60 * 60
@@ -77,6 +78,7 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
   }
 
   let completion: OpenAI.Chat.Completions.ChatCompletion
+  await assertCreditsAvailable(call.workspaceId, estimatedCredits(model))
   try {
     completion = await openai.chat.completions.create({
       model,
@@ -93,6 +95,15 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
     })
   }
   const content = completion.choices[0]?.message?.content?.trim() || ""
+
+  await recordCreditUsage({
+    workspaceId: call.workspaceId,
+    userId: call.userId,
+    route: call.route,
+    model,
+    inputTokens: completion.usage?.prompt_tokens,
+    outputTokens: completion.usage?.completion_tokens,
+  })
 
   if (content) {
     try {

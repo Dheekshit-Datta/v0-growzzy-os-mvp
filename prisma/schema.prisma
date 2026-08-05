@@ -33,6 +33,7 @@ model User {
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   image                  String?
+  creditUsageLogs        CreditUsageLog[]
   onboardingCompleted    Boolean             @default(false)
   onboardingStep         Int                 @default(0)
   resetToken             String?
@@ -122,6 +123,10 @@ model Workspace {
   toneOfVoice            String?
   defaultLandingPageUrl  String?
   dailyBudgetCeiling     Float?
+  monthlyCredits         Int                @default(1000)
+  creditResetDay         Int                @default(1)
+  usedCreditsThisMonth   Int                @default(0)
+  creditResetAt          DateTime?
   defaultAutomationMode  String               @default("ALERT")
   targetCpa              Float?
   maxDailyBudgetShiftPct Float                @default(0.2)
@@ -148,8 +153,28 @@ model Workspace {
   signals                Signal[]
   optimizationActions    OptimizationAction[]
   notifications          Notification[]
+  creditUsageLogs        CreditUsageLog[]
 
   @@index([ownerId])
+}
+
+model CreditUsageLog {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  userId       String
+  route        String
+  model        String?
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  credits      Int
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model WorkspaceMember {
