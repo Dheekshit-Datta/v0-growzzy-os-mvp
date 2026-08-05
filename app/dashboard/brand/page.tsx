@@ -28,6 +28,7 @@ export default function BrandPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState("")
   const [data, setData] = useState<Partial<BrandData>>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -55,8 +56,9 @@ export default function BrandPage() {
 
   const save = async () => {
     setSaving(true)
+    setSaveError("")
     try {
-      await fetch("/api/workspaces", {
+      const res = await fetch("/api/workspaces", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -69,8 +71,13 @@ export default function BrandPage() {
           logo: data.logo || "",
         }),
       })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not save brand context")
+      window.dispatchEvent(new Event("growzzy:workspace-updated"))
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save brand context")
     } finally {
       setSaving(false)
     }
@@ -205,7 +212,8 @@ export default function BrandPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-[#E9EBEF]">
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#E9EBEF]">
+              {saveError && <p className="text-[11.5px] text-[#D3564C]">{saveError}</p>}
               <button
                 onClick={save}
                 disabled={saving}

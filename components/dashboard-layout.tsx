@@ -8,7 +8,6 @@ import {
   Bell,
   Check,
   ChevronsUpDown,
-  FolderKanban,
   LogOut,
   Menu,
   Monitor,
@@ -53,7 +52,6 @@ const WORKSPACES_CACHE_TTL_MS = 5 * 60 * 1000
 const primaryNav = [
   { title: "All Campaigns", href: "/dashboard/campaigns/new", icon: Sparkles },
   { title: "My brand", href: "/dashboard/settings?tab=general", icon: Monitor },
-  { title: "Projects", href: "/dashboard/campaigns", icon: FolderKanban },
 ]
 
 export default function DashboardLayout({ children, immersive = false }: { children: React.ReactNode; immersive?: boolean }) {

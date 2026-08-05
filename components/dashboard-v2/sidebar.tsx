@@ -12,7 +12,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Megaphone,
-  FolderKanban,
   Sparkles,
   History,
   LayoutDashboard,
@@ -33,7 +32,6 @@ interface NavItem {
 
 const CREATE_NAV: NavItem[] = [
   { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
-  { href: "/dashboard/projects",      label: "Projects",      icon: FolderKanban },
   { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
   { href: "/dashboard/prompts",       label: "Recent Prompts", icon: History },
 ]

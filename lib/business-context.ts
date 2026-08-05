@@ -39,55 +39,15 @@ export async function getBusinessContextForWorkspace(workspaceId: string): Promi
     return "";
   }
 
-  let context = "";
-
-  if (workspace?.productDescription) {
-    context += `Confirmed business summary: ${workspace.productDescription}\n`;
-  }
+  let websiteSummary: string | null = null;
 
   if (workspace?.websiteUrl) {
     try {
       // Fetch and summarize website content
-      const websiteSummary = await summarizeWebsite(workspace.websiteUrl);
-      if (websiteSummary) {
-        context += `Website Summary: ${websiteSummary}\n`;
-      } else {
-        // Fallback to just URL if summarization fails
-        context += `Website: ${workspace.websiteUrl}\n`;
-      }
+      websiteSummary = await summarizeWebsite(workspace.websiteUrl);
     } catch (error) {
-      // Log error but continue with just URL
       console.warn(`Failed to scrape website ${workspace.websiteUrl}:`, error);
-      context += `Website: ${workspace.websiteUrl}\n`;
     }
-  }
-
-  if (workspace?.name) {
-    context += `Business: ${workspace.name}\n`;
-  }
-
-  if (workspace?.industry) {
-    context += `Industry: ${workspace.industry}\n`;
-  }
-
-  if (workspace?.toneOfVoice) {
-    context += `Preferred voice: ${workspace.toneOfVoice}\n`;
-  }
-
-  if (workspace?.primaryGoal) {
-    context += `Primary goal: ${workspace.primaryGoal}\n`;
-  }
-
-  if (workspace?.currencyCode) {
-    context += `Currency: ${workspace.currencyCode}\n`;
-  }
-
-  if (workspace?.timezone) {
-    context += `Timezone: ${workspace.timezone}\n`;
-  }
-
-  if (workspace?.dailyBudgetCeiling) {
-    context += `Approved daily budget ceiling: ${workspace.dailyBudgetCeiling}\n`;
   }
 
   // Format the final context string
@@ -95,6 +55,7 @@ export async function getBusinessContextForWorkspace(workspaceId: string): Promi
     workspace.name && `Business: ${workspace.name}`,
     workspace.productDescription && `Confirmed business summary: ${workspace.productDescription}`,
     workspace.websiteUrl && `Website: ${workspace.websiteUrl}`,
+    websiteSummary && `Website analysis: ${websiteSummary}`,
     workspace.industry && `Industry: ${workspace.industry}`,
     workspace.toneOfVoice && `Preferred voice: ${workspace.toneOfVoice}`,
     workspace.primaryGoal && `Primary goal: ${workspace.primaryGoal}`,

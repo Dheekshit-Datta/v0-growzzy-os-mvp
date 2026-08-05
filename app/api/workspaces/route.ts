@@ -3,6 +3,7 @@ import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { ensureDefaultWorkspace, getRequestWorkspaceId } from "@/lib/workspace"
+import { invalidateBusinessContext } from "@/lib/business-context"
 
 export const dynamic = "force-dynamic"
 
@@ -104,6 +105,8 @@ export async function PATCH(req: NextRequest) {
       ...(data.defaultAutomationMode !== undefined ? { defaultAutomationMode: data.defaultAutomationMode } : {}),
     },
   })
+
+  invalidateBusinessContext(workspaceId)
 
   return NextResponse.json({ ok: true, workspace })
 }
