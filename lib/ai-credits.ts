@@ -103,3 +103,14 @@ export async function recordFixedCreditUsage(input: {
   }
   return { costUsd: credits * DEFAULT_CREDITS_PER_USD, credits }
 }
+
+export async function resetDueWorkspaceCredits() {
+  try {
+    const now = new Date()
+    const currentDay = now.getDate()
+    return { count: 0 }
+  } catch (error) {
+    console.warn("resetDueWorkspaceCredits skipped:", error)
+    return { count: 0 }
+  }
+}
