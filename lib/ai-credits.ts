@@ -71,8 +71,10 @@ export async function recordCreditUsage(input: {
         costUsd: usage.costUsd,
       },
     })
-  } catch (error) {
-    console.warn("Could not log credit usage:", error)
+  } catch (error: any) {
+    if (error?.code !== "P2021") {
+      console.warn("Could not log credit usage:", error?.message || error)
+    }
   }
   return usage
 }
@@ -98,8 +100,10 @@ export async function recordFixedCreditUsage(input: {
         costUsd: credits * DEFAULT_CREDITS_PER_USD,
       },
     })
-  } catch (error) {
-    console.warn("Could not log fixed credit usage:", error)
+  } catch (error: any) {
+    if (error?.code !== "P2021") {
+      console.warn("Could not log fixed credit usage:", error?.message || error)
+    }
   }
   return { costUsd: credits * DEFAULT_CREDITS_PER_USD, credits }
 }
