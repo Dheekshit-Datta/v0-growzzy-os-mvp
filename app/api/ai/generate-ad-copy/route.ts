@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
     throw error
   }
 
-  const prompt = `You are a world-class Google Ads copywriter. Generate ad copy for a Responsive Search Ad.
+  const businessContext = await getBusinessContextForWorkspace(workspaceId)
+
+  const prompt = `You are a world-class Google Ads copywriter. Always personalize ad copy using the workspace brand memory below.
+${businessContext}
 
 Campaign goal: ${goal}
 Campaign type: ${type}

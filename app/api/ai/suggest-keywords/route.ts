@@ -5,6 +5,7 @@ import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { UTILITY_MODEL } from "@/lib/ai-utility"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
@@ -28,7 +29,11 @@ export async function POST(req: NextRequest) {
     throw error
   }
 
-  const prompt = `You are a Google Ads keyword strategist. For a campaign about '${theme || "the ad group"}' with goal '${goal || "conversions"}', suggest 15 high-intent keywords. Return ONLY a JSON array: [{ "keyword": string, "matchType": "BROAD"|"PHRASE"|"EXACT", "intent": "high"|"medium", "monthlySearches": "estimated range" }]`
+  const businessContext = await getBusinessContextForWorkspace(workspaceId)
+  const prompt = `You are a Google Ads keyword strategist. Always personalize keyword ideas using the workspace brand memory below.
+${businessContext}
+
+For a campaign theme about '${theme || "our products/services"}' with goal '${goal || "conversions"}', suggest 15 high-intent keywords. Return ONLY a JSON array: [{ "keyword": string, "matchType": "BROAD"|"PHRASE"|"EXACT", "intent": "high"|"medium", "monthlySearches": "estimated range" }]`
   const completion = await openai.chat.completions.create({
     model: UTILITY_MODEL,
     temperature: 0.35,
