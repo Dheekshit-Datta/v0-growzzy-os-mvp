@@ -19,8 +19,6 @@ const UpdateWorkspaceSchema = z.object({
   currencyCode: z.string().min(3).max(3).optional(),
   timezone: z.string().min(1).max(80).optional(),
   dailyBudgetCeiling: z.coerce.number().min(1).max(100000).optional(),
-  monthlyCredits: z.coerce.number().int().min(1).max(100000000).optional(),
-  creditResetDay: z.coerce.number().int().min(1).max(31).optional(),
   productDescription: z.string().max(1000).optional(),
   industry: z.string().max(80).optional(),
   toneOfVoice: z.string().max(40).optional(),
@@ -40,9 +38,28 @@ export async function GET() {
   await ensureDefaultWorkspace(session.user.id, session.user.name)
   const memberships = await prisma.workspaceMember.findMany({
     where: { userId: session.user.id },
-    include: {
+    select: {
+      id: true,
+      role: true,
       workspace: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logo: true,
+          ownerId: true,
+          websiteUrl: true,
+          primaryGoal: true,
+          currencyCode: true,
+          timezone: true,
+          productDescription: true,
+          industry: true,
+          toneOfVoice: true,
+          defaultLandingPageUrl: true,
+          dailyBudgetCeiling: true,
+          defaultAutomationMode: true,
+          createdAt: true,
+          updatedAt: true,
           _count: { select: { members: true, adAccounts: true, campaigns: true } },
         },
       },
@@ -76,6 +93,14 @@ export async function POST(req: NextRequest) {
       ownerId: session.user.id,
       members: { create: { userId: session.user.id, role: "ADMIN" } },
     },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      logo: true,
+      ownerId: true,
+      websiteUrl: true,
+    },
   })
 
   return NextResponse.json({ ok: true, workspace }, { status: 201 })
@@ -90,13 +115,7 @@ export async function PATCH(req: NextRequest) {
 
   const workspaceId = await getRequestWorkspaceId(session.user.id, req)
   const data = parsed.data
-  if (data.monthlyCredits !== undefined || data.creditResetDay !== undefined) {
-    const membership = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: session.user.id } }, select: { role: true } })
-    const workspaceOwner = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } })
-    if (workspaceOwner?.ownerId !== session.user.id && !["ADMIN", "admin"].includes(membership?.role || "")) {
-      return NextResponse.json({ ok: false, error: "Only workspace admins can change credit allocation" }, { status: 403 })
-    }
-  }
+
   const workspace = await prisma.workspace.update({
     where: { id: workspaceId },
     data: {
@@ -106,14 +125,22 @@ export async function PATCH(req: NextRequest) {
       ...(data.currencyCode !== undefined ? { currencyCode: data.currencyCode.toUpperCase() } : {}),
       ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
       ...(data.dailyBudgetCeiling !== undefined ? { dailyBudgetCeiling: data.dailyBudgetCeiling } : {}),
-      ...(data.monthlyCredits !== undefined ? { monthlyCredits: data.monthlyCredits } : {}),
-      ...(data.creditResetDay !== undefined ? { creditResetDay: data.creditResetDay } : {}),
       ...(data.productDescription !== undefined ? { productDescription: data.productDescription || null } : {}),
       ...(data.industry !== undefined ? { industry: data.industry || null } : {}),
       ...(data.toneOfVoice !== undefined ? { toneOfVoice: data.toneOfVoice || null } : {}),
       ...(data.defaultLandingPageUrl !== undefined ? { defaultLandingPageUrl: data.defaultLandingPageUrl || null } : {}),
       ...(data.logo !== undefined ? { logo: data.logo || null } : {}),
       ...(data.defaultAutomationMode !== undefined ? { defaultAutomationMode: data.defaultAutomationMode } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      websiteUrl: true,
+      productDescription: true,
+      industry: true,
+      toneOfVoice: true,
+      defaultLandingPageUrl: true,
+      logo: true,
     },
   })
 

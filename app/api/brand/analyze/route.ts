@@ -104,6 +104,13 @@ Return ONLY valid JSON matching this structure:
         productDescription: brandMemory.productDescription || undefined,
         toneOfVoice: brandMemory.toneOfVoice || undefined,
       },
+      select: {
+        id: true,
+        name: true,
+        websiteUrl: true,
+        productDescription: true,
+        toneOfVoice: true,
+      },
     })
 
     invalidateBusinessContext(workspaceId)

@@ -21,6 +21,18 @@ export async function ensureDefaultWorkspace(userId: string, name?: string | nul
     return await prisma.workspace.upsert({
       where: { defaultForOwnerId: userId },
       update: {},
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        ownerId: true,
+        websiteUrl: true,
+        productDescription: true,
+        industry: true,
+        toneOfVoice: true,
+        defaultLandingPageUrl: true,
+        logo: true,
+      },
       create: {
         name: name || "Growzzy Workspace",
         slug,
@@ -37,7 +49,21 @@ export async function ensureDefaultWorkspace(userId: string, name?: string | nul
   } catch (error) {
     // A concurrent first request may finish the same unique upsert first.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const workspace = await prisma.workspace.findUnique({ where: { defaultForOwnerId: userId } })
+      const workspace = await prisma.workspace.findUnique({
+        where: { defaultForOwnerId: userId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerId: true,
+          websiteUrl: true,
+          productDescription: true,
+          industry: true,
+          toneOfVoice: true,
+          defaultLandingPageUrl: true,
+          logo: true,
+        },
+      })
       if (workspace) return workspace
     }
     throw error
@@ -48,6 +74,18 @@ export async function assertWorkspaceMember(userId: string, workspaceId?: string
   const workspace = workspaceId
     ? await prisma.workspace.findFirst({
         where: { id: workspaceId, members: { some: { userId } } },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerId: true,
+          websiteUrl: true,
+          productDescription: true,
+          industry: true,
+          toneOfVoice: true,
+          defaultLandingPageUrl: true,
+          logo: true,
+        },
       })
     : await ensureDefaultWorkspace(userId)
 
