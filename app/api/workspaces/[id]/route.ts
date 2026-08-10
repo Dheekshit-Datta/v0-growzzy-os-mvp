@@ -25,6 +25,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const workspace = await prisma.workspace.update({
     where: { id: params.id },
     data: parsed.data,
+    select: {
+      id: true,
+      name: true,
+      logo: true,
+    },
   })
   return NextResponse.json({ ok: true, workspace })
 }

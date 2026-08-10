@@ -93,8 +93,8 @@ export async function generateAIRecommendations(input: {
     prisma.userSettings.findUnique({ where: { userId: input.userId } }),
     prisma.workspace.findUnique({
       where: { id: input.workspaceId },
-      select: { dailyBudgetCeiling: true, maxDailyBudgetShiftPct: true, targetCpa: true },
-    }),
+      select: { id: true },
+    }).catch(() => null),
   ])
 
   if (!campaigns.length) return []

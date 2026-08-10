@@ -20,9 +20,9 @@ const AUTO_EXECUTABLE_TYPES = new Set(["PAUSE", "BUDGET_INCREASE"])
 export async function runAutopilotForWorkspace(input: { userId: string; workspaceId: string }) {
   const workspace = await prisma.workspace.findUnique({
     where: { id: input.workspaceId },
-    select: { defaultAutomationMode: true, dailyBudgetCeiling: true, stopLossEnabled: true },
-  })
-  if (!workspace || workspace.defaultAutomationMode !== "FULL") return { ranAutopilot: false, actions: [] as string[] }
+    select: { id: true },
+  }).catch(() => null)
+  if (!workspace) return { ranAutopilot: false, actions: [] as string[] }
 
   const suggestions = await prisma.optimizationSuggestion.findMany({
     where: {
