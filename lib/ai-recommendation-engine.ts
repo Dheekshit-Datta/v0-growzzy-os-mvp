@@ -102,9 +102,9 @@ export async function generateAIRecommendations(input: {
   const riskLevel = (userSettings?.riskLevel as RiskLevel) || "BALANCED"
   const { pauseSpend, roasScaleMultiplier, poorRoasCeiling, ctrFloor } = thresholdsForRisk(riskLevel)
   const targetRoas = userSettings?.targetRoas || (userSettings?.primaryKpi === "ROAS" ? userSettings?.kpiTarget : null) || 3.5
-  const targetCpa = workspace?.targetCpa || (userSettings?.primaryKpi === "CPA" ? userSettings?.kpiTarget : null) || null
-  const budgetShiftPct = workspace?.maxDailyBudgetShiftPct ?? 0.2
-  const budgetCeiling = workspace?.dailyBudgetCeiling ?? null
+  const targetCpa = (userSettings?.primaryKpi === "CPA" ? userSettings?.kpiTarget : null) || null
+  const budgetShiftPct = 0.2
+  const budgetCeiling = null
   const scaleRoasThreshold = targetRoas * roasScaleMultiplier
 
   // Trend: last 14 days of daily metrics per campaign, split into two
