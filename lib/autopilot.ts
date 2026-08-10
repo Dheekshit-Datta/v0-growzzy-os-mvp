@@ -43,7 +43,7 @@ export async function runAutopilotForWorkspace(input: { userId: string; workspac
     // a user who disabled stop-loss protection is saying "don't
     // automatically pause my campaigns even if they look bad," which
     // autopilot must respect.
-    if (suggestion.actionType === "PAUSE" && !workspace.stopLossEnabled) continue
+    if (suggestion.actionType === "PAUSE" && (workspace as any).stopLossEnabled === false) continue
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: suggestion.campaignId, userId: input.userId, workspaceId: input.workspaceId },
