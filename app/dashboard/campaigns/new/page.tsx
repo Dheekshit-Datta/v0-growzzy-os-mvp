@@ -549,7 +549,7 @@ export default function NewCampaignPage() {
 
           {/* Clean Prompt Intake Card */}
           <div className="w-full max-w-[760px]">
-            <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #1F57F5', boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
+            <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #E0533C', boxShadow: '0 0 0 4px rgba(224,83,60,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
               <div className="px-1 py-1 mb-2">
                 <p className="text-[12.5px] font-medium text-[#374151]">Start with one sentence about what you sell, who it is for, and what outcome you want.</p>
               </div>
@@ -563,14 +563,14 @@ export default function NewCampaignPage() {
                 }}
                 placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
                 rows={6}
-                className="w-full px-3 py-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-[#F6F7F9] rounded-[10px] border border-[#E9EBEF] resize-none outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 leading-relaxed transition-colors"
+                className="w-full px-3 py-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-[#FAF9F8] rounded-[10px] border border-[#E9EBEF] resize-none outline-none focus:border-[#E0533C] focus:ring-2 focus:ring-[#E0533C]/10 leading-relaxed transition-colors"
               />
               
               <div className="flex items-center justify-between mt-3 pt-2">
                 <button
                   onClick={handleEnhance}
                   disabled={!prompt.trim() || enhancing}
-                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] disabled:opacity-40 transition-colors"
+                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] disabled:opacity-40 transition-colors"
                 >
                   {enhancing ? (<><RefreshCw size={12} className="animate-spin" />Enhancing brief…</>) : (<><Wand2 size={13} />✨ AI Enhance</>)}
                 </button>
@@ -580,7 +580,7 @@ export default function NewCampaignPage() {
                   disabled={!canBuildPlan}
                   className={cn(
                     "flex items-center gap-1.5 h-10 px-6 rounded-full text-[13.5px] font-semibold transition-all shadow-sm",
-                    canBuildPlan ? "bg-[#1F57F5] text-white hover:bg-[#1849d6]" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                    canBuildPlan ? "bg-[#E0533C] text-white hover:bg-[#C9432D]" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
                   )}
                 >
                   {building ? (<><Loader2 size={14} className="animate-spin" />Building plan…</>) : built ? (<><Check size={14} />Plan ready — rebuild</>) : (<><Sparkles size={14} />Build plan <ArrowRight size={14} /></>)}
@@ -601,7 +601,7 @@ export default function NewCampaignPage() {
                       <p className="text-[12px] font-semibold text-[#111827]">What Growzzy understood</p>
                       <p className="text-[11px] text-[#6B7280] mt-0.5">Offer: {enhancedBrief.productOrOffer} · Audience: {enhancedBrief.targetCustomer}</p>
                     </div>
-                    <span className="text-[10px] font-semibold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded-full">AI enhanced</span>
+                    <span className="text-[10px] font-semibold text-[#E0533C] bg-[#FDF2F0] px-2 py-1 rounded-full border border-[#F7D9D4]">AI enhanced</span>
                   </div>
                   <textarea
                     value={enhancedBrief.enhancedText}
@@ -615,13 +615,13 @@ export default function NewCampaignPage() {
               )}
 
               {built && (
-                <div className="mt-4 p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
-                  <p className="text-[13px] font-semibold text-[#2E9E5B] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
+                <div className="mt-4 p-4 rounded-[12px] border border-[#F7D9D4] bg-[#FDF2F0]">
+                  <p className="text-[13px] font-semibold text-[#E0533C] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
                   <p className="text-[12px] text-[#374151]">
                     "{campaignName}" was created and saved as a draft. Open the full editor to fine-tune keywords and ad copy, or review your campaign.
                   </p>
                   <div className="flex items-center gap-4 mt-3">
-                    <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">
+                    <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] transition-colors">
                       Open full editor <ExternalLink size={12} />
                     </a>
                   </div>
