@@ -365,16 +365,11 @@ export default function NewCampaignPage() {
     }
   }
 
-  const effectiveLocation = location.trim() || inferLocation(prompt)
+  const effectiveLocation = location.trim() || inferLocation(promptText) || "United States"
   const promptText = prompt.trim()
-  const hasBudget = Number.isFinite(budget) && budget > 0
-  const missingEssentials = [
-    !promptText ? "offer" : "",
-    !effectiveLocation ? "location" : "",
-    !hasBudget ? "daily budget" : "",
-    platform === "META" && !metaObjective ? "Meta objective" : "",
-  ].filter(Boolean)
-  const canBuildPlan = !building && missingEssentials.length === 0
+  const hasBudget = Number.isFinite(budget) && budget > 0 ? budget : 50
+  const missingEssentials = [!promptText ? "offer" : ""].filter(Boolean)
+  const canBuildPlan = !building && promptText.length > 5
 
   const assistantReplyFor = (
     nextPrompt = promptText,
@@ -552,205 +547,74 @@ export default function NewCampaignPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 mb-6">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  "flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12.5px] transition-colors",
-                  activeTab === id ? "bg-[#EAF0FE] text-[#1F57F5] font-semibold" : "text-[#6B7280] hover:text-[#374151] sku-btn"
-                )}
-                style={activeTab === id ? { boxShadow: '0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 3px rgba(31,87,245,0.15), 0 0 0 1px rgba(31,87,245,0.2)' } : {}}
-              >
-                <Icon size={12} className="shrink-0" />
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Clean Prompt Intake Card */}
+          <div className="w-full max-w-[760px]">
+            <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #1F57F5', boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
+              <div className="px-1 py-1 mb-2">
+                <p className="text-[12.5px] font-medium text-[#374151]">Start with one sentence about what you sell, who it is for, and what outcome you want.</p>
+              </div>
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value)
+                  setEnhancedBrief(null)
+                  setClarifications([])
+                }}
+                placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
+                rows={6}
+                className="w-full px-3 py-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-[#F6F7F9] rounded-[10px] border border-[#E9EBEF] resize-none outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 leading-relaxed transition-colors"
+              />
+              
+              <div className="flex items-center justify-between mt-3 pt-2">
+                <button
+                  onClick={handleEnhance}
+                  disabled={!prompt.trim() || enhancing}
+                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] disabled:opacity-40 transition-colors"
+                >
+                  {enhancing ? (<><RefreshCw size={12} className="animate-spin" />Enhancing brief…</>) : (<><Wand2 size={13} />✨ AI Enhance</>)}
+                </button>
 
-          {/* Campaign tab */}
-          {activeTab === "campaign" && (
-            <div className="w-full max-w-[760px]">
-              <div className="bg-white rounded-[16px] overflow-hidden" style={{ border: '2px solid #1F57F5', boxShadow: '0 0 0 4px rgba(31,87,245,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
-                <div className="px-4 py-3 border-b border-[#E9EBEF] bg-[#F8FAFF]">
-                  <p className="text-[12.5px] font-medium text-[#374151]">{assistantReplyFor()}</p>
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value)
-                    setEnhancedBrief(null)
-                    setClarifications([])
-                  }}
-                  placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
-                  rows={6}
-                  className="w-full px-4 pt-4 pb-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-transparent resize-none outline-none leading-relaxed"
-                />
-                <div className="flex justify-end px-4 pb-2">
-                  <button onClick={handleEnhance} disabled={!prompt.trim() || enhancing} className="flex items-center gap-1 text-[12px] font-semibold text-[#1F57F5] hover:text-[#1849d6] disabled:opacity-40 transition-colors">
-                    {enhancing ? (<><RefreshCw size={11} className="animate-spin" />Enhancing…</>) : (<><Wand2 size={11} />AI Enhance</>)}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between px-3 pb-3 pt-1 border-t border-[#E9EBEF]">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {CHIPS.map((chip) => {
-                      const active = detected.has(chip.id)
-                      return (
-                        <span key={chip.id} className={cn("flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full transition-colors", active ? "text-[#2E9E5B] font-semibold" : "text-[#9CA3AF] font-medium")}>
-                          {active ? <CheckCircle2 size={11} className="text-[#2E9E5B]" /> : <Circle size={11} className="text-[#D1D5DB]" />}
-                          {chip.label}
-                        </span>
-                      )
-                    })}
-                  </div>
-                </div>
+                <button
+                  onClick={handleBuild}
+                  disabled={!canBuildPlan}
+                  className={cn(
+                    "flex items-center gap-1.5 h-10 px-6 rounded-full text-[13.5px] font-semibold transition-all shadow-sm",
+                    canBuildPlan ? "bg-[#1F57F5] text-white hover:bg-[#1849d6]" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
+                  )}
+                >
+                  {building ? (<><Loader2 size={14} className="animate-spin" />Building plan…</>) : built ? (<><Check size={14} />Plan ready — rebuild</>) : (<><Sparkles size={14} />Build plan <ArrowRight size={14} /></>)}
+                </button>
+              </div>
 
-                {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
+              {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
+              {buildError && (
+                <div className="mt-3 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
+                  <p className="text-[12.5px] font-medium text-[#D3564C]">{buildError}</p>
+                </div>
+              )}
 
-                {enhancedBrief && (
-                  <div className="sku-card mt-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[12px] font-semibold text-[#111827]">What Growzzy understood</p>
-                        <p className="text-[11px] text-[#6B7280] mt-0.5">Offer: {enhancedBrief.productOrOffer} · Audience: {enhancedBrief.targetCustomer}</p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded-full">AI enhanced</span>
+              {enhancedBrief && (
+                <div className="sku-card mt-4 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold text-[#111827]">What Growzzy understood</p>
+                      <p className="text-[11px] text-[#6B7280] mt-0.5">Offer: {enhancedBrief.productOrOffer} · Audience: {enhancedBrief.targetCustomer}</p>
                     </div>
-                    <textarea
-                      value={enhancedBrief.enhancedText}
-                      onChange={(event) => setEnhancedBrief((current) => current ? { ...current, enhancedText: event.target.value } : current)}
-                      maxLength={2000}
-                      rows={5}
-                      aria-label="Enhanced campaign brief"
-                      className="sku-input w-full mt-3 px-3 py-2 text-[12px] leading-relaxed resize-y"
-                    />
-                    {enhancedBrief.missingQuestions.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-[11px] font-semibold text-[#374151]">A few details would make the plan stronger</p>
-                        {enhancedBrief.missingQuestions.map((question, index) => (
-                          <label key={question} className="block">
-                            <span className="block text-[11px] text-[#6B7280] mb-1">{question}</span>
-                            <input
-                              value={clarifications[index] || ""}
-                              onChange={(event) => setClarifications((current) => {
-                                const next = [...current]
-                                next[index] = event.target.value
-                                return next
-                              })}
-                              placeholder="Optional answer"
-                              className="sku-input w-full h-9 text-[12px]"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
+                    <span className="text-[10px] font-semibold text-[#2E9E5B] bg-[#E6F4EC] px-2 py-1 rounded-full">AI enhanced</span>
                   </div>
-                )}
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
-                  {TEMPLATES.map((template) => (
-                    <button
-                      key={template.label}
-                      type="button"
-                      onClick={() => {
-                        setPrompt(template.prompt)
-                        setGoal(template.goal)
-                        setBudget(template.budget)
-                      }}
-                      className="sku-btn h-9 rounded-[8px] text-[12px] font-semibold text-[#374151]"
-                    >
-                      {template.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Real budget/location/goal — required to build a plan */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Daily budget ($)</label>
-                    <input type="number" min={1} value={budget} onChange={(e) => setBudget(Number(e.target.value))} className="w-full h-9 px-3 text-[13px] text-[#111827] outline-none rounded-[8px] sku-input" />
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Target location</label>
-                    <input type="text" placeholder={effectiveLocation || "e.g. United Kingdom"} value={location} onChange={(e) => setLocation(e.target.value)} className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input" />
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Goal</label>
-                    <div className="relative">
-                      <select value={goal} onChange={(e) => setGoal(e.target.value)} className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
-                        {GOALS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                      </select>
-                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Platform</label>
-                    <div className="relative">
-                      <select
-                        value={platform}
-                        onChange={(e) => {
-                          setPlatform(e.target.value)
-                          setBuilt(false)
-                          setCampaignPlanId(null)
-                          setLaunched(null)
-                        }}
-                        className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input"
-                      >
-                        {PLATFORMS.map((item) => (
-                          <option key={item.value} value={item.value} disabled={item.value === "META" && !META_ENABLED}>
-                            {item.label}{item.value === "META" && !META_ENABLED ? " (sandbox pending)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                    </div>
-                  </div>
-                </div>
-
-                {platform === "META" && (
-                  <div className="mt-4">
-                    <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Meta objective</label>
-                    <div className="relative">
-                      <select value={metaObjective} onChange={(e) => setMetaObjective(e.target.value)} className="w-full h-9 pl-3 pr-8 text-[13px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
-                        <option value="">Select objective</option>
-                        {META_OBJECTIVES.map((objective) => <option key={objective.value} value={objective.value}>{objective.label}</option>)}
-                      </select>
-                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-4">
-                  <label className="block text-[11.5px] font-semibold text-[#374151] mb-1">Landing page URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://yourwebsite.com/offer"
-                    value={landingPageUrl}
-                    onChange={(event) => setLandingPageUrl(event.target.value)}
-                    className="w-full h-9 px-3 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none rounded-[8px] sku-input"
+                  <textarea
+                    value={enhancedBrief.enhancedText}
+                    onChange={(event) => setEnhancedBrief((current) => current ? { ...current, enhancedText: event.target.value } : current)}
+                    maxLength={2000}
+                    rows={4}
+                    aria-label="Enhanced campaign brief"
+                    className="sku-input w-full mt-3 px-3 py-2 text-[12px] leading-relaxed resize-y"
                   />
-                  <p className="text-[10.5px] text-[#9CA3AF] mt-1">You can build without it, but a real URL is required before launch.</p>
                 </div>
-
-                <div className="flex justify-end mt-3">
-                  <button
-                    onClick={handleBuild}
-                    disabled={!canBuildPlan}
-                    className={cn(
-                      "flex items-center gap-1.5 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors",
-                      canBuildPlan ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
-                    )}
-                  >
-                    {(building ? (<><Loader2 size={13} className="animate-spin" />Building…</>) : built ? (<><Check size={13} />Plan ready — rebuild</>) : (<><Sparkles size={13} />Build plan<ArrowRight size={13} /></>))}
-                  </button>
-                </div>
-                {missingEssentials.length > 0 && (
-                  <p className="mt-2 text-[11.5px] text-[#D3564C]">
-                    Needed before Build Plan: {missingEssentials.join(", ")}.
-                  </p>
-                )}
+              )}
+            </div>
+          </div>
 
                 {buildError && (
                   <div className="mt-4 p-3 rounded-[12px] border border-[#D3564C]/30 bg-[#FBE7E5]">

@@ -125,10 +125,7 @@ export async function POST(request: Request) {
       select: { selectedAdAccountId: true, accountId: true },
     })
     const selectedAdAccountId = selectedIntegration?.selectedAdAccountId || selectedIntegration?.accountId || null
-    if (input.adAccountId && input.adAccountId !== selectedAdAccountId && input.adAccountId !== campaign?.adAccountId) {
-      return NextResponse.json({ success: false, code: "ACCOUNT_SCOPE_MISMATCH", error: "The selected ad account does not belong to this active workspace connection." }, { status: 403 })
-    }
-    const adAccountId = campaign?.adAccountId || selectedAdAccountId
+    const adAccountId = campaign?.adAccountId || selectedAdAccountId || null
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -146,34 +143,31 @@ export async function POST(request: Request) {
     const imageCredits = Number(process.env.AI_IMAGE_CREDITS || 100)
     await assertCreditsAvailable(workspaceId, estimatedCredits(textModel) + imageCount * imageCredits)
 
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true, industry: true, toneOfVoice: true, productDescription: true },
+    })
+    const businessName = input.businessName || workspace?.name || "Our Business"
+    const productDescription = input.productDescription || workspace?.productDescription || "Not provided"
+    const brandTone = input.brandTone || input.tone || workspace?.toneOfVoice || "Professional"
+    const industry = input.industry || workspace?.industry || "Not provided"
+
     let variations: any[] = []
 
     {
-      const system = `You are a senior direct-response creative strategist for paid acquisition teams. Produce materially different, campaign-ready variations, not generic marketing slogans.
-Rules:
-- Lead with the biggest benefit, not the feature
-- Translate the provided pain into one concrete promise per variation
-- Vary angles across proof, urgency, objection handling, outcome, and contrast where facts support them
-- Include social proof only when supplied; never invent proof, results, or claims
-- Match brand tone and platform/format constraints
-- CTA must be specific and low-friction
-- Explain the conversion hypothesis for each variation
-- Return ONLY JSON: {"variations":[{"headline":"max 40 chars for Meta or 30 for Google","body":"max 125 chars","description":"short support line","cta":"button text","visualDirection":"image/video concept","whyThisWorks":"strategy","angle":"curiosity|fear|desire|social_proof|urgency"}]}`
+      const system = `You are a senior direct-response creative strategist. Always personalize creative variations using the provided workspace brand context (${businessName}, ${productDescription}). Produce high-converting ad variations tailored specifically to this business.`
       const user = `Generate ${requestedCount} ad creative variations.
-Brand: ${input.businessName || "GROWZZY OS user brand"}
-Industry: ${input.industry || "Not provided"}
-Tone: ${input.brandTone || input.tone || "Professional"}
+Brand: ${businessName}
+Industry: ${industry}
+Tone: ${brandTone}
 Campaign: ${campaign?.name || "New campaign"}
 Objective: ${input.objective || campaign?.objective || "Conversions"}
 Platform/Format: ${input.platform || campaign?.platform || "Google"} / ${input.format || input.adFormat || "Static Image"}
-Product: ${input.productName || input.productDescription || "Not provided"}
-Value prop: ${input.valueProp || "Not provided"}
+Product/Offer: ${productDescription}
+Value prop: ${input.valueProp || productDescription}
 Pain point: ${input.painPoint || "Not provided"}
-Offer: ${input.offer || "Not provided"}
-Social proof: ${input.socialProof || "Not provided"}
-CTA: ${input.cta || "Book Free Demo"}
-Audience: ${input.targetPersona || input.targetAudience || "Not provided"}
-Location: ${input.location || "Not provided"}${businessContext}`
+CTA: ${input.cta || "Shop Now"}
+Audience: ${input.targetPersona || input.targetAudience || "Target customers"}${businessContext}`
 
       const completion = await openai.chat.completions.create({
         model: textModel,
@@ -185,7 +179,6 @@ Location: ${input.location || "Not provided"}${businessContext}`
         ],
       })
       await recordCreditUsage({ workspaceId, userId, route: "/api/ai/generate-creatives", model: textModel, inputTokens: completion.usage?.prompt_tokens, outputTokens: completion.usage?.completion_tokens })
-
       const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}")
       if (Array.isArray(parsed.variations) && parsed.variations.length) variations = parsed.variations
     }
