@@ -73,7 +73,6 @@ async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, var
           model: imageModel,
           prompt: `${buildImagePrompt(input, variation, businessContext)}\nVariation ${index + 1}: ${index === 0 ? "primary composition" : index === 1 ? "different layout" : "different color treatment"}.`,
           size: "1024x1024",
-          quality: "standard",
         })
       )
     )

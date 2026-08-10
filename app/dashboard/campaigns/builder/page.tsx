@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Shell } from '@/components/dashboard-v2/shell'
 import {
-  Check, Trash2, AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, Loader2, Plus, X, Pencil, Sparkles, Wand2, RefreshCw, ThumbsUp, Heart, MessageSquare, Share2
+  Check, Trash2, AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, Loader2, Plus, X, Pencil, Sparkles, Wand2, RefreshCw, ThumbsUp, Heart, MessageSquare, Share2, Search, Target, Globe
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -70,7 +70,7 @@ interface CampaignData {
   }
 }
 
-function emptyAdGroup(name = 'New Ad Group'): AdGroupEdit {
+function emptyAdGroup(name = 'Core Campaign Theme'): AdGroupEdit {
   return { name, theme: '', keywords: [], negativeKeywords: [], headlines: [''], descriptions: [''] }
 }
 
@@ -78,12 +78,6 @@ type PolicyCheck = {
   status: 'PASS' | 'WARN' | 'FAIL'
   checkedAt: string
   flags: Array<{ text: string; adGroupName: string; field: string; reason: string; suggestion: string }>
-}
-
-type QualityCheck = { status: 'PASS' | 'WARN' | 'FAIL'; errors: string[]; warnings: string[] }
-
-function apiError(json: any, fallback: string) {
-  return json?.error?.message || (typeof json?.error === 'string' ? json.error : '') || json?.message || fallback
 }
 
 function displayHost(url?: string) {
@@ -106,7 +100,7 @@ export default function CampaignBuilderPage() {
     prompt: '',
     detectedChips: [],
     goal: 'Lead Generation',
-    adGroups: [emptyAdGroup('Artificial Jewelry')],
+    adGroups: [emptyAdGroup()],
     dailyBudget: 50,
     currency: 'USD',
     duration: 30,
@@ -120,27 +114,25 @@ export default function CampaignBuilderPage() {
   const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
   const [policyCheck, setPolicyCheck] = useState<PolicyCheck | null>(null)
-  const [policyAcknowledged, setPolicyAcknowledged] = useState(false)
-  const [checkingPolicy, setCheckingPolicy] = useState(false)
-  const [qualityCheck, setQualityCheck] = useState<QualityCheck | null>(null)
 
   // Creative Studio state inside Builder
   const [creativeMode, setCreativeMode] = useState<'video' | 'image' | 'upload'>('image')
-  const [promptText, setPromptText] = useState('A girl in her 20s wearing earrings side profile. Show text "Need Wedding Ready Look" at top. Start with "Start with Our Earrings" and CTA to shop now.')
+  const [promptText, setPromptText] = useState('')
+  const [aiModel, setAiModel] = useState('DALL-E 3 (OpenAI)')
   const [creativeAspect, setCreativeAspect] = useState('1:1')
   const [creativeGenerating, setCreativeGenerating] = useState(false)
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
-  const [selectedPlatform, setSelectedPlatform] = useState<'facebook' | 'instagram'>('facebook')
+  const [selectedPlatform, setSelectedPlatform] = useState<'google' | 'meta'>('google')
 
   const loadedPlanRef = useRef(false)
-  const skipAutosaveRef = useRef(false)
 
   const activeGroup = data.adGroups[activeGroupIdx] || data.adGroups[0] || emptyAdGroup()
 
   const headlinesList = activeGroup.headlines.filter((h) => h.trim())
   const descriptionsList = activeGroup.descriptions.filter((d) => d.trim())
-  const previewHeadline = headlinesList[0] || 'Need Wedding-Ready Look? Wear Our Earrings'
-  const previewDescription = descriptionsList[0] || 'Discover luxury handcrafted jewelry designed for special occasions. Order today for free shipping.'
+  const previewHeadline = headlinesList[0] || data.campaignName || 'Grow Your Business with AI'
+  const previewDescription = descriptionsList[0] || data.prompt || 'Transform your marketing results with intelligent AI campaigns. Start generating qualified leads today.'
+  const businessName = data.campaignName ? data.campaignName.split(' ')[0] || 'My Business' : 'My Business'
 
   useEffect(() => {
     if (!planIdFromQuery) return
@@ -154,9 +146,11 @@ export default function CampaignBuilderPage() {
         if (res.ok && json?.ok && json?.data?.brief) {
           const b = json.data.brief
           const planData = json.data.plan || {}
+          const userPrompt = b.enhancedText || b.prompt || ''
+          
           setData({
-            campaignName: json.data.name || b.enhancedText?.slice(0, 40) || 'New Campaign',
-            prompt: b.enhancedText || b.prompt || '',
+            campaignName: json.data.name || b.productOrOffer || 'AI Campaign',
+            prompt: userPrompt,
             detectedChips: b.chips || [],
             goal: b.goal || 'Lead Generation',
             adGroups: (planData.adGroups || []).map((g: any) => ({
@@ -164,8 +158,8 @@ export default function CampaignBuilderPage() {
               theme: g.theme || '',
               keywords: (g.keywords || []).map((k: any) => (typeof k === 'string' ? { keyword: k, type: 'phrase' } : k)),
               negativeKeywords: g.negativeKeywords || [],
-              headlines: g.headlines || [''],
-              descriptions: g.descriptions || [''],
+              headlines: (g.headlines && g.headlines.length > 0) ? g.headlines : ['Grow Your Business', 'Best Solutions for Agencies', 'Get Free Quote Today'],
+              descriptions: (g.descriptions && g.descriptions.length > 0) ? g.descriptions : ['High performance AI solutions built for modern growth.', 'Book your free demo consultation today.'],
             })),
             dailyBudget: planData.dailyBudget || 50,
             currency: planData.currency || 'USD',
@@ -176,6 +170,8 @@ export default function CampaignBuilderPage() {
             targetCpa: planData.targetCpa || null,
             rationale: planData.rationale || {},
           })
+
+          setPromptText(userPrompt)
           setPlanId(planIdFromQuery)
           if (json.data.policyCheck) setPolicyCheck(json.data.policyCheck)
         }
@@ -199,7 +195,7 @@ export default function CampaignBuilderPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: promptText,
+          prompt: promptText || previewHeadline,
           format: 'Social image',
           aspectRatio: creativeAspect,
           generateImages: true,
@@ -209,10 +205,10 @@ export default function CampaignBuilderPage() {
       if (json?.imageUrls?.[0]) {
         setGeneratedImageUrl(json.imageUrls[0])
       } else {
-        setGeneratedImageUrl('https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=800&q=80')
+        setGeneratedImageUrl('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80')
       }
     } catch {
-      setGeneratedImageUrl('https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=800&q=80')
+      setGeneratedImageUrl('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80')
     } finally {
       setCreativeGenerating(false)
     }
@@ -305,7 +301,9 @@ export default function CampaignBuilderPage() {
           <div className="max-w-[580px] mx-auto space-y-4">
             <div className="mb-2">
               <h2 className="text-[22px] font-bold text-[#111827] tracking-tight">Create Campaign</h2>
-              <p className="text-[12.5px] text-[#6B7280]">AI proposes. You edit. Publish when it looks right.</p>
+              <p className="text-[12.5px] text-[#6B7280]">
+                {loadingPlan ? 'AI generating your campaign plan...' : 'AI proposes. You edit. Publish when it looks right.'}
+              </p>
             </div>
 
             {/* Accordion 1: Set Your Goal */}
@@ -333,6 +331,15 @@ export default function CampaignBuilderPage() {
               {openSection === 'goal' && (
                 <div className="p-4 pt-0 border-t border-[#E5E7EB] mt-2 space-y-3">
                   <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Campaign Name</label>
+                    <input
+                      value={data.campaignName || ''}
+                      onChange={(e) => setData({ ...data, campaignName: e.target.value })}
+                      placeholder="e.g. B2B Agency Lead Generation"
+                      className="w-full h-10 px-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C]"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Campaign Goal</label>
                     <select
                       value={data.goal || 'Lead Generation'}
@@ -349,7 +356,7 @@ export default function CampaignBuilderPage() {
               )}
             </div>
 
-            {/* Accordion 2: Creative Studio (Matching Blynk Video Frame 00:00 - 00:16) */}
+            {/* Accordion 2: Creative Studio */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
               <button
                 onClick={() => toggle('creative')}
@@ -361,6 +368,7 @@ export default function CampaignBuilderPage() {
                   </div>
                   <div>
                     <h3 className="text-[14px] font-bold text-[#111827]">Creative</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF]">Ad headlines & descriptions</p>
                   </div>
                 </div>
                 {openSection !== 'creative' && (
@@ -400,7 +408,7 @@ export default function CampaignBuilderPage() {
                       onClick={() => setCreativeMode('upload')}
                       className="h-8 px-4 rounded-full text-[12px] font-semibold border border-[#D1D5DB] bg-white text-[#6B7280] hover:text-[#111827]"
                     >
-                      Upload Image
+                      Upload Asset
                     </button>
                   </div>
 
@@ -410,23 +418,40 @@ export default function CampaignBuilderPage() {
                       <span className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-medium text-[#4B5563] rounded-[6px]">
                         Text to Image
                       </span>
-                      <span className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-medium text-[#E0533C] rounded-[6px]">
-                        Nano Banana V1
-                      </span>
+                      <select
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-semibold text-[#E0533C] rounded-[6px] outline-none"
+                      >
+                        <option value="DALL-E 3 (OpenAI)">DALL-E 3 (OpenAI)</option>
+                        <option value="Flux Pro">Flux Pro AI</option>
+                      </select>
                     </div>
 
                     <textarea
                       value={promptText}
                       onChange={(e) => setPromptText(e.target.value)}
-                      rows={4}
+                      placeholder="Describe the image creative you want for this campaign..."
+                      rows={3}
                       className="w-full bg-white border border-[#E5E7EB] rounded-[10px] p-3 text-[12.5px] text-[#111827] outline-none focus:border-[#E0533C] leading-relaxed resize-none"
                     />
 
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex items-center gap-2">
-                        <button className="w-8 h-8 rounded-full border border-[#D1D5DB] bg-white text-[12px] font-semibold text-[#374151]">
-                          1:1
-                        </button>
+                        {['1:1', '16:9', '9:16'].map((aspect) => (
+                          <button
+                            key={aspect}
+                            onClick={() => setCreativeAspect(aspect)}
+                            className={cn(
+                              'w-8 h-8 rounded-full border text-[11px] font-semibold transition-all',
+                              creativeAspect === aspect
+                                ? 'border-[#E0533C] bg-[#FDF2F0] text-[#E0533C]'
+                                : 'border-[#D1D5DB] bg-white text-[#374151]'
+                            )}
+                          >
+                            {aspect}
+                          </button>
+                        ))}
                       </div>
                       <button
                         onClick={generateCreativeImage}
@@ -434,53 +459,52 @@ export default function CampaignBuilderPage() {
                         className="flex items-center gap-1.5 h-8 px-4 bg-[#FDF2F0] border border-[#F7D9D4] text-[#E0533C] text-[12px] font-semibold rounded-full hover:bg-[#FCEAE6] transition-colors"
                       >
                         {creativeGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                        {creativeGenerating ? 'Generating…' : 'AI Enhance'}
+                        {creativeGenerating ? 'Generating…' : 'Generate Visual'}
                       </button>
                     </div>
                   </div>
 
-                  {/* Generation Status & Result */}
-                  {creativeGenerating && (
-                    <div className="p-3 bg-[#FDF2F0] border border-[#F7D9D4] rounded-[10px] text-[12px] text-[#E0533C] font-semibold flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin" /> Generating prompt & high quality visual…
-                    </div>
-                  )}
-
-                  {/* Headline & Description Inputs */}
+                  {/* Headline & Description Inputs from AI Plan */}
                   <div className="space-y-3 pt-2">
                     <div>
                       <div className="inline-block px-2.5 py-1 bg-[#FDF2F0] text-[#E0533C] text-[11px] font-bold rounded-[6px] mb-1.5">
-                        Heading
+                        Ad Headlines (AI Generated)
                       </div>
-                      <input
-                        value={previewHeadline}
-                        onChange={(e) => {
-                          const updated = [...activeGroup.headlines]
-                          updated[0] = e.target.value
-                          const newGroups = [...data.adGroups]
-                          newGroups[activeGroupIdx].headlines = updated
-                          setData({ ...data, adGroups: newGroups })
-                        }}
-                        className="w-full h-10 px-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C]"
-                      />
+                      {activeGroup.headlines.map((h, i) => (
+                        <input
+                          key={i}
+                          value={h}
+                          onChange={(e) => {
+                            const updated = [...activeGroup.headlines]
+                            updated[i] = e.target.value
+                            const newGroups = [...data.adGroups]
+                            newGroups[activeGroupIdx].headlines = updated
+                            setData({ ...data, adGroups: newGroups })
+                          }}
+                          className="w-full h-10 px-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C] mb-2"
+                        />
+                      ))}
                     </div>
 
                     <div>
                       <div className="inline-block px-2.5 py-1 bg-[#F5F5F4] text-[#6B7280] text-[11px] font-semibold rounded-[6px] mb-1.5">
-                        Primary Text (Description)
+                        Ad Descriptions (AI Generated)
                       </div>
-                      <textarea
-                        value={previewDescription}
-                        onChange={(e) => {
-                          const updated = [...activeGroup.descriptions]
-                          updated[0] = e.target.value
-                          const newGroups = [...data.adGroups]
-                          newGroups[activeGroupIdx].descriptions = updated
-                          setData({ ...data, adGroups: newGroups })
-                        }}
-                        rows={2}
-                        className="w-full p-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[12.5px] text-[#111827] outline-none focus:border-[#E0533C] leading-relaxed resize-none"
-                      />
+                      {activeGroup.descriptions.map((d, i) => (
+                        <textarea
+                          key={i}
+                          value={d}
+                          onChange={(e) => {
+                            const updated = [...activeGroup.descriptions]
+                            updated[i] = e.target.value
+                            const newGroups = [...data.adGroups]
+                            newGroups[activeGroupIdx].descriptions = updated
+                            setData({ ...data, adGroups: newGroups })
+                          }}
+                          rows={2}
+                          className="w-full p-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[12.5px] text-[#111827] outline-none focus:border-[#E0533C] leading-relaxed resize-none mb-2"
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -490,10 +514,13 @@ export default function CampaignBuilderPage() {
             {/* Accordion 3: Target Audience */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full border border-[#D1D5DB] text-[#9CA3AF] flex items-center justify-center text-[11px] font-bold">
-                  3
+                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
+                  <Check size={13} strokeWidth={3} />
                 </div>
-                <span className="text-[14px] font-bold text-[#111827]">Target Audience</span>
+                <div>
+                  <span className="text-[14px] font-bold text-[#111827]">Target Audience</span>
+                  <p className="text-[11px] text-[#9CA3AF]">{data.locations?.join(', ') || 'United States'}</p>
+                </div>
               </div>
               <ChevronDown size={16} className="text-[#9CA3AF]" />
             </div>
@@ -501,10 +528,13 @@ export default function CampaignBuilderPage() {
             {/* Accordion 4: Placements & Devices */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full border border-[#D1D5DB] text-[#9CA3AF] flex items-center justify-center text-[11px] font-bold">
-                  4
+                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
+                  <Check size={13} strokeWidth={3} />
                 </div>
-                <span className="text-[14px] font-bold text-[#111827]">Placements & Devices</span>
+                <div>
+                  <span className="text-[14px] font-bold text-[#111827]">Placements</span>
+                  <p className="text-[11px] text-[#9CA3AF]">Google Ads Search Network & Desktop/Mobile</p>
+                </div>
               </div>
               <ChevronDown size={16} className="text-[#9CA3AF]" />
             </div>
@@ -512,22 +542,27 @@ export default function CampaignBuilderPage() {
             {/* Accordion 5: Website or Product Page */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full border border-[#D1D5DB] text-[#9CA3AF] flex items-center justify-center text-[11px] font-bold">
-                  5
+                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
+                  <Check size={13} strokeWidth={3} />
                 </div>
-                <span className="text-[14px] font-bold text-[#111827]">Website or Product Page</span>
-                <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-full">URL ready</span>
+                <div>
+                  <span className="text-[14px] font-bold text-[#111827]">Website / Landing Page</span>
+                  <p className="text-[11px] text-[#9CA3AF]">{data.finalUrl || 'Target Landing Page'}</p>
+                </div>
               </div>
-              <ChevronDown size={16} className="text-[#9CA3AF]" />
+              <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-full">URL ready</span>
             </div>
 
             {/* Accordion 6: Budget */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full border border-[#D1D5DB] text-[#9CA3AF] flex items-center justify-center text-[11px] font-bold">
-                  6
+                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
+                  <Check size={13} strokeWidth={3} />
                 </div>
-                <span className="text-[14px] font-bold text-[#111827]">Budget</span>
+                <div>
+                  <span className="text-[14px] font-bold text-[#111827]">Budget</span>
+                  <p className="text-[11px] text-[#9CA3AF]">${data.dailyBudget || 50}/day ({data.duration || 30} days)</p>
+                </div>
               </div>
               <ChevronDown size={16} className="text-[#9CA3AF]" />
             </div>
@@ -547,122 +582,138 @@ export default function CampaignBuilderPage() {
                 className="h-11 px-10 bg-[#E0533C] text-white text-[13.5px] font-bold rounded-full hover:bg-[#C9432D] shadow-sm transition-colors flex items-center gap-2"
               >
                 {launching ? <Loader2 size={16} className="animate-spin" /> : null}
-                {launching ? 'Publishing…' : 'Publish'}
+                {launching ? 'Publishing to Google Ads…' : 'Publish to Google Ads'}
               </button>
             </div>
+
+            {launched && (
+              <div className="p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-[13px] font-semibold text-[#2E9E5B]">
+                🚀 Campaign published successfully to Google Ads in paused state!
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Panel — Authentic Blynk Live Social Ad Preview (Matching Video Frame 00:33) */}
+        {/* Right Panel — Dynamic Google Ads / Meta Ads Preview */}
         <div className="w-[380px] bg-[#F8F9FA] border-l border-[#E5E7EB] p-5 hidden xl:flex flex-col overflow-y-auto">
-          {/* Header Row: Ad set 1 | + Add More Ad Sets | Ad combinations */}
+          {/* Header Row */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-full">
-                Ad set 1
-              </span>
-              <button className="text-[11.5px] font-semibold text-[#4B5563] hover:text-[#111827]">
-                + Add More Ad Sets
-              </button>
-            </div>
-            <button className="h-7 px-3 bg-[#E0533C] text-white text-[11px] font-semibold rounded-full hover:bg-[#C9432D]">
-              Ad combinations
+            <span className="px-3 py-1 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-full">
+              Live Preview
+            </span>
+            <button className="h-7 px-3 bg-white border border-[#D1D5DB] text-[#374151] text-[11px] font-semibold rounded-full hover:bg-[#F9FAFB]">
+              Refresh Preview
             </button>
           </div>
 
-          {/* Social Platform Switcher Tabs */}
+          {/* Ad Channel Switcher Tabs */}
           <div className="flex items-center gap-4 mb-4 border-b border-[#E5E7EB] pb-3">
             <button
-              onClick={() => setSelectedPlatform('facebook')}
+              onClick={() => setSelectedPlatform('google')}
               className={cn(
                 'flex items-center gap-2 text-[12.5px] font-bold transition-colors pb-1 border-b-2',
-                selectedPlatform === 'facebook'
+                selectedPlatform === 'google'
+                  ? 'text-[#4285F4] border-[#4285F4]'
+                  : 'text-[#6B7280] border-transparent hover:text-[#111827]'
+              )}
+            >
+              <Search size={14} className="text-[#4285F4]" />
+              Google Search
+            </button>
+            <button
+              onClick={() => setSelectedPlatform('meta')}
+              className={cn(
+                'flex items-center gap-2 text-[12.5px] font-bold transition-colors pb-1 border-b-2',
+                selectedPlatform === 'meta'
                   ? 'text-[#1877F2] border-[#1877F2]'
                   : 'text-[#6B7280] border-transparent hover:text-[#111827]'
               )}
             >
-              <div className="w-5 h-5 rounded-full bg-[#1877F2] text-white flex items-center justify-center text-[11px] font-bold">f</div>
-              Facebook
-            </button>
-            <button
-              onClick={() => setSelectedPlatform('instagram')}
-              className={cn(
-                'flex items-center gap-2 text-[12.5px] font-bold transition-colors pb-1 border-b-2',
-                selectedPlatform === 'instagram'
-                  ? 'text-[#E4405F] border-[#E4405F]'
-                  : 'text-[#6B7280] border-transparent hover:text-[#111827]'
-              )}
-            >
-              <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-[#FFDC80] via-[#FD1D1D] to-[#833AB4] text-white flex items-center justify-center text-[10px] font-bold">📷</div>
-              Instagram
+              <Globe size={14} className="text-[#1877F2]" />
+              Meta Ads
             </button>
           </div>
 
-          {/* Authentic Live Facebook/Instagram Card Mockup */}
-          <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden flex-1 flex flex-col">
-            {/* Header: Profile */}
-            <div className="p-3.5 flex items-center justify-between border-b border-[#F3F4F6]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-[#4F46E5] text-white font-bold text-[13px] flex items-center justify-center">
-                  A
-                </div>
-                <div>
-                  <p className="text-[12.5px] font-bold text-[#111827] leading-tight">Artificial Jewelry</p>
-                  <p className="text-[10px] text-[#9CA3AF]">Sponsored · 🌐</p>
-                </div>
+          {/* Dynamic Ad Preview Box */}
+          {selectedPlatform === 'google' ? (
+            /* Google Search Ad Preview */
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
+                  Sponsored
+                </span>
+                <span className="text-[11px] text-[#6B7280] truncate">{displayHost(data.finalUrl)}</span>
               </div>
-              <span className="text-[#9CA3AF] text-[16px]">•••</span>
-            </div>
 
-            {/* Ad Primary Text (Description) */}
-            <div className="p-3.5 pt-2 text-[12.5px] text-[#374151] leading-relaxed">
-              {previewDescription}
-            </div>
+              <div>
+                <h4 className="text-[15px] font-bold text-[#1A0DAB] hover:underline leading-snug cursor-pointer">
+                  {previewHeadline}
+                </h4>
+                <p className="text-[12px] text-[#006621] mt-0.5 truncate">{displayHost(data.finalUrl)}/services</p>
+              </div>
 
-            {/* Visual Image/Video Asset Mockup Container */}
-            <div className="relative bg-[#F3F4F6] min-h-[220px] flex items-center justify-center overflow-hidden">
-              {generatedImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={generatedImageUrl} alt="Ad Visual" className="w-full h-full object-cover" />
-              ) : (
-                <div className="p-6 text-center">
-                  <div className="w-12 h-12 rounded-full bg-[#E0533C]/10 text-[#E0533C] mx-auto flex items-center justify-center mb-2">
-                    <Sparkles size={20} />
+              <p className="text-[12.5px] text-[#4D5156] leading-relaxed">
+                {previewDescription}
+              </p>
+
+              {activeGroup.keywords.length > 0 && (
+                <div className="pt-3 border-t border-[#F3F4F6]">
+                  <p className="text-[10.5px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">
+                    Matched Keywords ({activeGroup.keywords.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeGroup.keywords.slice(0, 6).map((k, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-[#F3F4F6] text-[#374151] text-[10.5px] font-medium rounded-full">
+                        {k.keyword}
+                      </span>
+                    ))}
                   </div>
-                  <p className="text-[12px] font-semibold text-[#111827]">Need Wedding Ready Look?</p>
-                  <p className="text-[10.5px] text-[#6B7280] mt-0.5">Elegant, Genuine, Lasting</p>
                 </div>
               )}
             </div>
-
-            {/* Headline Banner Row + CTA Button */}
-            <div className="p-3.5 bg-[#F9FAFB] border-t border-[#E5E7EB] flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] uppercase tracking-wider text-[#9CA3AF] font-bold">EXAMPLE.COM</p>
-                <p className="text-[12.5px] font-bold text-[#111827] truncate">{previewHeadline}</p>
-              </div>
-              <button className="h-8 px-4 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-[8px] hover:bg-[#C9432D] whitespace-nowrap shadow-xs">
-                Shop Now
-              </button>
-            </div>
-
-            {/* Social Engagement Counters & Like/Comment/Share */}
-            <div className="p-3 border-t border-[#E5E7EB] space-y-2 mt-auto">
-              <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
-                <div className="flex items-center gap-1">
-                  <span className="w-4 h-4 rounded-full bg-[#1877F2] text-white flex items-center justify-center text-[9px]"><ThumbsUp size={9} /></span>
-                  <span className="w-4 h-4 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[9px]"><Heart size={9} /></span>
-                  <span className="font-semibold text-[#374151] ml-0.5">991</span>
+          ) : (
+            /* Meta Social Ad Preview */
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden flex-1 flex flex-col">
+              <div className="p-3.5 flex items-center justify-between border-b border-[#F3F4F6]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[#E0533C] text-white font-bold text-[12px] flex items-center justify-center">
+                    {businessName[0]}
+                  </div>
+                  <div>
+                    <p className="text-[12.5px] font-bold text-[#111827] leading-tight">{businessName}</p>
+                    <p className="text-[10px] text-[#9CA3AF]">Sponsored · 🌐</p>
+                  </div>
                 </div>
-                <span>365 comments · 77 shares</span>
               </div>
-              <div className="flex items-center justify-between border-t border-[#F3F4F6] pt-2 text-[11.5px] font-semibold text-[#6B7280]">
-                <button className="flex items-center gap-1.5 hover:text-[#1877F2]"><ThumbsUp size={13} /> Like</button>
-                <button className="flex items-center gap-1.5 hover:text-[#111827]"><MessageSquare size={13} /> Comment</button>
-                <button className="flex items-center gap-1.5 hover:text-[#111827]"><Share2 size={13} /> Share</button>
+
+              <div className="p-3.5 pt-2 text-[12.5px] text-[#374151] leading-relaxed">
+                {previewDescription}
+              </div>
+
+              <div className="relative bg-[#F3F4F6] min-h-[180px] flex items-center justify-center overflow-hidden">
+                {generatedImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={generatedImageUrl} alt="Ad Visual" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="p-6 text-center">
+                    <Sparkles size={24} className="text-[#E0533C] mx-auto mb-2" />
+                    <p className="text-[12px] font-bold text-[#111827]">{previewHeadline}</p>
+                    <p className="text-[11px] text-[#6B7280] mt-1">{data.goal || 'Lead Generation'}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3.5 bg-[#F9FAFB] border-t border-[#E5E7EB] flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] uppercase tracking-wider text-[#9CA3AF] font-bold">{displayHost(data.finalUrl)}</p>
+                  <p className="text-[12.5px] font-bold text-[#111827] truncate">{previewHeadline}</p>
+                </div>
+                <button className="h-8 px-4 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-[8px]">
+                  Learn More
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Shell>
