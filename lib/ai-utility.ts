@@ -5,7 +5,7 @@ import { assertCreditsAvailable, estimatedCredits, recordCreditUsage } from "@/l
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 const CACHE_TTL_SECONDS = 24 * 60 * 60
-export const UTILITY_MODEL = process.env.OPENAI_UTILITY_MODEL || "gpt-5-mini"
+export const UTILITY_MODEL = process.env.OPENAI_UTILITY_MODEL || "gpt-4o-mini"
 
 type UtilityCall = {
   route: string
