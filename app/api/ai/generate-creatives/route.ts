@@ -66,13 +66,14 @@ async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, var
   if (!process.env.OPENAI_API_KEY || input.generateImages === false) return { urls: [] as string[], error: null as string | null }
   try {
     const targets = variations.slice(0, Math.min(3, variations.length))
+    const imageModel = process.env.OPENAI_IMAGE_MODEL || "dall-e-3"
     const responses = await Promise.all(
       targets.map((variation, index) =>
         openai.images.generate({
-          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+          model: imageModel,
           prompt: `${buildImagePrompt(input, variation, businessContext)}\nVariation ${index + 1}: ${index === 0 ? "primary composition" : index === 1 ? "different layout" : "different color treatment"}.`,
           size: "1024x1024",
-          ...(process.env.OPENAI_IMAGE_MODEL === "dall-e-3" ? { quality: "hd", style: "natural" } : {}),
+          quality: "standard",
         })
       )
     )
@@ -86,6 +87,7 @@ async function generateImageUrls(input: z.infer<typeof CreativeBriefSchema>, var
       .filter(Boolean) as string[]
     return { urls, error: urls.length ? null : "OpenAI did not return image assets" }
   } catch (error: any) {
+    console.warn("Image generation fallback triggered:", error?.message || error)
     return { urls: [] as string[], error: publicAiError(error) }
   }
 }
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
       )
     }
     const textModel = process.env.OPENAI_CREATIVE_MODEL || "gpt-4o"
-    const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1"
+    const imageModel = process.env.OPENAI_IMAGE_MODEL || "dall-e-3"
     const imageCount = input.generateImages === false ? 0 : Math.min(3, requestedCount)
     const imageCredits = Number(process.env.AI_IMAGE_CREDITS || 100)
     await assertCreditsAvailable(workspaceId, estimatedCredits(textModel) + imageCount * imageCredits)
