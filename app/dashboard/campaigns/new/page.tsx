@@ -613,33 +613,22 @@ export default function NewCampaignPage() {
                   />
                 </div>
               )}
+
+              {built && (
+                <div className="mt-4 p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
+                  <p className="text-[13px] font-semibold text-[#2E9E5B] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
+                  <p className="text-[12px] text-[#374151]">
+                    "{campaignName}" was created and saved as a draft. Open the full editor to fine-tune keywords and ad copy, or review your campaign.
+                  </p>
+                  <div className="flex items-center gap-4 mt-3">
+                    <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">
+                      Open full editor <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-                {buildError && (
-                  <div className="mt-4 p-3 rounded-[12px] border border-[#D3564C]/30 bg-[#FBE7E5]">
-                    <p className="text-[12.5px] font-medium text-[#D3564C]">{buildError}</p>
-                  </div>
-                )}
-                {built && (
-                  <div className="mt-4 p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC]">
-                    <p className="text-[13px] font-semibold text-[#2E9E5B] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
-                    <p className="text-[12px] text-[#374151]">
-                      "{campaignName}" was created and saved as a draft. Generate creatives, launch it here, or open the full editor to fine-tune keywords and ad copy.
-                    </p>
-                    <div className="flex items-center gap-4 mt-3">
-                      <button onClick={() => setActiveTab("creatives")} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">
-                        Generate AI creatives <ArrowRight size={12} />
-                      </button>
-                      <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#374151] hover:text-[#111827] transition-colors">
-                        Open full editor <ExternalLink size={12} />
-                      </a>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Boolean search tab */}
           {activeTab === "boolean" && (
