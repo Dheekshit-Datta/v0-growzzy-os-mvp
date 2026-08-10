@@ -63,7 +63,8 @@ export async function runAutopilotForWorkspace(input: { userId: string; workspac
       if (!Number.isFinite(requested) || requested <= 0) continue
       // Never exceed the workspace's own ceiling, regardless of what the
       // suggestion asked for - this is the hard money-safety boundary.
-      targetBudget = workspace.dailyBudgetCeiling ? Math.min(requested, workspace.dailyBudgetCeiling) : requested
+      const ceiling = (workspace as any).dailyBudgetCeiling
+      targetBudget = ceiling ? Math.min(requested, ceiling) : requested
     }
 
     const previousValue = suggestion.actionType === "BUDGET_INCREASE" ? String(campaign.budgetAmount || 0) : String(campaign.status)
