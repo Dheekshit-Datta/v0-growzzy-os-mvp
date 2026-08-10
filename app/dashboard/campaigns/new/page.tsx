@@ -365,8 +365,8 @@ export default function NewCampaignPage() {
     }
   }
 
-  const effectiveLocation = location.trim() || inferLocation(promptText) || "United States"
   const promptText = prompt.trim()
+  const effectiveLocation = location.trim() || inferLocation(promptText) || "United States"
   const hasBudget = Number.isFinite(budget) && budget > 0 ? budget : 50
   const missingEssentials = [!promptText ? "offer" : ""].filter(Boolean)
   const canBuildPlan = !building && promptText.length > 5
