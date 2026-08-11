@@ -237,7 +237,7 @@ Apply top direct-response rules:
 - Formulate 8-15 ad headlines per ad group using direct-response psychological hooks (Curiosity, Pain Point, Solution, Social Proof, CTA). Each <=30 chars.
 - Formulate 3-4 ad descriptions per ad group. Each <=90 chars.
 - Bidding strategy: MAXIMIZE_CONVERSIONS, MAXIMIZE_CLICKS, or TARGET_CPA (do NOT use TARGET_ROAS on day-one campaigns).
-- ENGINEER AN ELITE DALL-E 3 IMAGE PROMPT in "imagePrompt": Craft a world-class visual description that represents the high-converting visual ad concept based on WHO we are selling to, WHAT we are selling, and WHY they need to act now (visual hook, subject, composition, studio lighting, visual color harmony, high contrast).`
+- ENGINEER AN ELITE DALL-E 3 IMAGE PROMPT in "imagePrompt": Craft a world-class visual description that represents the high-converting visual ad concept based on WHO we are selling to, WHAT we are selling, and WHY they need to act now (visual hook, subject, composition, studio lighting, visual color harmony, high contrast).
 
 Return ONLY JSON:
 {
