@@ -204,7 +204,9 @@ export async function POST(req: NextRequest) {
     await recordActivity({
       userId,
       workspaceId,
-      action: "CAMPAIGN_PUBLISHED",
+      type: "CAMPAIGN_PUBLISHED",
+      title: "Campaign Published",
+      message: `Published campaign ${campaign.name} to Google Ads`,
       entityType: "CAMPAIGN",
       entityId: campaign.id,
       metadata: { campaignName: campaign.name, googleCampaignId, adGroupId: adGroupResult.adGroupId },
@@ -218,6 +220,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     const errorInfo = classifyActionError(error)
+    const errorMessage = typeof errorInfo === 'object' && errorInfo !== null ? (errorInfo as any).message || String(error) : String(errorInfo || error)
     log("error", "api/campaigns/publish", "Google publish failed", { message: error?.message, stack: error?.stack })
 
     if (createdCampaignId && rollbackAccess) {
@@ -237,10 +240,10 @@ export async function POST(req: NextRequest) {
     if (publishContext) {
       await prisma.campaign.update({
         where: { id: publishContext.campaignId },
-        data: { liveStatus: "FAILED", liveError: errorInfo.message },
+        data: { liveStatus: "FAILED", liveError: errorMessage },
       }).catch(() => null)
     }
 
-    return NextResponse.json({ ok: false, error: errorInfo, message: errorInfo.message }, { status: 502 })
+    return NextResponse.json({ ok: false, error: errorInfo, message: errorMessage }, { status: 502 })
   }
 }

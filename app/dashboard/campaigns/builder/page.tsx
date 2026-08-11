@@ -120,7 +120,7 @@ export default function CampaignBuilderPage() {
   })
   const [activeGroupIdx, setActiveGroupIdx] = useState(0)
   const [launching, setLaunching] = useState(false)
-  const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
+  const [launched, setLaunched] = useState<{ isLive?: boolean; externalCampaignId?: string; message?: string } | null>(null)
   const [policyCheck, setPolicyCheck] = useState<PolicyCheck | null>({
     status: 'PASS',
     checkedAt: new Date().toISOString(),
@@ -265,8 +265,6 @@ export default function CampaignBuilderPage() {
   }
 
   const toggle = (id: Section) => setOpenSection((cur) => (cur === id ? null : id))
-
-  const [launched, setLaunched] = useState<{ isLive: boolean; externalCampaignId?: string; message?: string } | null>(null)
 
   const handlePublish = async () => {
     if (launching) return
