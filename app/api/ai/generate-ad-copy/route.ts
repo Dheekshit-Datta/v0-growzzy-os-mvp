@@ -5,6 +5,7 @@ import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 

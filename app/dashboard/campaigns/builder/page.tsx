@@ -268,10 +268,64 @@ export default function CampaignBuilderPage() {
   const handlePublish = async () => {
     if (launching) return
     setLaunching(true)
-    setTimeout(() => {
-      setLaunched({ externalCampaignId: '1092837412' })
+    setLaunched(null)
+    try {
+      // 1. Create Campaign Record
+      const createRes = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.campaignName || 'B2B AI Automation Campaign',
+          platform: 'GOOGLE',
+          objective: data.goal || 'LEADS',
+          budgetAmount: data.dailyBudget || 50,
+          locations: data.locations || ['United States'],
+          finalUrl: data.finalUrl || 'https://yourwebsite.com',
+        }),
+      })
+
+      const createJson = await readJson(createRes)
+      const campaignId = createJson?.data?.id || createJson?.id
+
+      if (!createRes.ok || !campaignId) {
+        throw new Error(createJson?.error?.message || createJson?.error || 'Failed to create campaign draft.')
+      }
+
+      // 2. Publish to Google Ads API via backend publisher
+      const publishRes = await fetch('/api/campaigns/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId,
+          adGroup: {
+            name: activeGroup.name || 'Core Performance Ad Group',
+            theme: activeGroup.theme || 'Core Keywords',
+          },
+          keywords: activeGroup.keywords.map((k) => ({
+            text: k.keyword,
+            matchType: k.type.toUpperCase() as any,
+          })),
+          ad: {
+            headlines: activeGroup.headlines.map((text) => ({ text })),
+            descriptions: activeGroup.descriptions.map((text) => ({ text })),
+            finalUrl: data.finalUrl || 'https://yourwebsite.com',
+          },
+        }),
+      })
+
+      const publishJson = await readJson(publishRes)
+      if (publishRes.ok && publishJson?.ok) {
+        setLaunched({ externalCampaignId: publishJson.externalCampaignId || campaignId })
+      } else {
+        const errorMsg = publishJson?.error || publishJson?.message || 'Google Ads account is not connected yet.'
+        alert(`Notice: ${errorMsg}\n\nTo push live to Google Ads, ensure your Google Ads account is connected under Settings -> Integrations. Your campaign has been saved as a draft!`)
+        setLaunched({ externalCampaignId: campaignId })
+      }
+    } catch (err: any) {
+      alert(`Error publishing campaign: ${err?.message || 'Unknown error'}`)
+    } finally {
       setLaunching(false)
-    }, 1200)
+    }
   }
 
   return (
