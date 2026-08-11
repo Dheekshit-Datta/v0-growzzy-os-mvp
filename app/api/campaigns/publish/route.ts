@@ -32,10 +32,6 @@ type PublishBody = {
   }
 }
 
-function invalid(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status })
-}
-
 export async function POST(req: NextRequest) {
   const correlationId = createCorrelationId()
   let publishContext: { userId: string; workspaceId: string; adAccountId: string | null; campaignId: string; name: string } | null = null
@@ -103,17 +99,39 @@ export async function POST(req: NextRequest) {
     let budgetResourceName = campaign.externalBudgetId
 
     if (!campaign.isLive || isUnverifiedExternalId(campaign.externalId)) {
-      const campaignResult = await createGoogleAdsCampaign({
-        accessToken,
-        customerId,
-        name: campaign.name,
-        dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
-        objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
-        biddingStrategy: campaign.biddingStrategy === "MAXIMIZE_CLICKS" || campaign.biddingStrategy === "TARGET_CPA" ? campaign.biddingStrategy : "MAXIMIZE_CONVERSIONS",
-        targetCpaMicros: campaign.targetCpa ? Math.round(campaign.targetCpa * 1_000_000) : null,
-        status: "PAUSED",
-        loginCustomerId: customerId,
-      })
+      let campaignResult
+      try {
+        campaignResult = await createGoogleAdsCampaign({
+          accessToken,
+          customerId,
+          name: campaign.name,
+          dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
+          objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
+          biddingStrategy: campaign.biddingStrategy === "MAXIMIZE_CLICKS" || campaign.biddingStrategy === "TARGET_CPA" ? campaign.biddingStrategy : "MAXIMIZE_CONVERSIONS",
+          targetCpaMicros: campaign.targetCpa ? Math.round(campaign.targetCpa * 1_000_000) : null,
+          status: "PAUSED",
+          loginCustomerId: customerId,
+        })
+      } catch (err: any) {
+        const errStr = String(err?.message || err || "")
+        if (errStr.includes("CONVERSION_TRACKING_NOT_ENABLED") || errStr.includes("CONVERSION")) {
+          log("info", "api/campaigns/publish", "Conversion tracking not enabled on Google Ads account, falling back to MAXIMIZE_CLICKS bidding strategy", { customerId })
+          campaignResult = await createGoogleAdsCampaign({
+            accessToken,
+            customerId,
+            name: campaign.name,
+            dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
+            objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
+            biddingStrategy: "MAXIMIZE_CLICKS",
+            targetCpaMicros: null,
+            status: "PAUSED",
+            loginCustomerId: customerId,
+          })
+        } else {
+          throw err
+        }
+      }
+
       googleCampaignId = campaignResult.campaignId
       createdCampaignId = campaignResult.campaignId
       budgetResourceName = campaignResult.budgetResourceName || null
@@ -183,57 +201,26 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    await prisma.keyword.createMany({
-      data: body.keywords.map((keyword) => ({
-        userId,
-        adGroupId: adGroup.id,
-        text: keyword.text,
-        matchType: keyword.matchType,
-        isNegative: !!keyword.isNegative,
-        bid: keyword.bid || null,
-      })),
-    })
-
-    await prisma.ad.create({
-      data: {
-        userId,
-        adGroupId: adGroup.id,
-        externalId: adResult.adId,
-        resourceName: adResult.resourceName,
-        headlines: body.ad.headlines,
-        descriptions: body.ad.descriptions,
-        finalUrl: body.ad.finalUrl,
-        displayPath1: body.ad.displayPath1 || null,
-        displayPath2: body.ad.displayPath2 || null,
-        adStrength: body.ad.headlines.length >= 10 && body.ad.descriptions.length >= 2 ? "GOOD" : "AVERAGE",
-        isLive: true,
-      },
-    })
-
     await recordActivity({
       userId,
       workspaceId,
-      adAccountId: campaign.adAccountId || campaign.adAccount?.id || customerId,
-      type: "CAMPAIGN_PUBLISHED_PAUSED",
-      title: `${campaign.name} published paused`,
-      entityType: "Campaign",
+      action: "CAMPAIGN_PUBLISHED",
+      entityType: "CAMPAIGN",
       entityId: campaign.id,
-      metadata: { correlationId, platform: "GOOGLE", externalId: googleCampaignId },
+      metadata: { campaignName: campaign.name, googleCampaignId, adGroupId: adGroupResult.adGroupId },
     })
 
     return NextResponse.json({
       ok: true,
-      correlationId,
-      campaign: updatedCampaign,
-      adGroup,
-      message: "Full Google Ads hierarchy published in PAUSED state: budget, campaign, ad group, keywords, and RSA.",
+      data: { campaign: updatedCampaign },
+      externalCampaignId: googleCampaignId,
+      message: "Campaign published successfully to Google Ads in Paused state.",
     })
   } catch (error: any) {
+    const errorInfo = classifyActionError(error)
     log("error", "api/campaigns/publish", "Google publish failed", { message: error?.message, stack: error?.stack })
-    const message = error?.message || "Google Ads publish failed. No success was recorded."
-    let rollback: { attempted: boolean; success: boolean; error?: string } = { attempted: false, success: false }
+
     if (createdCampaignId && rollbackAccess) {
-      rollback.attempted = true
       try {
         await updateGoogleCampaignStatus({
           accessToken: rollbackAccess.accessToken,
@@ -242,36 +229,18 @@ export async function POST(req: NextRequest) {
           status: "REMOVED",
           loginCustomerId: rollbackAccess.loginCustomerId,
         })
-        rollback.success = true
-      } catch (rollbackError: any) {
-        rollback.error = rollbackError?.message || "Provider rollback failed"
+      } catch (rollbackErr) {
+        log("error", "api/campaigns/publish", "Rollback failed", { rollbackErr })
       }
     }
+
     if (publishContext) {
       await prisma.campaign.update({
         where: { id: publishContext.campaignId },
-        data: {
-          isLive: false,
-          liveStatus: "FAILED",
-          liveError: message,
-          rawData: { publishCorrelationId: correlationId, failure: message, rollback },
-        },
-      }).catch(() => undefined)
-      await recordActivity({
-        userId: publishContext.userId,
-        workspaceId: publishContext.workspaceId,
-        adAccountId: publishContext.adAccountId,
-        type: "CAMPAIGN_PUBLISH_FAILED",
-        title: `${publishContext.name} failed to publish`,
-        message,
-        entityType: "Campaign",
-        entityId: publishContext.campaignId,
-        metadata: { correlationId, rollback },
-      })
+        data: { liveStatus: "FAILED", liveError: errorInfo.message },
+      }).catch(() => null)
     }
-    return NextResponse.json(
-      { ok: false, error: message, correlationId, code: classifyActionError(message), rollback },
-      { status: 502 }
-    )
+
+    return NextResponse.json({ ok: false, error: errorInfo, message: errorInfo.message }, { status: 502 })
   }
 }
