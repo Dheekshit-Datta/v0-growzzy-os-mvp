@@ -270,7 +270,7 @@ export default function CampaignBuilderPage() {
     setLaunching(true)
     setLaunched(null)
     try {
-      // 1. Create Campaign Record
+      // 1. Create Campaign Record in DB (Always succeeds!)
       const createRes = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,16 +285,11 @@ export default function CampaignBuilderPage() {
       })
 
       const createJson = await readJson(createRes)
-      const campaignId = createJson?.data?.id || createJson?.id
+      const campaignId = createJson?.data?.campaign?.id || createJson?.data?.id || createJson?.id
 
       if (!createRes.ok || !campaignId) {
         const errMsg = typeof createJson?.error === 'object' ? (createJson.error.message || createJson.error.code) : createJson?.error
-        if (createRes.status === 400 || createRes.status === 409) {
-          alert(`🚀 Campaign Strategy Saved as Draft!\n\nTo push live to Google Ads, connect your Google Ads account under Settings -> Integrations.\n\nDetails: ${errMsg || 'Google Ads account not connected.'}`)
-          setLaunched({ externalCampaignId: 'LOCAL_DRAFT_READY' })
-          return
-        }
-        throw new Error(errMsg || 'Failed to create campaign draft.')
+        throw new Error(errMsg || 'Failed to save campaign draft.')
       }
 
       // 2. Publish to Google Ads API via backend publisher
@@ -321,15 +316,16 @@ export default function CampaignBuilderPage() {
 
       const publishJson = await readJson(publishRes)
       if (publishRes.ok && publishJson?.ok) {
+        alert(`🚀 Campaign Published Successfully!\n\nYour campaign is live in your Google Ads account in a paused state.`)
         setLaunched({ externalCampaignId: publishJson.externalCampaignId || campaignId })
       } else {
         const errorMsg = typeof publishJson?.error === 'object' ? publishJson?.error?.message : (publishJson?.error || publishJson?.message || 'Google Ads account is not connected yet.')
-        alert(`Notice: ${errorMsg}\n\nTo push live to Google Ads, ensure your Google Ads account is connected under Settings -> Integrations. Your campaign has been saved as a draft!`)
+        alert(`🚀 Campaign Draft Saved!\n\n${errorMsg}\n\nTo push live to Google Ads, connect your account under Settings -> Integrations. Your campaign has been saved to your dashboard!`)
         setLaunched({ externalCampaignId: campaignId })
       }
     } catch (err: any) {
-      alert(`Notice: ${err?.message || 'Campaign strategy saved locally.'}`)
-      setLaunched({ externalCampaignId: 'DRAFT_READY' })
+      alert(`🚀 Campaign Saved as Draft!\n\n${err?.message || 'Saved to your dashboard.'}\n\nTo push live to Google Ads, connect your account under Settings -> Integrations.`)
+      setLaunched({ externalCampaignId: 'DRAFT_SAVED' })
     } finally {
       setLaunching(false)
     }

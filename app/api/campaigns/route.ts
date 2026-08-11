@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ============================================
-// POST — Create campaign
+// POST — Create campaign draft (Always succeeds!)
 // ============================================
 export async function POST(request: NextRequest) {
     try {
@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, { status: 401 })
         }
         const userId = await resolveUserId(session.user.id)
+        const workspaceId = await getRequestWorkspaceId(userId, request)
 
         const body = await request.json()
         const {
@@ -124,7 +125,6 @@ export async function POST(request: NextRequest) {
             status,
             startDate,
             endDate,
-            workspaceId: requestedWorkspaceId,
         } = body
 
         const validationErrors = validateLaunchInput({ name, platform, budgetAmount })
@@ -135,35 +135,33 @@ export async function POST(request: NextRequest) {
         const normalizedPlatform = String(platform).toUpperCase() as SupportedPlatform
         const normalizedType = normalizeCampaignType(campaignType || type || objective || "SEARCH")
         const parsedBudget = parseBudget(budgetAmount)
-        const workspaceId = await getRequestWorkspaceId(userId, request)
 
-        if (normalizedPlatform !== "GOOGLE") {
-            return NextResponse.json({ ok: false, error: { code: "UNSUPPORTED_PLATFORM", message: "Only Google Ads campaign creation is supported in this pass." } }, { status: 400 })
-        }
-
-        const integration = await prisma.integration.findFirst({
+        let integration = await prisma.integration.findFirst({
             where: { userId, workspaceId, platform: normalizedPlatform },
             include: { adAccounts: { where: { isPrimary: true } } },
         })
 
-        if (!integration || !integration.hasAdsAccess) {
-            return NextResponse.json({
-                ok: false,
-                error: {
-                    code: 'NOT_CONFIGURED',
-                    message: `Connect ${normalizedPlatform} Ads and select an ad account before launching campaigns.`,
+        if (!integration) {
+            integration = await prisma.integration.create({
+                data: {
+                    userId,
+                    workspaceId,
+                    platform: normalizedPlatform,
+                    status: "NOT_CONNECTED",
+                    hasAdsAccount: false,
+                    hasAdsAccess: false,
                 },
-            }, { status: 400 })
+                include: { adAccounts: { where: { isPrimary: true } } },
+            })
         }
 
-        // Save to database strictly using the native DB model schema
         const primaryAccount = integration.adAccounts[0]
         const selectedAccount = primaryAccount || (integration.selectedAdAccountId
             ? await prisma.adAccount.findFirst({ where: { integrationId: integration.id, externalId: integration.selectedAdAccountId } })
             : null)
-        if (!selectedAccount) {
-            return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: "Select a Google Ads account before creating a campaign draft." } }, { status: 409 })
-        }
+
+        const adAccountId = selectedAccount?.id || null
+        const adAccountExternalId = selectedAccount?.externalId || `draft-${Date.now()}`
 
         const campaign = await prisma.campaign.create({
             data: {
@@ -171,9 +169,9 @@ export async function POST(request: NextRequest) {
                 workspaceId,
                 userId,
                 platform: normalizedPlatform,
-                externalId: `local-${Date.now()}`, // Temporary local ID until real platform sync
-                adAccountId: selectedAccount.id,
-                adAccountExternalId: selectedAccount.externalId,
+                externalId: `local-${Date.now()}`,
+                adAccountId,
+                adAccountExternalId,
                 name,
                 objective: objective || goal || 'conversions',
                 goal: goal || null,
@@ -202,7 +200,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             ok: true,
             data: { campaign },
-            message: "Campaign draft saved. Publish through the reviewed hierarchy flow to create it in the ad platform.",
+            id: campaign.id,
+            message: "Campaign draft saved. Connect Google Ads under Settings -> Integrations to launch live.",
         }, { status: 201 })
     } catch (error: any) {
         log('error', 'api/campaigns', 'Failed to create campaign', { message: error?.message, stack: error?.stack })
