@@ -266,6 +266,8 @@ export default function CampaignBuilderPage() {
 
   const toggle = (id: Section) => setOpenSection((cur) => (cur === id ? null : id))
 
+  const [launched, setLaunched] = useState<{ isLive: boolean; externalCampaignId?: string; message?: string } | null>(null)
+
   const handlePublish = async () => {
     if (launching) return
     setLaunching(true)
@@ -317,16 +319,15 @@ export default function CampaignBuilderPage() {
 
       const publishJson = await readJson(publishRes)
       if (publishRes.ok && publishJson?.ok) {
-        alert(`🚀 Campaign Published Successfully!\n\nYour campaign is live in your Google Ads account in a paused state.`)
-        setLaunched({ externalCampaignId: publishJson.externalCampaignId || campaignId })
+        setLaunched({ isLive: true, externalCampaignId: publishJson.externalCampaignId || campaignId, message: '🚀 Campaign published live to Google Ads in Paused state!' })
       } else {
         const errorMsg = typeof publishJson?.error === 'object' ? publishJson?.error?.message : (publishJson?.error || publishJson?.message || 'Google Ads account is not connected yet.')
-        alert(`🚀 Campaign Draft Saved!\n\n${errorMsg}\n\nTo push live to Google Ads, connect your account under Settings -> Integrations. Your campaign has been saved to your dashboard!`)
-        setLaunched({ externalCampaignId: campaignId })
+        alert(`Notice: ${errorMsg}\n\nTo push live to Google Ads, connect your account under Settings -> Integrations. Your campaign has been saved to your dashboard as a draft!`)
+        setLaunched({ isLive: false, externalCampaignId: campaignId, message: '📝 Campaign saved as a draft in Growzzy OS.' })
       }
     } catch (err: any) {
-      alert(`🚀 Campaign Saved as Draft!\n\n${err?.message || 'Saved to your dashboard.'}\n\nTo push live to Google Ads, connect your account under Settings -> Integrations.`)
-      setLaunched({ externalCampaignId: 'DRAFT_SAVED' })
+      alert(`Notice: ${err?.message || 'Campaign saved as draft.'}\n\nConnect your Google Ads account under Settings -> Integrations to launch live.`)
+      setLaunched({ isLive: false, message: '📝 Campaign saved as a draft.' })
     } finally {
       setLaunching(false)
     }
@@ -963,8 +964,28 @@ export default function CampaignBuilderPage() {
             </div>
 
             {launched && (
-              <div className="p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-[13px] font-semibold text-[#2E9E5B]">
-                🚀 Campaign published successfully in paused state!
+              <div className={cn(
+                "p-4 rounded-[12px] border text-[13px] font-semibold flex items-center justify-between gap-3",
+                launched.isLive 
+                  ? "border-[#2E9E5B]/30 bg-[#E6F4EC] text-[#2E9E5B]" 
+                  : "border-[#C7D9FD] bg-[#EAF0FE] text-[#1F57F5]"
+              )}>
+                <div>
+                  <p>{launched.message || (launched.isLive ? "🚀 Campaign published live to Google Ads!" : "📝 Campaign saved as a draft.")}</p>
+                  {!launched.isLive && (
+                    <p className="text-[11.5px] font-normal text-[#4B5563] mt-0.5">
+                      Connect your Google Ads account under Settings -&gt; Integrations to push live.
+                    </p>
+                  )}
+                </div>
+                {!launched.isLive && (
+                  <a
+                    href="/dashboard/settings?tab=integrations"
+                    className="px-3.5 py-1.5 bg-[#1F57F5] text-white text-[12px] font-bold rounded-[6px] hover:bg-[#1849D6] shrink-0"
+                  >
+                    Connect Google Ads
+                  </a>
+                )}
               </div>
             )}
           </div>
