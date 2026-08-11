@@ -1,0 +1,118 @@
+{
+  "datasetVersion": "1.0.0",
+  "totalTemplates": 50,
+  "categories": [
+    {
+      "niche": "B2B SaaS & AI Automation",
+      "targetAudience": "Founders, CMOs, Agency Owners, Operations Directors",
+      "awarenessStage": "SOLUTION_AWARE",
+      "emotionalTriggers": ["Relief from manual work", "Scalable ARR Growth", "Competitive Advantage"],
+      "topHeadlines": [
+        "Scale B2B Leads 10x with AI",
+        "Stop Manual Outreach Today",
+        "Automate Prospecting 24/7",
+        "Book 30+ Qualified Meetings/Mo",
+        "The AI Copilot for Growth Teams",
+        "Replace 5 Tools with 1 OS",
+        "Proven B2B Lead Engine",
+        "Zero Cold Calling Required"
+      ],
+      "topDescriptions": [
+        "Generate verified B2B leads using cutting-edge AI workflows. Book your live demo today.",
+        "Automate prospect research, email copy, and CRM sync in under 5 minutes.",
+        "Designed for high-growth teams ready to scale pipeline without increasing headcount.",
+        "See how 200+ agencies use Growzzy OS to double qualified appointments."
+      ],
+      "visualPromptTemplates": [
+        "Professional modern B2B SaaS dashboard interface showing AI lead generation analytics, dark mode UI with glowing royal blue accent lighting, sleek 3D isometric metric charts, 4k digital render",
+        "High-contrast minimalist tech workspace background with a laptop displaying a glowing green lead growth curve, professional studio lighting, 8k resolution",
+        "3D futuristic command center dashboard with glowing holographic charts displaying B2B sales pipeline automation, electric blue and slate gray palette, ultra-realistic"
+      ]
+    },
+    {
+      "niche": "Growth Marketing & Ad Agencies",
+      "targetAudience": "E-commerce Brands, Local Business Owners, Corporate Clients",
+      "awarenessStage": "PROBLEM_AWARE",
+      "emotionalTriggers": ["High ROAS Guarantee", "Client Retention", "Predictable Customer Acquisition"],
+      "topHeadlines": [
+        "Double Your Ad ROAS in 30 Days",
+        "Predictable Client Acquisition",
+        "Performance Ad Management",
+        "Stop Wasting Ad Budget",
+        "Data-Driven Growth Agency",
+        "Scale Paid Ads Profitably"
+      ],
+      "topDescriptions": [
+        "We engineer high-converting Meta and Google ad campaigns that deliver guaranteed ROI.",
+        "Over $50M in verified client ad spend managed. Request a free performance audit now.",
+        "Custom direct-response creative, landing page optimization, and daily AI tracking."
+      ],
+      "visualPromptTemplates": [
+        "Split visual showing an upward trending green ROAS revenue graph next to sleek smartphone preview of Facebook feed ads, professional studio lighting, depth of field",
+        "Executive agency board room display showing real-time ad performance metrics, high contrast royal blue lighting, 4k advertising photography"
+      ]
+    },
+    {
+      "niche": "E-Commerce & Direct-to-Consumer (D2C)",
+      "targetAudience": "Online Shoppers, Lifestyle Consumers",
+      "awarenessStage": "MOST_AWARE",
+      "emotionalTriggers": ["Instant Gratification", "Social Proof", "Exclusive Discount"],
+      "topHeadlines": [
+        "Claim Your 20% Off Today",
+        "Over 10,000+ 5-Star Reviews",
+        "The Ultimate Upgrade for You",
+        "Free Express Shipping Today",
+        "Limited Stock Available"
+      ],
+      "topDescriptions": [
+        "Experience premium quality trusted by thousands of happy customers. Order now with risk-free 30-day returns.",
+        "Shop our best-selling collection today and get fast free shipping on orders over $50."
+      ],
+      "visualPromptTemplates": [
+        "Clean aesthetic product hero shot on pastel podium with soft ambient studio lighting, floating 5-star customer rating badge, 8k commercial photography",
+        "Dynamic lifestyle shot showing product in action with vibrant color harmony, crisp focus, social proof overlay"
+      ]
+    },
+    {
+      "niche": "High-Ticket Coaching & Professional Services",
+      "targetAudience": "Executives, Consultants, Entrepreneurs",
+      "awarenessStage": "PROBLEM_AWARE",
+      "emotionalTriggers": ["Authority", "Career Advancement", "Freedom & Revenue Growth"],
+      "topHeadlines": [
+        "Build a 7-Figure Practice",
+        "Exclusive Executive Mentorship",
+        "Master High-Ticket Sales",
+        "Free 45-Min Strategy Session",
+        "The Proven Growth Roadmap"
+      ],
+      "topDescriptions": [
+        "Learn the exact blueprint used by industry leaders to scale revenue and build market authority.",
+        "Apply for our confidential 1-on-1 strategy session. Limited seats available this week."
+      ],
+      "visualPromptTemplates": [
+        "Minimalist executive office environment with warm natural sunlight, tablet displaying a strategic growth roadmap, luxury corporate aesthetic",
+        "High-contrast portrait of a confident entrepreneur at a modern desk with ambient soft lighting, premium 4k editorial photography"
+      ]
+    },
+    {
+      "niche": "Local Services & Lead Generation",
+      "targetAudience": "Homeowners, Local Residents",
+      "awarenessStage": "MOST_AWARE",
+      "emotionalTriggers": ["Urgency", "Local Trust", "Fast Free Estimate"],
+      "topHeadlines": [
+        "Fast Free Local Quote",
+        "Top-Rated Local Specialists",
+        "Same-Day Service Available",
+        "Licensed & Fully Insured",
+        "Save $250 On Your First Job"
+      ],
+      "topDescriptions": [
+        "Trusted by your neighbors with 100+ 5-star reviews. Call or click now for a instant estimate.",
+        "Fast reliable local service guaranteed. Emergency service available 24/7."
+      ],
+      "visualPromptTemplates": [
+        "Friendly local technician in clean uniform standing in front of modern home with branded service vehicle, warm sunset lighting, authentic local trust photography"
+      ]
+    }
+  ]
+}

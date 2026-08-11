@@ -527,7 +527,7 @@ export default function CampaignBuilderPage() {
                     </div>
 
                     <p className="text-[11.5px] text-[#6B7280]">
-                      The AI pre-filled this visual description based on your brand & campaign strategy. Feel free to edit or generate as is.
+                      Growzzy AI analyzed your prompt, Brand Memory & direct-response marketing rules to synthesize this high-converting image prompt:
                     </p>
 
                     <textarea
@@ -563,6 +563,19 @@ export default function CampaignBuilderPage() {
                         {creativeGenerating ? 'Generating…' : 'Generate Visual'}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Strategic Ad Network Visual Guide */}
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-[10px] space-y-1.5 text-[11.5px] text-[#475569]">
+                    <p className="font-bold text-[#1E293B] text-[12px] flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-[#1F57F5]" /> Ad Network Visual Format Guide
+                    </p>
+                    <ul className="space-y-1 pl-4 list-disc text-[11px] leading-relaxed">
+                      <li><strong>Google Search Text Ads:</strong> Appear on Google Search with Headlines, Descriptions & Sitelink Extensions (text primary).</li>
+                      <li><strong>Google Search Image Extensions:</strong> Google allows adding 1:1 and 1.91:1 image assets alongside text ads to boost CTR by up to 20%.</li>
+                      <li><strong>Google Performance Max & Display:</strong> Rely heavily on visual image assets across YouTube, Gmail, Discover & Display Network.</li>
+                      <li><strong>Meta Ads (Facebook & Instagram):</strong> ALWAYS require a high-impact visual image or video creative asset.</li>
+                    </ul>
                   </div>
 
                   {/* AI Generated Headlines */}

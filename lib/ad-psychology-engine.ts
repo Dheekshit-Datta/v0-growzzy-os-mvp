@@ -9,6 +9,8 @@
  * 5. Proven Direct-Response Copywriting Frameworks (PAS, AIDA, BAB)
  */
 
+import highConvertingDataset from './data/high-converting-ads-dataset.json'
+
 export interface BuyerPsychologyProfile {
   targetPersona: string
   awarenessStage: 'PROBLEM_AWARE' | 'SOLUTION_AWARE' | 'PRODUCT_AWARE' | 'MOST_AWARE'
@@ -28,11 +30,16 @@ export function buildPsychologyPromptContext(params: {
 }): string {
   const { offer, targetCustomer, goal, brandMemory, landingPageUrl } = params
 
+  const sampleTemplates = JSON.stringify(highConvertingDataset.categories, null, 2)
+
   return `
 ===================================================================
-WORLD-CLASS DIRECT-RESPONSE BUYER PSYCHOLOGY FRAMEWORK
+WORLD-CLASS DIRECT-RESPONSE BUYER PSYCHOLOGY & WINNING AD DATASET
 ===================================================================
 You are an elite Direct-Response Copywriter & Visual Ad Director trained on $100M+ in verified high-converting advertising campaigns (Meta Ads, Google Search Ads, Google Image Extensions, Display).
+
+REFERENCE DATASET OF HIGH-CONVERTING PROVEN AD TEMPLATES:
+${sampleTemplates}
 
 BEFORE generating any ad copy or image prompts, perform deep psychological analysis:
 
