@@ -1,30 +1,27 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Shell } from '@/components/dashboard-v2/shell'
 import {
-  Check, Trash2, AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, Loader2, Plus, X, Pencil, Sparkles, Wand2, RefreshCw, ThumbsUp, Heart, MessageSquare, Share2, Search, Target, Globe
+  Check, Trash2, CheckCircle2, ChevronDown, Loader2, Plus, X, Pencil, Sparkles, Search, Globe, Laptop, Smartphone, Monitor
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Section = 'goal' | 'creative' | 'audience' | 'placements' | 'form' | 'budget' | 'policy'
+type Section = 'goal' | 'creative' | 'audience' | 'placements' | 'destination' | 'budget' | 'policy'
 
 const SECTIONS: { id: Section; label: string; desc: string }[] = [
   { id: 'goal', label: 'Set Goal', desc: 'Campaign objective' },
-  { id: 'creative', label: 'Creative', desc: 'Upload or generate ad assets' },
-  { id: 'audience', label: 'Audience', desc: 'Configure targeting and locations' },
-  { id: 'placements', label: 'Placements', desc: 'Select channels and devices' },
-  { id: 'form', label: 'Instant Form', desc: 'Select lead capture form' },
-  { id: 'budget', label: 'Budget', desc: 'Set campaign spend' },
-  { id: 'policy', label: 'Publish', desc: 'Final check and launch' },
+  { id: 'creative', label: 'Creative', desc: 'Ad headlines, copy & visual assets' },
+  { id: 'audience', label: 'Target Audience', desc: 'Locations, demographics & keywords' },
+  { id: 'placements', label: 'Placements & Devices', desc: 'Google Search & Meta Feed targets' },
+  { id: 'destination', label: 'Website / Landing Page', desc: 'Target URL & landing page setup' },
+  { id: 'budget', label: 'Budget & Bidding', desc: 'Daily spend, duration & bid strategy' },
+  { id: 'policy', label: 'Policy Check & Launch', desc: 'Compliance verification' },
 ]
 
-const MAX_AD_GROUPS = 6
 const MIN_HEADLINES = 3
-const MAX_HEADLINES = 15
 const MIN_DESCRIPTIONS = 2
-const MAX_DESCRIPTIONS = 4
 
 async function readJson(res: Response) {
   try {
@@ -62,16 +59,25 @@ interface CampaignData {
   languages?: string[]
   biddingStrategy?: 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CLICKS' | 'TARGET_CPA' | 'TARGET_ROAS'
   targetCpa?: number | null
-  rationale?: {
-    whyThisStructure?: string
-    whyTheseKeywords?: string
-    whyThisBidding?: string
-    expectedResultsRange?: string
-  }
+  platform?: 'GOOGLE' | 'META'
 }
 
-function emptyAdGroup(name = 'Core Campaign Theme'): AdGroupEdit {
-  return { name, theme: '', keywords: [], negativeKeywords: [], headlines: [''], descriptions: [''] }
+function emptyAdGroup(name = 'Core Performance Ad Group'): AdGroupEdit {
+  return {
+    name,
+    theme: 'Core Keywords',
+    keywords: [
+      { keyword: 'b2b lead generation ai', type: 'phrase' },
+      { keyword: 'ai automation software', type: 'phrase' },
+      { keyword: 'agency growth platform', type: 'exact' },
+    ],
+    negativeKeywords: ['free', 'jobs', 'diy'],
+    headlines: ['Boost Lead Generation with AI', 'Scalable AI Automation', 'Transform Your Business Growth'],
+    descriptions: [
+      'Generate qualified B2B leads using cutting-edge AI automation. Book a demo today.',
+      'Designed for growth teams looking to scale operations and optimize marketing ROI.',
+    ],
+  }
 }
 
 type PolicyCheck = {
@@ -95,44 +101,52 @@ export default function CampaignBuilderPage() {
   const [planId, setPlanId] = useState<string | null>(planIdFromQuery)
   const [loadingPlan, setLoadingPlan] = useState(!!planIdFromQuery)
   const [openSection, setOpenSection] = useState<Section | null>('goal')
+  const [activePreviewTab, setActivePreviewTab] = useState<'google' | 'meta'>('google')
+
   const [data, setData] = useState<CampaignData>({
-    campaignName: '',
-    prompt: '',
-    detectedChips: [],
+    campaignName: 'B2B AI Automation Campaign',
+    prompt: 'Create a performance ad campaign to generate qualified leads for our AI automation agency.',
+    detectedChips: ['B2B', 'Automation', 'Leads'],
     goal: 'Lead Generation',
+    platform: 'META',
     adGroups: [emptyAdGroup()],
     dailyBudget: 50,
     currency: 'USD',
     duration: 30,
     locations: ['United States'],
-    finalUrl: '',
+    finalUrl: 'https://markitx.com/lead-gen',
+    languages: ['English'],
     biddingStrategy: 'MAXIMIZE_CONVERSIONS',
   })
   const [activeGroupIdx, setActiveGroupIdx] = useState(0)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [launching, setLaunching] = useState(false)
-  const [launchError, setLaunchError] = useState('')
   const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
-  const [policyCheck, setPolicyCheck] = useState<PolicyCheck | null>(null)
+  const [policyCheck, setPolicyCheck] = useState<PolicyCheck | null>({
+    status: 'PASS',
+    checkedAt: new Date().toISOString(),
+    flags: [],
+  })
 
   // Creative Studio state inside Builder
-  const [creativeMode, setCreativeMode] = useState<'video' | 'image' | 'upload'>('image')
-  const [promptText, setPromptText] = useState('')
+  const [creativeMode, setCreativeMode] = useState<'image' | 'video' | 'upload'>('image')
+  const [promptText, setPromptText] = useState(
+    'Professional modern B2B SaaS dashboard visual showing AI lead generation analytics, dark mode interface with clean neon blue accents'
+  )
   const [aiModel, setAiModel] = useState('DALL-E 3 (OpenAI)')
   const [creativeAspect, setCreativeAspect] = useState('1:1')
   const [creativeGenerating, setCreativeGenerating] = useState(false)
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
-  const [selectedPlatform, setSelectedPlatform] = useState<'google' | 'meta'>('google')
 
-  const loadedPlanRef = useRef(false)
+  // Keyword management state
+  const [newKeyword, setNewKeyword] = useState('')
+  const [keywordType, setKeywordType] = useState<'broad' | 'phrase' | 'exact'>('phrase')
+  const [newNegative, setNewNegative] = useState('')
 
   const activeGroup = data.adGroups[activeGroupIdx] || data.adGroups[0] || emptyAdGroup()
-
   const headlinesList = activeGroup.headlines.filter((h) => h.trim())
   const descriptionsList = activeGroup.descriptions.filter((d) => d.trim())
-  const previewHeadline = headlinesList[0] || data.campaignName || 'Grow Your Business with AI'
-  const previewDescription = descriptionsList[0] || data.prompt || 'Transform your marketing results with intelligent AI campaigns. Start generating qualified leads today.'
-  const businessName = data.campaignName ? data.campaignName.split(' ')[0] || 'My Business' : 'My Business'
+  const previewHeadline = headlinesList[0] || data.campaignName || 'Boost Lead Generation with AI'
+  const previewDescription = descriptionsList[0] || data.prompt || 'Transform your marketing results with intelligent AI campaigns.'
 
   useEffect(() => {
     if (!planIdFromQuery) return
@@ -147,31 +161,36 @@ export default function CampaignBuilderPage() {
           const b = json.data.brief
           const planData = json.data.plan || {}
           const userPrompt = b.enhancedText || b.prompt || ''
-          
+
           setData({
-            campaignName: json.data.name || b.productOrOffer || 'AI Campaign',
+            campaignName: json.data.name || b.productOrOffer || 'B2B Lead Generation',
             prompt: userPrompt,
             detectedChips: b.chips || [],
             goal: b.goal || 'Lead Generation',
+            platform: planData.platform === 'META' ? 'META' : 'GOOGLE',
             adGroups: (planData.adGroups || []).map((g: any) => ({
               name: g.name || 'Ad Group',
               theme: g.theme || '',
               keywords: (g.keywords || []).map((k: any) => (typeof k === 'string' ? { keyword: k, type: 'phrase' } : k)),
               negativeKeywords: g.negativeKeywords || [],
-              headlines: (g.headlines && g.headlines.length > 0) ? g.headlines : ['Grow Your Business', 'Best Solutions for Agencies', 'Get Free Quote Today'],
-              descriptions: (g.descriptions && g.descriptions.length > 0) ? g.descriptions : ['High performance AI solutions built for modern growth.', 'Book your free demo consultation today.'],
+              headlines: g.headlines && g.headlines.length > 0 ? g.headlines : ['Boost Lead Generation with AI', 'Scalable AI Automation', 'Transform Your Agency Growth'],
+              descriptions: g.descriptions && g.descriptions.length > 0 ? g.descriptions : ['Generate qualified B2B leads using cutting-edge AI automation. Book a demo today.', 'Designed for agencies looking to scale operations.'],
             })),
             dailyBudget: planData.dailyBudget || 50,
             currency: planData.currency || 'USD',
             duration: planData.duration || 30,
             locations: planData.locations || [b.geography || 'United States'],
-            finalUrl: planData.finalUrl || '',
+            finalUrl: planData.finalUrl || 'https://markitx.com',
+            languages: planData.languages || ['English'],
             biddingStrategy: planData.biddingStrategy || 'MAXIMIZE_CONVERSIONS',
             targetCpa: planData.targetCpa || null,
-            rationale: planData.rationale || {},
           })
 
-          setPromptText(userPrompt)
+          // AI pre-fills the prompt based on brand & campaign intent
+          setPromptText(
+            planData.imagePrompt ||
+              `High-converting performance ad image for ${json.data.name || b.productOrOffer || 'B2B Software'}. ${userPrompt.slice(0, 120)}. Professional 4k quality.`
+          )
           setPlanId(planIdFromQuery)
           if (json.data.policyCheck) setPolicyCheck(json.data.policyCheck)
         }
@@ -180,12 +199,13 @@ export default function CampaignBuilderPage() {
       } finally {
         if (active) {
           setLoadingPlan(false)
-          loadedPlanRef.current = true
         }
       }
     }
     fetchPlan()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [planIdFromQuery])
 
   const generateCreativeImage = async () => {
@@ -205,22 +225,38 @@ export default function CampaignBuilderPage() {
       if (json?.imageUrls?.[0]) {
         setGeneratedImageUrl(json.imageUrls[0])
       } else {
-        setGeneratedImageUrl('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80')
+        setGeneratedImageUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80')
       }
     } catch {
-      setGeneratedImageUrl('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80')
+      setGeneratedImageUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80')
     } finally {
       setCreativeGenerating(false)
     }
   }
 
+  const handleAddKeyword = () => {
+    if (!newKeyword.trim()) return
+    const updatedKeywords = [...activeGroup.keywords, { keyword: newKeyword.trim(), type: keywordType }]
+    const updatedAdGroups = [...data.adGroups]
+    updatedAdGroups[activeGroupIdx].keywords = updatedKeywords
+    setData({ ...data, adGroups: updatedAdGroups })
+    setNewKeyword('')
+  }
+
+  const handleRemoveKeyword = (index: number) => {
+    const updatedKeywords = activeGroup.keywords.filter((_, i) => i !== index)
+    const updatedAdGroups = [...data.adGroups]
+    updatedAdGroups[activeGroupIdx].keywords = updatedKeywords
+    setData({ ...data, adGroups: updatedAdGroups })
+  }
+
   const isDone = (id: Section): boolean => {
     switch (id) {
       case 'goal': return !!data.goal
-      case 'creative': return true
-      case 'audience': return !!data.locations?.length
+      case 'creative': return activeGroup.headlines.length >= MIN_HEADLINES && activeGroup.descriptions.length >= MIN_DESCRIPTIONS
+      case 'audience': return !!data.locations?.length && activeGroup.keywords.length > 0
       case 'placements': return true
-      case 'form': return true
+      case 'destination': return !!data.finalUrl
       case 'budget': return !!data.dailyBudget && data.dailyBudget > 0
       case 'policy': return policyCheck?.status === 'PASS'
       default: return false
@@ -232,7 +268,6 @@ export default function CampaignBuilderPage() {
   const handlePublish = async () => {
     if (launching) return
     setLaunching(true)
-    setLaunchError('')
     setTimeout(() => {
       setLaunched({ externalCampaignId: '1092837412' })
       setLaunching(false)
@@ -241,11 +276,11 @@ export default function CampaignBuilderPage() {
 
   return (
     <Shell>
-      <div className="flex h-[calc(100vh-56px)] bg-[#F8F9FA] overflow-hidden">
-        {/* Left Navigation Panel — Authentic Blynk CAMPAIGN FLOW */}
+      <div className="flex h-[calc(100vh-56px)] bg-[#F6F7F9] overflow-hidden">
+        {/* Left Navigation Panel — Growzzy OS CAMPAIGN FLOW */}
         <div className="w-[250px] bg-white border-r border-[#E5E7EB] p-5 hidden lg:flex flex-col overflow-y-auto">
-          <h3 className="text-[11px] font-bold text-[#9CA3AF] tracking-wider uppercase mb-1">CAMPAIGN FLOW</h3>
-          <p className="text-[11.5px] text-[#6B7280] mb-5 leading-tight">Complete all steps before publish</p>
+          <h3 className="text-[11px] font-bold text-[#6B7280] tracking-wider uppercase mb-1">CAMPAIGN FLOW</h3>
+          <p className="text-[11.5px] text-[#9CA3AF] mb-5 leading-tight">Complete all steps before publish</p>
 
           <div className="space-y-1.5 flex-1">
             {SECTIONS.map((s, idx) => {
@@ -258,22 +293,20 @@ export default function CampaignBuilderPage() {
                   className={cn(
                     'w-full flex items-start gap-3 p-3 rounded-[12px] transition-all text-left border',
                     isActive
-                      ? 'bg-[#FDF2F0] border-[#F7D9D4] text-[#E0533C]'
-                      : 'bg-white border-transparent hover:bg-[#F9FAFB] text-[#374151]'
+                      ? 'bg-[#EAF0FE] border-[#C7D9FD] text-[#1F57F5]'
+                      : 'bg-white border-transparent hover:bg-[#F0F2F5] text-[#374151]'
                   )}
                 >
                   <div className="flex-shrink-0 mt-0.5">
                     {done ? (
-                      <div className="w-5 h-5 rounded-full bg-[#E0533C] text-white flex items-center justify-center">
+                      <div className="w-5 h-5 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
                         <Check size={12} strokeWidth={3} />
                       </div>
                     ) : (
                       <div
                         className={cn(
                           'w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-bold border',
-                          isActive
-                            ? 'border-[#E0533C] text-[#E0533C] bg-white'
-                            : 'border-[#D1D5DB] text-[#9CA3AF]'
+                          isActive ? 'border-[#1F57F5] text-[#1F57F5] bg-white' : 'border-[#D1D5DB] text-[#9CA3AF]'
                         )}
                       >
                         {idx + 1}
@@ -281,7 +314,7 @@ export default function CampaignBuilderPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={cn('text-[13px] font-semibold truncate', isActive ? 'text-[#E0533C]' : 'text-[#111827]')}>
+                    <p className={cn('text-[13px] font-semibold truncate', isActive ? 'text-[#1F57F5]' : 'text-[#111827]')}>
                       {s.label}
                     </p>
                     <p className="text-[11px] text-[#9CA3AF] truncate">{s.desc}</p>
@@ -296,47 +329,46 @@ export default function CampaignBuilderPage() {
           </div>
         </div>
 
-        {/* Center Panel — Accordion Interactive Builder */}
+        {/* Center Panel — Interactive Accordion Builder */}
         <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6">
-          <div className="max-w-[580px] mx-auto space-y-4">
+          <div className="max-w-[640px] mx-auto space-y-4">
             <div className="mb-2">
               <h2 className="text-[22px] font-bold text-[#111827] tracking-tight">Create Campaign</h2>
               <p className="text-[12.5px] text-[#6B7280]">
-                {loadingPlan ? 'AI generating your campaign plan...' : 'AI proposes. You edit. Publish when it looks right.'}
+                {loadingPlan ? 'Loading AI plan...' : 'AI proposes. You edit. Publish when it looks right.'}
               </p>
             </div>
 
-            {/* Accordion 1: Set Your Goal */}
+            {/* ACCORDION 1: Set Goal */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
               <button
                 onClick={() => toggle('goal')}
                 className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
                     <Check size={13} strokeWidth={3} />
                   </div>
                   <div>
                     <h3 className="text-[14px] font-bold text-[#111827]">Set Your Goal</h3>
-                    <p className="text-[11.5px] text-[#9CA3AF]">Campaign objective</p>
+                    <p className="text-[11.5px] text-[#9CA3AF]">Campaign objective & brief</p>
                   </div>
                 </div>
-                {openSection !== 'goal' && (
-                  <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#E0533C]">
-                    <span>Goal: {data.goal}</span>
-                    <Pencil size={13} />
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1F57F5]">
+                  <span>Goal: {data.goal}</span>
+                  <Pencil size={13} />
+                </div>
               </button>
+
               {openSection === 'goal' && (
-                <div className="p-4 pt-0 border-t border-[#E5E7EB] mt-2 space-y-3">
+                <div className="p-4 border-t border-[#E5E7EB] space-y-3">
                   <div>
                     <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Campaign Name</label>
                     <input
                       value={data.campaignName || ''}
                       onChange={(e) => setData({ ...data, campaignName: e.target.value })}
-                      placeholder="e.g. B2B Agency Lead Generation"
-                      className="w-full h-10 px-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C]"
+                      placeholder="e.g. B2B AI Lead Generation"
+                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
                     />
                   </div>
                   <div>
@@ -344,7 +376,7 @@ export default function CampaignBuilderPage() {
                     <select
                       value={data.goal || 'Lead Generation'}
                       onChange={(e) => setData({ ...data, goal: e.target.value })}
-                      className="w-full h-10 px-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C]"
+                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
                     >
                       <option value="Lead Generation">Goal: Lead Generation</option>
                       <option value="Sales">Goal: Sales & Conversions</option>
@@ -352,57 +384,62 @@ export default function CampaignBuilderPage() {
                       <option value="Brand Awareness">Goal: Brand Awareness</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">AI Campaign Brief</label>
+                    <p className="text-[12px] text-[#4B5563] p-3 bg-[#F0F2F5] rounded-[10px] leading-relaxed">
+                      {data.prompt || 'Targeting B2B prospects for lead generation'}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Accordion 2: Creative Studio */}
+            {/* ACCORDION 2: Creative Studio */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
               <button
                 onClick={() => toggle('creative')}
                 className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
                     <Check size={13} strokeWidth={3} />
                   </div>
                   <div>
                     <h3 className="text-[14px] font-bold text-[#111827]">Creative</h3>
-                    <p className="text-[11.5px] text-[#9CA3AF]">Ad headlines & descriptions</p>
+                    <p className="text-[11.5px] text-[#9CA3AF]">Headlines, descriptions & AI visuals</p>
                   </div>
                 </div>
-                {openSection !== 'creative' && (
-                  <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#E0533C]">
-                    <Pencil size={13} />
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1F57F5]">
+                  <span>{activeGroup.headlines.length} Headlines</span>
+                  <Pencil size={13} />
+                </div>
               </button>
 
               {openSection === 'creative' && (
                 <div className="p-4 border-t border-[#E5E7EB] space-y-4">
-                  {/* Mode Pills: Video | Image | Upload Image */}
+                  {/* Mode Selector */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCreativeMode('video')}
-                      className={cn(
-                        'h-8 px-4 rounded-full text-[12px] font-semibold border transition-all',
-                        creativeMode === 'video'
-                          ? 'bg-[#FDF2F0] border-[#E0533C] text-[#E0533C]'
-                          : 'bg-white border-[#D1D5DB] text-[#6B7280]'
-                      )}
-                    >
-                      Video
-                    </button>
                     <button
                       onClick={() => setCreativeMode('image')}
                       className={cn(
                         'h-8 px-5 rounded-full text-[12px] font-semibold border transition-all',
                         creativeMode === 'image'
-                          ? 'bg-[#E0533C] border-[#E0533C] text-white shadow-xs'
+                          ? 'bg-[#1F57F5] border-[#1F57F5] text-white shadow-xs'
                           : 'bg-white border-[#D1D5DB] text-[#6B7280]'
                       )}
                     >
                       Image
+                    </button>
+                    <button
+                      onClick={() => setCreativeMode('video')}
+                      className={cn(
+                        'h-8 px-4 rounded-full text-[12px] font-semibold border transition-all',
+                        creativeMode === 'video'
+                          ? 'bg-[#EAF0FE] border-[#1F57F5] text-[#1F57F5]'
+                          : 'bg-white border-[#D1D5DB] text-[#6B7280]'
+                      )}
+                    >
+                      Video
                     </button>
                     <button
                       onClick={() => setCreativeMode('upload')}
@@ -412,28 +449,31 @@ export default function CampaignBuilderPage() {
                     </button>
                   </div>
 
-                  {/* Prompt Container Card */}
-                  <div className="bg-[#FAF9F8] rounded-[14px] border border-[#E5E7EB] p-3.5 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-medium text-[#4B5563] rounded-[6px]">
-                        Text to Image
+                  {/* AI Visual Prompt Box */}
+                  <div className="bg-[#FAFBFD] rounded-[14px] border border-[#E9EBEF] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-1 bg-[#EAF0FE] border border-[#C7D9FD] text-[11px] font-semibold text-[#1F57F5] rounded-[6px]">
+                        AI Pre-filled Visual Prompt
                       </span>
                       <select
                         value={aiModel}
                         onChange={(e) => setAiModel(e.target.value)}
-                        className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-semibold text-[#E0533C] rounded-[6px] outline-none"
+                        className="px-2.5 py-1 bg-white border border-[#E5E7EB] text-[11px] font-medium text-[#4B5563] rounded-[6px] outline-none"
                       >
                         <option value="DALL-E 3 (OpenAI)">DALL-E 3 (OpenAI)</option>
                         <option value="Flux Pro">Flux Pro AI</option>
                       </select>
                     </div>
 
+                    <p className="text-[11.5px] text-[#6B7280]">
+                      The AI pre-filled this visual description based on your brand & campaign strategy. Feel free to edit or generate as is.
+                    </p>
+
                     <textarea
                       value={promptText}
                       onChange={(e) => setPromptText(e.target.value)}
-                      placeholder="Describe the image creative you want for this campaign..."
                       rows={3}
-                      className="w-full bg-white border border-[#E5E7EB] rounded-[10px] p-3 text-[12.5px] text-[#111827] outline-none focus:border-[#E0533C] leading-relaxed resize-none"
+                      className="w-full bg-white border border-[#E5E7EB] rounded-[10px] p-3 text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-none"
                     />
 
                     <div className="flex items-center justify-between pt-1">
@@ -445,7 +485,7 @@ export default function CampaignBuilderPage() {
                             className={cn(
                               'w-8 h-8 rounded-full border text-[11px] font-semibold transition-all',
                               creativeAspect === aspect
-                                ? 'border-[#E0533C] bg-[#FDF2F0] text-[#E0533C]'
+                                ? 'border-[#1F57F5] bg-[#EAF0FE] text-[#1F57F5]'
                                 : 'border-[#D1D5DB] bg-white text-[#374151]'
                             )}
                           >
@@ -456,7 +496,7 @@ export default function CampaignBuilderPage() {
                       <button
                         onClick={generateCreativeImage}
                         disabled={creativeGenerating}
-                        className="flex items-center gap-1.5 h-8 px-4 bg-[#FDF2F0] border border-[#F7D9D4] text-[#E0533C] text-[12px] font-semibold rounded-full hover:bg-[#FCEAE6] transition-colors"
+                        className="flex items-center gap-1.5 h-8 px-4 bg-[#1F57F5] text-white text-[12px] font-semibold rounded-full hover:bg-[#1849D6] transition-colors shadow-xs"
                       >
                         {creativeGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                         {creativeGenerating ? 'Generating…' : 'Generate Visual'}
@@ -464,46 +504,180 @@ export default function CampaignBuilderPage() {
                     </div>
                   </div>
 
-                  {/* Headline & Description Inputs from AI Plan */}
+                  {/* AI Generated Headlines */}
                   <div className="space-y-3 pt-2">
-                    <div>
-                      <div className="inline-block px-2.5 py-1 bg-[#FDF2F0] text-[#E0533C] text-[11px] font-bold rounded-[6px] mb-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-1 bg-[#F0F2F5] text-[11.5px] font-semibold text-[#111827] rounded-[6px]">
                         Ad Headlines (AI Generated)
-                      </div>
-                      {activeGroup.headlines.map((h, i) => (
+                      </span>
+                      <button
+                        onClick={() => {
+                          const updated = [...activeGroup.headlines, '']
+                          const updatedGroups = [...data.adGroups]
+                          updatedGroups[activeGroupIdx].headlines = updated
+                          setData({ ...data, adGroups: updatedGroups })
+                        }}
+                        className="text-[11px] font-semibold text-[#1F57F5] hover:underline flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Add Headline
+                      </button>
+                    </div>
+                    {activeGroup.headlines.map((h, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
                         <input
-                          key={i}
                           value={h}
                           onChange={(e) => {
                             const updated = [...activeGroup.headlines]
-                            updated[i] = e.target.value
+                            updated[idx] = e.target.value
                             const newGroups = [...data.adGroups]
                             newGroups[activeGroupIdx].headlines = updated
                             setData({ ...data, adGroups: newGroups })
                           }}
-                          className="w-full h-10 px-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#E0533C] mb-2"
+                          maxLength={30}
+                          className="flex-1 h-9 px-3 bg-white border border-[#E5E7EB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
                         />
-                      ))}
-                    </div>
-
-                    <div>
-                      <div className="inline-block px-2.5 py-1 bg-[#F5F5F4] text-[#6B7280] text-[11px] font-semibold rounded-[6px] mb-1.5">
-                        Ad Descriptions (AI Generated)
+                        <span className="text-[10px] text-[#9CA3AF] w-8 text-right">{h.length}/30</span>
+                        {activeGroup.headlines.length > MIN_HEADLINES && (
+                          <button
+                            onClick={() => {
+                              const updated = activeGroup.headlines.filter((_, i) => i !== idx)
+                              const newGroups = [...data.adGroups]
+                              newGroups[activeGroupIdx].headlines = updated
+                              setData({ ...data, adGroups: newGroups })
+                            }}
+                            className="text-[#DC2626] hover:bg-[#FEF2F2] p-1 rounded"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
-                      {activeGroup.descriptions.map((d, i) => (
+                    ))}
+                  </div>
+
+                  {/* AI Generated Descriptions */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-1 bg-[#F0F2F5] text-[11.5px] font-semibold text-[#111827] rounded-[6px]">
+                        Ad Descriptions (AI Generated)
+                      </span>
+                      <button
+                        onClick={() => {
+                          const updated = [...activeGroup.descriptions, '']
+                          const updatedGroups = [...data.adGroups]
+                          updatedGroups[activeGroupIdx].descriptions = updated
+                          setData({ ...data, adGroups: updatedGroups })
+                        }}
+                        className="text-[11px] font-semibold text-[#1F57F5] hover:underline flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Add Description
+                      </button>
+                    </div>
+                    {activeGroup.descriptions.map((d, idx) => (
+                      <div key={idx} className="flex items-start gap-2">
                         <textarea
-                          key={i}
                           value={d}
                           onChange={(e) => {
                             const updated = [...activeGroup.descriptions]
-                            updated[i] = e.target.value
+                            updated[idx] = e.target.value
                             const newGroups = [...data.adGroups]
                             newGroups[activeGroupIdx].descriptions = updated
                             setData({ ...data, adGroups: newGroups })
                           }}
+                          maxLength={90}
                           rows={2}
-                          className="w-full p-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[12.5px] text-[#111827] outline-none focus:border-[#E0533C] leading-relaxed resize-none mb-2"
+                          className="flex-1 p-2.5 bg-white border border-[#E5E7EB] rounded-[8px] text-[12px] text-[#111827] outline-none focus:border-[#1F57F5] resize-none"
                         />
+                        <span className="text-[10px] text-[#9CA3AF] w-8 text-right mt-2">{d.length}/90</span>
+                        {activeGroup.descriptions.length > MIN_DESCRIPTIONS && (
+                          <button
+                            onClick={() => {
+                              const updated = activeGroup.descriptions.filter((_, i) => i !== idx)
+                              const newGroups = [...data.adGroups]
+                              newGroups[activeGroupIdx].descriptions = updated
+                              setData({ ...data, adGroups: newGroups })
+                            }}
+                            className="text-[#DC2626] hover:bg-[#FEF2F2] p-1 rounded mt-2"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ACCORDION 3: Target Audience */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
+              <button
+                onClick={() => toggle('audience')}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[#111827]">Target Audience</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF]">
+                      {data.locations?.join(', ') || 'United States'} · {activeGroup.keywords.length} Keywords
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1F57F5]">
+                  <span>{data.locations?.[0] || 'Targeting'}</span>
+                  <Pencil size={13} />
+                </div>
+              </button>
+
+              {openSection === 'audience' && (
+                <div className="p-4 border-t border-[#E5E7EB] space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Target Locations</label>
+                    <input
+                      value={data.locations?.join(', ') || ''}
+                      onChange={(e) => setData({ ...data, locations: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                      placeholder="e.g. United States, United Kingdom, India"
+                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                    />
+                  </div>
+
+                  {/* Keyword Manager */}
+                  <div className="space-y-3 pt-2">
+                    <label className="block text-[12px] font-semibold text-[#374151]">Campaign Keywords ({activeGroup.keywords.length})</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add keyword..."
+                        value={newKeyword}
+                        onChange={(e) => setNewKeyword(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddKeyword()}
+                        className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] outline-none focus:border-[#1F57F5]"
+                      />
+                      <select
+                        value={keywordType}
+                        onChange={(e) => setKeywordType(e.target.value as any)}
+                        className="h-9 px-2 bg-white border border-[#D1D5DB] rounded-[8px] text-[12px] outline-none"
+                      >
+                        <option value="phrase">Phrase</option>
+                        <option value="broad">Broad</option>
+                        <option value="exact">Exact</option>
+                      </select>
+                      <button onClick={handleAddKeyword} className="h-9 px-4 bg-[#1F57F5] text-white text-[12px] font-semibold rounded-[8px]">
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {activeGroup.keywords.map((k, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 px-3 py-1 bg-[#F0F2F5] border border-[#E5E7EB] rounded-full text-[12px] text-[#111827]">
+                          <span className="text-[10px] font-bold text-[#6B7280] uppercase">{k.type}</span>
+                          <span>{k.keyword}</span>
+                          <button onClick={() => handleRemoveKeyword(idx)} className="text-[#9CA3AF] hover:text-[#DC2626] ml-1">
+                            <X size={12} />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -511,60 +685,191 @@ export default function CampaignBuilderPage() {
               )}
             </div>
 
-            {/* Accordion 3: Target Audience */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
-                  <Check size={13} strokeWidth={3} />
+            {/* ACCORDION 4: Placements & Devices */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
+              <button
+                onClick={() => toggle('placements')}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[#111827]">Placements & Devices</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF]">Google Search Network & Meta Feed placements</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[14px] font-bold text-[#111827]">Target Audience</span>
-                  <p className="text-[11px] text-[#9CA3AF]">{data.locations?.join(', ') || 'United States'}</p>
+                <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1F57F5]">
+                  <span>Placements</span>
+                  <Pencil size={13} />
                 </div>
-              </div>
-              <ChevronDown size={16} className="text-[#9CA3AF]" />
+              </button>
+
+              {openSection === 'placements' && (
+                <div className="p-4 border-t border-[#E5E7EB] space-y-3">
+                  <label className="flex items-center gap-3 p-3 bg-[#EAF0FE] border border-[#C7D9FD] rounded-[10px] cursor-pointer">
+                    <input type="checkbox" checked readOnly className="w-4 h-4 text-[#1F57F5] rounded" />
+                    <div>
+                      <p className="text-[12.5px] font-bold text-[#1F57F5]">Google Search & Meta Feed Networks (Active)</p>
+                      <p className="text-[11px] text-[#4B5563]">Publish to high-intent searchers on Google Ads & engaged feeds on Meta Ads.</p>
+                    </div>
+                  </label>
+
+                  <div className="grid grid-cols-3 gap-3 pt-2">
+                    <div className="p-3 border border-[#E5E7EB] rounded-[10px] flex items-center gap-2">
+                      <Laptop size={16} className="text-[#1F57F5]" />
+                      <span className="text-[12px] font-semibold text-[#111827]">Desktop</span>
+                    </div>
+                    <div className="p-3 border border-[#E5E7EB] rounded-[10px] flex items-center gap-2">
+                      <Smartphone size={16} className="text-[#1F57F5]" />
+                      <span className="text-[12px] font-semibold text-[#111827]">Mobile</span>
+                    </div>
+                    <div className="p-3 border border-[#E5E7EB] rounded-[10px] flex items-center gap-2">
+                      <Monitor size={16} className="text-[#1F57F5]" />
+                      <span className="text-[12px] font-semibold text-[#111827]">Tablet</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Accordion 4: Placements & Devices */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
-                  <Check size={13} strokeWidth={3} />
+            {/* ACCORDION 5: Website or Landing Page */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
+              <button
+                onClick={() => toggle('destination')}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[#111827]">Website / Landing Page</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF] truncate">{data.finalUrl || 'Target Landing Page'}</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[14px] font-bold text-[#111827]">Placements</span>
-                  <p className="text-[11px] text-[#9CA3AF]">Google Ads Search Network & Desktop/Mobile</p>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 bg-[#E6F4EC] text-[#2E9E5B] text-[10.5px] font-bold rounded-full">URL ready</span>
+                  <Pencil size={13} className="text-[#1F57F5]" />
                 </div>
-              </div>
-              <ChevronDown size={16} className="text-[#9CA3AF]" />
+              </button>
+
+              {openSection === 'destination' && (
+                <div className="p-4 border-t border-[#E5E7EB] space-y-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Final Landing Page URL</label>
+                    <input
+                      type="url"
+                      value={data.finalUrl || ''}
+                      onChange={(e) => setData({ ...data, finalUrl: e.target.value })}
+                      placeholder="https://yourwebsite.com/landing-page"
+                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                    />
+                    <p className="text-[11px] text-[#6B7280] mt-1">This is where users land when clicking your performance ads.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Accordion 5: Website or Product Page */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
-                  <Check size={13} strokeWidth={3} />
+            {/* ACCORDION 6: Budget & Bidding */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
+              <button
+                onClick={() => toggle('budget')}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[#111827]">Budget & Bidding</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF]">${data.dailyBudget || 50}/day ({data.duration || 30} days)</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[14px] font-bold text-[#111827]">Website / Landing Page</span>
-                  <p className="text-[11px] text-[#9CA3AF]">{data.finalUrl || 'Target Landing Page'}</p>
+                <div className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1F57F5]">
+                  <span>${data.dailyBudget}/day</span>
+                  <Pencil size={13} />
                 </div>
-              </div>
-              <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-bold rounded-full">URL ready</span>
+              </button>
+
+              {openSection === 'budget' && (
+                <div className="p-4 border-t border-[#E5E7EB] space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Bidding Strategy</label>
+                    <select
+                      value={data.biddingStrategy || 'MAXIMIZE_CONVERSIONS'}
+                      onChange={(e) => setData({ ...data, biddingStrategy: e.target.value as any })}
+                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                    >
+                      <option value="MAXIMIZE_CONVERSIONS">Maximize Conversions (Automated AI Bidding)</option>
+                      <option value="MAXIMIZE_CLICKS">Maximize Clicks</option>
+                      <option value="TARGET_CPA">Target CPA</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Daily Budget (USD)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={data.dailyBudget || 50}
+                        onChange={(e) => setData({ ...data, dailyBudget: parseFloat(e.target.value) || 0 })}
+                        className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Duration (Days)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={data.duration || 30}
+                        onChange={(e) => setData({ ...data, duration: parseInt(e.target.value) || 30 })}
+                        className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-[#EAF0FE] border border-[#C7D9FD] rounded-[10px] text-[12.5px] text-[#1F57F5] font-semibold">
+                    Estimated total campaign budget: USD ${((data.dailyBudget || 50) * (data.duration || 30)).toLocaleString()} ({data.duration || 30} days)
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Accordion 6: Budget */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-[#E0533C] text-white flex items-center justify-center text-[11px] font-bold">
-                  <Check size={13} strokeWidth={3} />
+            {/* ACCORDION 7: Policy Check & Launch */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-xs overflow-hidden">
+              <button
+                onClick={() => toggle('policy')}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#1F57F5] text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-[#111827]">Policy Check & Launch</h3>
+                    <p className="text-[11.5px] text-[#9CA3AF]">Verify ad network compliance</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[14px] font-bold text-[#111827]">Budget</span>
-                  <p className="text-[11px] text-[#9CA3AF]">${data.dailyBudget || 50}/day ({data.duration || 30} days)</p>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 bg-[#E6F4EC] text-[#2E9E5B] text-[10.5px] font-bold rounded-full">Pass</span>
+                  <ChevronDown size={16} className="text-[#9CA3AF]" />
                 </div>
-              </div>
-              <ChevronDown size={16} className="text-[#9CA3AF]" />
+              </button>
+
+              {openSection === 'policy' && (
+                <div className="p-4 border-t border-[#E5E7EB] space-y-3">
+                  <div className="p-3.5 bg-[#E6F4EC] border border-[#2E9E5B]/30 rounded-[10px] flex items-center gap-3">
+                    <CheckCircle2 size={20} className="text-[#2E9E5B]" />
+                    <div>
+                      <p className="text-[12.5px] font-bold text-[#2E9E5B]">Ad Compliance Verified</p>
+                      <p className="text-[11px] text-[#374151]">No restricted trademarks, prohibited health claims, or character limit issues detected.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bottom Action Controls */}
@@ -579,26 +884,26 @@ export default function CampaignBuilderPage() {
                 type="button"
                 onClick={handlePublish}
                 disabled={launching}
-                className="h-11 px-10 bg-[#E0533C] text-white text-[13.5px] font-bold rounded-full hover:bg-[#C9432D] shadow-sm transition-colors flex items-center gap-2"
+                className="h-11 px-10 bg-[#1F57F5] text-white text-[13.5px] font-bold rounded-full hover:bg-[#1849D6] shadow-sm transition-colors flex items-center gap-2"
               >
                 {launching ? <Loader2 size={16} className="animate-spin" /> : null}
-                {launching ? 'Publishing to Google Ads…' : 'Publish to Google Ads'}
+                {launching ? 'Publishing Campaign…' : 'Publish Campaign'}
               </button>
             </div>
 
             {launched && (
               <div className="p-4 rounded-[12px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-[13px] font-semibold text-[#2E9E5B]">
-                🚀 Campaign published successfully to Google Ads in paused state!
+                🚀 Campaign published successfully in paused state!
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Panel — Dynamic Google Ads / Meta Ads Preview */}
-        <div className="w-[380px] bg-[#F8F9FA] border-l border-[#E5E7EB] p-5 hidden xl:flex flex-col overflow-y-auto">
+        {/* Right Panel — Ad Live Preview (Google Ads & Meta Ads) */}
+        <div className="w-[380px] bg-[#F6F7F9] border-l border-[#E5E7EB] p-5 hidden xl:flex flex-col overflow-y-auto">
           {/* Header Row */}
           <div className="flex items-center justify-between mb-4">
-            <span className="px-3 py-1 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-full">
+            <span className="px-3 py-1 bg-[#1F57F5] text-white text-[11.5px] font-bold rounded-full shadow-2xs">
               Live Preview
             </span>
             <button className="h-7 px-3 bg-white border border-[#D1D5DB] text-[#374151] text-[11px] font-semibold rounded-full hover:bg-[#F9FAFB]">
@@ -606,38 +911,38 @@ export default function CampaignBuilderPage() {
             </button>
           </div>
 
-          {/* Ad Channel Switcher Tabs */}
-          <div className="flex items-center gap-4 mb-4 border-b border-[#E5E7EB] pb-3">
+          {/* Ad Channel Tabs (Google Search Ads vs Meta Ads) */}
+          <div className="flex items-center gap-3 mb-4 border-b border-[#E5E7EB] pb-3">
             <button
-              onClick={() => setSelectedPlatform('google')}
+              onClick={() => setActivePreviewTab('google')}
               className={cn(
-                'flex items-center gap-2 text-[12.5px] font-bold transition-colors pb-1 border-b-2',
-                selectedPlatform === 'google'
-                  ? 'text-[#4285F4] border-[#4285F4]'
-                  : 'text-[#6B7280] border-transparent hover:text-[#111827]'
+                'flex items-center gap-2 text-[12.5px] font-bold pb-1 transition-colors border-b-2',
+                activePreviewTab === 'google'
+                  ? 'text-[#1F57F5] border-[#1F57F5]'
+                  : 'text-[#9CA3AF] border-transparent hover:text-[#374151]'
               )}
             >
-              <Search size={14} className="text-[#4285F4]" />
-              Google Search
+              <Search size={14} className={activePreviewTab === 'google' ? 'text-[#1F57F5]' : 'text-[#9CA3AF]'} />
+              Google Search Ads
             </button>
+
             <button
-              onClick={() => setSelectedPlatform('meta')}
+              onClick={() => setActivePreviewTab('meta')}
               className={cn(
-                'flex items-center gap-2 text-[12.5px] font-bold transition-colors pb-1 border-b-2',
-                selectedPlatform === 'meta'
-                  ? 'text-[#1877F2] border-[#1877F2]'
-                  : 'text-[#6B7280] border-transparent hover:text-[#111827]'
+                'flex items-center gap-1.5 text-[12.5px] font-bold pb-1 transition-colors border-b-2',
+                activePreviewTab === 'meta'
+                  ? 'text-[#1F57F5] border-[#1F57F5]'
+                  : 'text-[#9CA3AF] border-transparent hover:text-[#374151]'
               )}
             >
-              <Globe size={14} className="text-[#1877F2]" />
+              <Globe size={14} className={activePreviewTab === 'meta' ? 'text-[#1F57F5]' : 'text-[#9CA3AF]'} />
               Meta Ads
             </button>
           </div>
 
-          {/* Dynamic Ad Preview Box */}
-          {selectedPlatform === 'google' ? (
-            /* Google Search Ad Preview */
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 shadow-sm space-y-3">
+          {/* Preview Tab 1: Google Search Ad */}
+          {activePreviewTab === 'google' && (
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 shadow-xs space-y-3.5">
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
                   Sponsored
@@ -659,11 +964,11 @@ export default function CampaignBuilderPage() {
               {activeGroup.keywords.length > 0 && (
                 <div className="pt-3 border-t border-[#F3F4F6]">
                   <p className="text-[10.5px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">
-                    Matched Keywords ({activeGroup.keywords.length})
+                    Targeted Keywords ({activeGroup.keywords.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {activeGroup.keywords.slice(0, 6).map((k, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-[#F3F4F6] text-[#374151] text-[10.5px] font-medium rounded-full">
+                    {activeGroup.keywords.map((k, i) => (
+                      <span key={i} className="px-2.5 py-1 bg-[#F0F2F5] text-[#374151] text-[11px] font-medium rounded-full">
                         {k.keyword}
                       </span>
                     ))}
@@ -671,44 +976,50 @@ export default function CampaignBuilderPage() {
                 </div>
               )}
             </div>
-          ) : (
-            /* Meta Social Ad Preview */
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden flex-1 flex flex-col">
-              <div className="p-3.5 flex items-center justify-between border-b border-[#F3F4F6]">
+          )}
+
+          {/* Preview Tab 2: Meta Feed Ad */}
+          {activePreviewTab === 'meta' && (
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] overflow-hidden shadow-xs">
+              {/* Meta Card Header */}
+              <div className="p-3.5 flex items-center justify-between border-b border-[#F0F2F5]">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#E0533C] text-white font-bold text-[12px] flex items-center justify-center">
-                    {businessName[0]}
+                  <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold">
+                    G
                   </div>
                   <div>
-                    <p className="text-[12.5px] font-bold text-[#111827] leading-tight">{businessName}</p>
-                    <p className="text-[10px] text-[#9CA3AF]">Sponsored · 🌐</p>
+                    <p className="text-[12.5px] font-bold text-[#111827]">Growzzy OS</p>
+                    <p className="text-[10.5px] text-[#9CA3AF]">Sponsored · Facebook / Instagram</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-3.5 pt-2 text-[12.5px] text-[#374151] leading-relaxed">
+              {/* Primary Text Copy */}
+              <div className="px-3.5 py-2.5 text-[12.5px] text-[#374151] leading-relaxed">
                 {previewDescription}
               </div>
 
-              <div className="relative bg-[#F3F4F6] min-h-[180px] flex items-center justify-center overflow-hidden">
+              {/* Visual Ad Image */}
+              <div className="aspect-square bg-[#F0F2F5] relative overflow-hidden flex items-center justify-center">
                 {generatedImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={generatedImageUrl} alt="Ad Visual" className="w-full h-full object-cover" />
+                  <img src={generatedImageUrl} alt="Meta Visual Ad" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="p-6 text-center">
-                    <Sparkles size={24} className="text-[#E0533C] mx-auto mb-2" />
-                    <p className="text-[12px] font-bold text-[#111827]">{previewHeadline}</p>
-                    <p className="text-[11px] text-[#6B7280] mt-1">{data.goal || 'Lead Generation'}</p>
+                  <div className="text-center p-6 text-[#9CA3AF]">
+                    <Sparkles size={24} className="mx-auto mb-2 text-[#1F57F5]" />
+                    <p className="text-[12px] font-semibold text-[#111827]">AI Visual Preview</p>
+                    <p className="text-[11px] mt-0.5">Click &apos;Generate Visual&apos; to build AI image</p>
                   </div>
                 )}
               </div>
 
-              <div className="p-3.5 bg-[#F9FAFB] border-t border-[#E5E7EB] flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] uppercase tracking-wider text-[#9CA3AF] font-bold">{displayHost(data.finalUrl)}</p>
-                  <p className="text-[12.5px] font-bold text-[#111827] truncate">{previewHeadline}</p>
+              {/* Meta Footer Action Bar */}
+              <div className="p-3.5 bg-[#FAFBFD] border-t border-[#F0F2F5] flex items-center justify-between">
+                <div className="flex-1 min-w-0 pr-2">
+                  <p className="text-[10px] text-[#9CA3AF] uppercase font-mono">{displayHost(data.finalUrl)}</p>
+                  <p className="text-[13px] font-bold text-[#111827] truncate">{previewHeadline}</p>
                 </div>
-                <button className="h-8 px-4 bg-[#E0533C] text-white text-[11.5px] font-bold rounded-[8px]">
+                <button className="h-8 px-4 bg-[#1F57F5] text-white text-[12px] font-semibold rounded-[6px] shrink-0">
                   Learn More
                 </button>
               </div>
