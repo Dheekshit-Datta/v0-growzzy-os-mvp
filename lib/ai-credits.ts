@@ -59,22 +59,22 @@ export async function recordCreditUsage(input: {
   if (usage.credits <= 0) return usage
 
   try {
-    await prisma.creditUsageLog.create({
-      data: {
-        workspaceId: input.workspaceId,
-        userId: input.userId,
-        route: input.route,
-        model: input.model,
-        inputTokens,
-        outputTokens,
-        credits: usage.credits,
-        costUsd: usage.costUsd,
-      },
-    })
-  } catch (error: any) {
-    if (error?.code !== "P2021") {
-      console.warn("Could not log credit usage:", error?.message || error)
+    if ((prisma as any).creditUsageLog) {
+      await (prisma as any).creditUsageLog.create({
+        data: {
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          route: input.route,
+          model: input.model,
+          inputTokens,
+          outputTokens,
+          credits: usage.credits,
+          costUsd: usage.costUsd,
+        },
+      })
     }
+  } catch (error: any) {
+    console.warn("Could not log credit usage:", error?.message || error)
   }
   return usage
 }

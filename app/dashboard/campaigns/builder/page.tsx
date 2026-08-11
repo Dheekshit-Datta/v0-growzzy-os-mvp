@@ -186,11 +186,12 @@ export default function CampaignBuilderPage() {
             targetCpa: planData.targetCpa || null,
           })
 
-          // AI pre-fills the prompt based on brand & campaign intent
-          setPromptText(
-            planData.imagePrompt ||
-              `High-converting performance ad image for ${json.data.name || b.productOrOffer || 'B2B Software'}. ${userPrompt.slice(0, 120)}. Professional 4k quality.`
-          )
+          const persona = b.targetCustomer || 'target prospects'
+          const offer = json.data.name || b.productOrOffer || 'B2B AI Software'
+          const dynamicVisualPrompt = planData.imagePrompt || 
+            `High-converting visual ad for ${offer} targeting ${persona}. ${userPrompt.slice(0, 100)}. Modern high-contrast dark mode dashboard UI with glowing neon blue analytics, 3D metric charts, clean studio lighting, 4k digital advertising photography`
+
+          setPromptText(dynamicVisualPrompt)
           setPlanId(planIdFromQuery)
           if (json.data.policyCheck) setPolicyCheck(json.data.policyCheck)
         }

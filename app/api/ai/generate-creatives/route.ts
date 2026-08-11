@@ -154,7 +154,7 @@ export async function POST(request: Request) {
     let variations: any[] = []
 
     {
-      const system = `You are a senior direct-response creative strategist. Always personalize creative variations using the provided workspace brand context (${businessName}, ${productDescription}). Produce high-converting ad variations tailored specifically to this business.`
+      const system = `You are a senior direct-response creative strategist. Always personalize creative variations using the provided workspace brand context (${businessName}, ${productDescription}). Produce high-converting ad variations tailored specifically to this business. Return ONLY valid JSON matching this schema: { "variations": [{ "headline": "...", "body": "...", "description": "...", "cta": "...", "visualDirection": "...", "whyThisWorks": "...", "angle": "desire|pain|proof|curiosity" }] }`
       const user = `Generate ${requestedCount} ad creative variations.
 Brand: ${businessName}
 Industry: ${industry}
