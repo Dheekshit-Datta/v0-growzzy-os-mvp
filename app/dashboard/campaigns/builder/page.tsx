@@ -449,13 +449,13 @@ export default function CampaignBuilderPage() {
                       onChange={(e) => setData({ ...data, campaignType: e.target.value } as any)}
                       className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
                     >
-                      <option value="SEARCH">🔍 Search — Text ads on Google search engine results</option>
-                      <option value="PERFORMANCE_MAX">🚀 Performance Max (PMax) — AI all-in-one across Search, YouTube & Display</option>
-                      <option value="DISPLAY">🖼️ Display — Visual image & banner ads across 3M+ websites & apps</option>
-                      <option value="VIDEO">🎥 Video — Video ads on YouTube Shorts & In-stream</option>
-                      <option value="SHOPPING">🛍️ Shopping — Product card listings from Merchant Center</option>
-                      <option value="DEMAND_GEN">⚡ Demand Gen — High-impact image & video feeds on YouTube & Gmail</option>
-                      <option value="APP">📱 App — Mobile app install & action campaigns on Play Store</option>
+                      <option value="SEARCH">Search — Text ads on Google search engine results</option>
+                      <option value="PERFORMANCE_MAX">Performance Max (PMax) — AI all-in-one across Search, YouTube & Display</option>
+                      <option value="DISPLAY">Display — Visual image & banner ads across 3M+ websites & apps</option>
+                      <option value="VIDEO">Video — Video ads on YouTube Shorts & In-stream</option>
+                      <option value="SHOPPING">Shopping — Product card listings from Merchant Center</option>
+                      <option value="DEMAND_GEN">Demand Gen — High-impact image & video feeds on YouTube & Gmail</option>
+                      <option value="APP">App — Mobile app install & action campaigns on Play Store</option>
                     </select>
                   </div>
                   <div>
@@ -1030,7 +1030,17 @@ export default function CampaignBuilderPage() {
               )}
             >
               <Search size={14} className={activePreviewTab === 'google' ? 'text-[#1F57F5]' : 'text-[#9CA3AF]'} />
-              Google Search Ads
+              {
+                {
+                  SEARCH: "Google Search Ads",
+                  PERFORMANCE_MAX: "Google Performance Max (PMax)",
+                  DISPLAY: "Google Display Ads",
+                  VIDEO: "Google Video Ads",
+                  SHOPPING: "Google Shopping Ads",
+                  DEMAND_GEN: "Google Demand Gen Ads",
+                  APP: "Google App Promotion Ads",
+                }[(data as any).campaignType || "SEARCH"] || "Google Ads"
+              }
             </button>
 
             <button
