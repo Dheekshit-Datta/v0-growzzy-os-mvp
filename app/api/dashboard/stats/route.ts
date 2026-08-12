@@ -142,38 +142,30 @@ export async function GET(request: NextRequest) {
     const selectedAdAccountIdsRaw = activeScope
       ? [activeScope.adAccountId]
       : metricIntegrations
-          .map((integration) =>
-            integration.adAccounts.find((account) => account.externalId === integration.selectedAdAccountId)?.externalId ||
-            integration.adAccounts.find((account) => account.isPrimary)?.externalId
-          )
-          .filter(Boolean) as string[]
     const selectedAdAccountIds = Array.from(new Set(selectedAdAccountIdsRaw.flatMap((id) => accountIdVariants(id))))
 
-    const campaignsWithAccountFilter = integrationIds.length && selectedAdAccountIds.length
-      ? await prisma.campaign.findMany({
-          where: {
-            ...verifiedMetricCampaignWhere({ userId, workspaceId }),
-            integrationId: { in: integrationIds },
-            adAccountId: { in: selectedAdAccountIds },
-            platform: { in: connectedPlatforms as any },
-          },
-          orderBy: { spend: "desc" },
-          take: 500,
-        })
-      : []
-    const campaigns = campaignsWithAccountFilter.length > 0
-      ? campaignsWithAccountFilter
-      : integrationIds.length
-        ? await prisma.campaign.findMany({
-            where: {
-              ...verifiedMetricCampaignWhere({ userId, workspaceId }),
-              integrationId: { in: integrationIds },
-              platform: { in: connectedPlatforms as any },
-            },
-            orderBy: { spend: "desc" },
-            take: 500,
-          })
-        : []
+    const campaigns = await prisma.campaign.findMany({
+      where: {
+        userId,
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        platform: true,
+        status: true,
+        spend: true,
+        impressions: true,
+        clicks: true,
+        conversions: true,
+        roas: true,
+        ctr: true,
+        cpc: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    })
 
     const current = aggregateCampaigns(campaigns)
     const metricWindowEnd = new Date()
