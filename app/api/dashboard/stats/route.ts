@@ -142,6 +142,8 @@ export async function GET(request: NextRequest) {
     const selectedAdAccountIdsRaw = activeScope
       ? [activeScope.adAccountId]
       : metricIntegrations
+          .map((integration) => integration.selectedAdAccountId || integration.accountId)
+          .filter(Boolean) as string[]
     const selectedAdAccountIds = Array.from(new Set(selectedAdAccountIdsRaw.flatMap((id) => accountIdVariants(id))))
 
     const campaigns = await prisma.campaign.findMany({
