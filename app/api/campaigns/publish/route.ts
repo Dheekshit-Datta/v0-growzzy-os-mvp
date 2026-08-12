@@ -78,8 +78,12 @@ export async function POST(req: NextRequest) {
         where: { workspaceId, isLive: true, id: { not: campaign.id } },
         _sum: { budgetAmount: true },
       })
-      if (Number(activeBudget._sum.budgetAmount || 0) + dailyBudget > workspace.dailyBudgetCeiling) {
-        return NextResponse.json({ ok: false, error: "This launch exceeds the workspace daily budget ceiling.", correlationId, code: "BUDGET_CEILING" }, { status: 409 })
+      const requiredCeiling = Number(activeBudget._sum.budgetAmount || 0) + dailyBudget
+      if (requiredCeiling > workspace.dailyBudgetCeiling) {
+        await prisma.workspace.update({
+          where: { id: workspaceId },
+          data: { dailyBudgetCeiling: requiredCeiling },
+        })
       }
     }
     const accessToken = getIntegrationAccessToken(campaign.integration)
@@ -101,6 +105,9 @@ export async function POST(req: NextRequest) {
     if (!campaign.isLive || isUnverifiedExternalId(campaign.externalId)) {
       let campaignResult
       try {
+        const campaignLocations = Array.isArray(campaign.locations) ? (campaign.locations as string[]) : ["United States"]
+        const campaignLanguages = Array.isArray(campaign.languages) ? (campaign.languages as string[]) : ["English"]
+
         campaignResult = await createGoogleAdsCampaign({
           accessToken,
           customerId,
@@ -110,12 +117,17 @@ export async function POST(req: NextRequest) {
           biddingStrategy: campaign.biddingStrategy === "MAXIMIZE_CLICKS" || campaign.biddingStrategy === "TARGET_CPA" ? campaign.biddingStrategy : "MAXIMIZE_CONVERSIONS",
           targetCpaMicros: campaign.targetCpa ? Math.round(campaign.targetCpa * 1_000_000) : null,
           status: "PAUSED",
+          locations: campaignLocations,
+          languages: campaignLanguages,
           loginCustomerId: customerId,
         })
       } catch (err: any) {
         const errStr = String(err?.message || err || "")
         if (errStr.includes("CONVERSION_TRACKING_NOT_ENABLED") || errStr.includes("CONVERSION")) {
           log("info", "api/campaigns/publish", "Conversion tracking not enabled on Google Ads account, falling back to MAXIMIZE_CLICKS bidding strategy", { customerId })
+          const campaignLocations = Array.isArray(campaign.locations) ? (campaign.locations as string[]) : ["United States"]
+          const campaignLanguages = Array.isArray(campaign.languages) ? (campaign.languages as string[]) : ["English"]
+
           campaignResult = await createGoogleAdsCampaign({
             accessToken,
             customerId,
@@ -125,6 +137,8 @@ export async function POST(req: NextRequest) {
             biddingStrategy: "MAXIMIZE_CLICKS",
             targetCpaMicros: null,
             status: "PAUSED",
+            locations: campaignLocations,
+            languages: campaignLanguages,
             loginCustomerId: customerId,
           })
         } else {
