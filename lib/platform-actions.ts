@@ -12,7 +12,10 @@ export type CreateCampaignParams = {
   targetRoas?: number | null
   status?: "PAUSED" | "ENABLED"
   loginCustomerId?: string | null
+  locations?: string[]
+  languages?: string[]
 }
+
 function normalizeId(value: string) {
   return String(value).replace(/\D/g, "")
 }
@@ -82,7 +85,6 @@ function googleBiddingConfig(strategy: GoogleBiddingStrategy, targetCpaMicros?: 
     return { targetCpa: { targetCpaMicros } }
   }
   if (strategy === "TARGET_ROAS") {
-    // Google Ads API takes this as a plain ratio (4 = 400% = $4 revenue per $1 spend), not micros.
     if (!targetRoas || targetRoas <= 0) throw new Error("TARGET_ROAS requires a positive target ROAS")
     return { targetRoas: { targetRoas } }
   }
@@ -125,6 +127,67 @@ async function createGoogleCampaignBudget({
   return resourceName
 }
 
+export async function applyGoogleCampaignCriteria({
+  accessToken,
+  customerId,
+  campaignResourceName,
+  locations = ["United States"],
+  languages = ["English"],
+  loginCustomerId,
+}: {
+  accessToken: string
+  customerId: string
+  campaignResourceName: string
+  locations?: string[]
+  languages?: string[]
+  loginCustomerId?: string | null
+}) {
+  const operations: any[] = []
+
+  const geoMap: Record<string, string> = {
+    "united states": "geoTargetConstants/2840",
+    "us": "geoTargetConstants/2840",
+    "usa": "geoTargetConstants/2840",
+    "india": "geoTargetConstants/2356",
+    "in": "geoTargetConstants/2356",
+    "united kingdom": "geoTargetConstants/2826",
+    "uk": "geoTargetConstants/2826",
+    "canada": "geoTargetConstants/2124",
+    "australia": "geoTargetConstants/2036",
+  }
+
+  const locList = Array.isArray(locations) && locations.length ? locations : ["United States"]
+  locList.forEach((loc) => {
+    const geoId = geoMap[String(loc).toLowerCase().trim()] || "geoTargetConstants/2840"
+    operations.push({
+      create: {
+        campaign: campaignResourceName,
+        location: { geoTargetConstant: geoId },
+      },
+    })
+  })
+
+  operations.push({
+    create: {
+      campaign: campaignResourceName,
+      language: { languageConstant: "languageConstants/1000" },
+    },
+  })
+
+  try {
+    await fetch(
+      `https://googleads.googleapis.com/${googleAdsApiVersion()}/customers/${normalizeId(customerId)}/campaignCriteria:mutate`,
+      {
+        method: "POST",
+        headers: googleHeaders(accessToken, loginCustomerId),
+        body: JSON.stringify({ operations }),
+      }
+    )
+  } catch (err) {
+    console.warn("Failed to set Google campaign criteria:", err)
+  }
+}
+
 export async function createGoogleAdsCampaign({
   accessToken,
   customerId,
@@ -135,6 +198,8 @@ export async function createGoogleAdsCampaign({
   targetCpaMicros,
   targetRoas,
   status = "PAUSED",
+  locations = ["United States"],
+  languages = ["English"],
   loginCustomerId,
 }: CreateCampaignParams) {
   const budgetResource = await createGoogleCampaignBudget({
@@ -171,6 +236,16 @@ export async function createGoogleAdsCampaign({
   const resourceName = payload?.results?.[0]?.resourceName
   const campaignId = resourceName ? String(resourceName).split("/").pop() : null
   if (!campaignId || !resourceName) throw new Error("Google campaign resource ID missing")
+
+  await applyGoogleCampaignCriteria({
+    accessToken,
+    customerId,
+    campaignResourceName: resourceName,
+    locations,
+    languages,
+    loginCustomerId,
+  })
+
   return { campaignId, resourceName, budgetResourceName: budgetResource }
 }
 
@@ -224,21 +299,22 @@ export async function createGoogleAdGroup({
   defaultBidMicros?: number | null
   loginCustomerId?: string | null
 }) {
+  const campaignResource = campaignId.includes("customers/")
+    ? campaignId
+    : `customers/${normalizeId(customerId)}/campaigns/${normalizeId(campaignId)}`
   const body = {
     operations: [
       {
         create: {
           name,
-          campaign: campaignId.includes("customers/")
-            ? campaignId
-            : `customers/${normalizeId(customerId)}/campaigns/${normalizeId(campaignId)}`,
+          campaign: campaignResource,
           status: "ENABLED",
-          ...(defaultBidMicros ? { cpcBidMicros: defaultBidMicros } : {}),
+          ...(defaultBidMicros && defaultBidMicros > 0 ? { cpcBidMicros: defaultBidMicros } : {}),
         },
       },
     ],
   }
-  const payload: any = await mutateGoogle({
+  const payload = await mutateGoogle<any>({
     accessToken,
     customerId,
     loginCustomerId,
@@ -246,7 +322,9 @@ export async function createGoogleAdGroup({
     body,
   })
   const resourceName = payload?.results?.[0]?.resourceName
-  return { adGroupId: String(resourceName || "").split("/").pop() || "", resourceName }
+  const adGroupId = resourceName ? String(resourceName).split("/").pop() : null
+  if (!adGroupId) throw new Error("Google ad group resource ID missing")
+  return { adGroupId, resourceName }
 }
 
 export async function createGoogleKeywords({
@@ -259,27 +337,36 @@ export async function createGoogleKeywords({
   accessToken: string
   customerId: string
   adGroupId: string
-  keywords: Array<{ text: string; matchType: string; isNegative?: boolean; bid?: number | null }>
+  keywords: Array<{ text: string; matchType: "BROAD" | "PHRASE" | "EXACT"; isNegative?: boolean; bid?: number }>
   loginCustomerId?: string | null
 }) {
-  const adGroupResource = adGroupId.includes("customers/")
+  const groupResource = adGroupId.includes("customers/")
     ? adGroupId
     : `customers/${normalizeId(customerId)}/adGroups/${normalizeId(adGroupId)}`
-  const body = {
-    operations: keywords.map((keyword) => ({
+
+  const operations = keywords
+    .filter((k) => k.text && k.text.trim())
+    .map((k) => ({
       create: {
-        adGroup: adGroupResource,
+        adGroup: groupResource,
         status: "ENABLED",
-        negative: !!keyword.isNegative,
         keyword: {
-          text: keyword.text,
-          matchType: keyword.matchType,
+          text: k.text.trim(),
+          matchType: k.matchType || "PHRASE",
         },
-        ...(keyword.bid ? { cpcBidMicros: Math.round(keyword.bid * 1_000_000) } : {}),
+        ...(k.bid && k.bid > 0 ? { cpcBidMicros: Math.round(k.bid * 1_000_000) } : {}),
       },
-    })),
-  }
-  return mutateGoogle<any>({ accessToken, customerId, loginCustomerId, resource: "adGroupCriteria", body })
+    }))
+
+  if (!operations.length) return { count: 0 }
+
+  return mutateGoogle<any>({
+    accessToken,
+    customerId,
+    loginCustomerId,
+    resource: "adGroupCriteria",
+    body: { operations },
+  })
 }
 
 export async function createGoogleResponsiveSearchAd({
@@ -303,37 +390,53 @@ export async function createGoogleResponsiveSearchAd({
   displayPath2?: string | null
   loginCustomerId?: string | null
 }) {
-  const adGroupResource = adGroupId.includes("customers/")
+  const groupResource = adGroupId.includes("customers/")
     ? adGroupId
     : `customers/${normalizeId(customerId)}/adGroups/${normalizeId(adGroupId)}`
-  const pinnedMap: Record<number, string> = {
-    1: "HEADLINE_1",
-    2: "HEADLINE_2",
-    3: "HEADLINE_3",
-  }
+
+  const validHeadlines = headlines
+    .filter((h) => h.text && h.text.trim())
+    .slice(0, 15)
+    .map((h) => ({
+      text: h.text.trim().slice(0, 30),
+      ...(h.pinPosition ? { pinnedField: `HEADLINE_${h.pinPosition}` } : {}),
+    }))
+
+  const validDescriptions = descriptions
+    .filter((d) => d.text && d.text.trim())
+    .slice(0, 4)
+    .map((d) => ({
+      text: d.text.trim().slice(0, 90),
+    }))
+
+  if (validHeadlines.length < 3) throw new Error("At least 3 valid headlines (<=30 chars) required for RSA ad")
+  if (validDescriptions.length < 1) throw new Error("At least 1 valid description (<=90 chars) required for RSA ad")
+
   const body = {
     operations: [
       {
         create: {
-          adGroup: adGroupResource,
+          adGroup: groupResource,
           status: "ENABLED",
           ad: {
             finalUrls: [finalUrl],
+            ...(displayPath1 ? { path1: displayPath1.slice(0, 15) } : {}),
+            ...(displayPath2 ? { path2: displayPath2.slice(0, 15) } : {}),
             responsiveSearchAd: {
-              headlines: headlines.map((headline) => ({
-                text: headline.text,
-                ...(headline.pinPosition ? { pinnedField: pinnedMap[headline.pinPosition] } : {}),
-              })),
-              descriptions: descriptions.map((description) => ({ text: description.text })),
-              ...(displayPath1 ? { path1: displayPath1 } : {}),
-              ...(displayPath2 ? { path2: displayPath2 } : {}),
+              headlines: validHeadlines,
+              descriptions: validDescriptions,
             },
           },
         },
       },
     ],
   }
-  const payload: any = await mutateGoogle({ accessToken, customerId, loginCustomerId, resource: "adGroupAds", body })
-  const resourceName = payload?.results?.[0]?.resourceName
-  return { adId: String(resourceName || "").split("~").pop() || "", resourceName }
+
+  return mutateGoogle<any>({
+    accessToken,
+    customerId,
+    loginCustomerId,
+    resource: "adGroupAd",
+    body,
+  })
 }
