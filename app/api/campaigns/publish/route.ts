@@ -111,13 +111,14 @@ export async function POST(req: NextRequest) {
       try {
         const campaignLocations = Array.isArray(campaign.locations) ? (campaign.locations as string[]) : ["United States"]
         const campaignLanguages = Array.isArray(campaign.languages) ? (campaign.languages as string[]) : ["English"]
+        const targetObjective = (campaign.type || campaign.objective || "SEARCH").toUpperCase() as any
 
         campaignResult = await createGoogleAdsCampaign({
           accessToken,
           customerId,
           name: campaign.name,
           dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
-          objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
+          objective: targetObjective,
           biddingStrategy: campaign.biddingStrategy === "MAXIMIZE_CLICKS" || campaign.biddingStrategy === "TARGET_CPA" ? campaign.biddingStrategy : "MAXIMIZE_CONVERSIONS",
           targetCpaMicros: campaign.targetCpa ? Math.round(campaign.targetCpa * 1_000_000) : null,
           status: "PAUSED",
@@ -131,13 +132,14 @@ export async function POST(req: NextRequest) {
           log("info", "api/campaigns/publish", "Conversion tracking not enabled on Google Ads account, falling back to MAXIMIZE_CLICKS bidding strategy", { customerId })
           const campaignLocations = Array.isArray(campaign.locations) ? (campaign.locations as string[]) : ["United States"]
           const campaignLanguages = Array.isArray(campaign.languages) ? (campaign.languages as string[]) : ["English"]
+          const targetObjective = (campaign.type || campaign.objective || "SEARCH").toUpperCase() as any
 
           campaignResult = await createGoogleAdsCampaign({
             accessToken,
             customerId,
             name: campaign.name,
             dailyBudgetMicros: Math.round(dailyBudget * 1_000_000),
-            objective: campaign.type === "DISPLAY" || campaign.type === "VIDEO" ? campaign.type : "SEARCH",
+            objective: targetObjective,
             biddingStrategy: "MAXIMIZE_CLICKS",
             targetCpaMicros: null,
             status: "PAUSED",

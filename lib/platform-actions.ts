@@ -1,4 +1,4 @@
-type GoogleObjective = "SEARCH" | "DISPLAY" | "VIDEO"
+type GoogleObjective = "SEARCH" | "DISPLAY" | "VIDEO" | "PERFORMANCE_MAX" | "DEMAND_GEN" | "SHOPPING" | "MULTI_CHANNEL"
 type GoogleBiddingStrategy = "MAXIMIZE_CONVERSIONS" | "MAXIMIZE_CLICKS" | "TARGET_CPA" | "TARGET_ROAS"
 
 export type CreateCampaignParams = {
@@ -73,8 +73,12 @@ async function mutateGoogle<T>({
 
 function mapObjectiveToChannelType(objective: string): GoogleObjective {
   const normalized = (objective || "").toUpperCase()
+  if (normalized.includes("PMAX") || normalized.includes("PERFORMANCE_MAX")) return "PERFORMANCE_MAX"
   if (normalized.includes("VIDEO")) return "VIDEO"
   if (normalized.includes("DISPLAY")) return "DISPLAY"
+  if (normalized.includes("SHOPPING")) return "SHOPPING"
+  if (normalized.includes("DEMAND_GEN") || normalized.includes("DEMANDGEN")) return "DEMAND_GEN"
+  if (normalized.includes("APP")) return "MULTI_CHANNEL"
   return "SEARCH"
 }
 
