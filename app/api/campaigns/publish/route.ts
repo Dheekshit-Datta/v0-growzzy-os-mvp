@@ -80,10 +80,14 @@ export async function POST(req: NextRequest) {
       })
       const requiredCeiling = Number(activeBudget._sum.budgetAmount || 0) + dailyBudget
       if (requiredCeiling > workspace.dailyBudgetCeiling) {
-        await prisma.workspace.update({
-          where: { id: workspaceId },
-          data: { dailyBudgetCeiling: requiredCeiling },
-        })
+        try {
+          await prisma.workspace.update({
+            where: { id: workspaceId },
+            data: { dailyBudgetCeiling: requiredCeiling },
+          })
+        } catch (err) {
+          console.warn("Could not update workspace daily budget ceiling:", err)
+        }
       }
     }
     const accessToken = getIntegrationAccessToken(campaign.integration)
