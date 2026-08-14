@@ -278,7 +278,7 @@ export default function CampaignBuilderPage() {
         body: JSON.stringify({
           name: data.campaignName || 'B2B AI Automation Campaign',
           platform: 'GOOGLE',
-          type: (data as any).campaignType || 'SEARCH',
+          type: 'DISPLAY',
           objective: data.goal || 'LEADS',
           budgetAmount: data.dailyBudget || 50,
           locations: data.locations || ['United States'],
@@ -443,25 +443,16 @@ export default function CampaignBuilderPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Google Campaign Type</label>
-                    <select
-                      value={(data as any).campaignType || 'SEARCH'}
-                      onChange={(e) => setData({ ...data, campaignType: e.target.value } as any)}
-                      className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                    >
-                      <option value="SEARCH">Search — Text ads on Google search engine results</option>
-                      <option value="PERFORMANCE_MAX">Performance Max (PMax) — AI all-in-one across Search, YouTube & Display</option>
-                      <option value="DISPLAY">Display — Visual image & banner ads across 3M+ websites & apps</option>
-                      <option value="VIDEO">Video — Video ads on YouTube Shorts & In-stream</option>
-                      <option value="SHOPPING">Shopping — Product card listings from Merchant Center</option>
-                      <option value="DEMAND_GEN">Demand Gen — High-impact image & video feeds on YouTube & Gmail</option>
-                      <option value="APP">App — Mobile app install & action campaigns on Play Store</option>
-                    </select>
+                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Campaign Type</label>
+                    <div className="w-full h-10 px-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-[10px] text-[13px] font-semibold text-[#111827] flex items-center justify-between">
+                      <span>Google Display Ads (Visual Banner)</span>
+                      <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10.5px] font-bold rounded">Visual Image</span>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">AI Campaign Brief</label>
                     <p className="text-[12px] text-[#4B5563] p-3 bg-[#F0F2F5] rounded-[10px] leading-relaxed">
-                      {data.prompt || 'Targeting B2B prospects for lead generation'}
+                      {data.prompt || 'Targeting B2B prospects for lead generation with visual display creative'}
                     </p>
                   </div>
                 </div>
@@ -1018,326 +1009,62 @@ export default function CampaignBuilderPage() {
             </button>
           </div>
 
-          {/* Ad Channel Tabs (Google Search Ads vs Meta Ads) */}
-          <div className="flex items-center gap-3 mb-4 border-b border-[#E5E7EB] pb-3">
-            <button
-              onClick={() => setActivePreviewTab('google')}
-              className={cn(
-                'flex items-center gap-2 text-[12.5px] font-bold pb-1 transition-colors border-b-2',
-                activePreviewTab === 'google'
-                  ? 'text-[#1F57F5] border-[#1F57F5]'
-                  : 'text-[#9CA3AF] border-transparent hover:text-[#374151]'
-              )}
-            >
-              <Search size={14} className={activePreviewTab === 'google' ? 'text-[#1F57F5]' : 'text-[#9CA3AF]'} />
-              {
-                {
-                  SEARCH: "Google Search Ads",
-                  PERFORMANCE_MAX: "Google Performance Max (PMax)",
-                  DISPLAY: "Google Display Ads",
-                  VIDEO: "Google Video Ads",
-                  SHOPPING: "Google Shopping Ads",
-                  DEMAND_GEN: "Google Demand Gen Ads",
-                  APP: "Google App Promotion Ads",
-                }[(data as any).campaignType || "SEARCH"] || "Google Ads"
-              }
-            </button>
-
-            <button
-              onClick={() => setActivePreviewTab('meta')}
-              className={cn(
-                'flex items-center gap-1.5 text-[12.5px] font-bold pb-1 transition-colors border-b-2',
-                activePreviewTab === 'meta'
-                  ? 'text-[#1F57F5] border-[#1F57F5]'
-                  : 'text-[#9CA3AF] border-transparent hover:text-[#374151]'
-              )}
-            >
-              <Globe size={14} className={activePreviewTab === 'meta' ? 'text-[#1F57F5]' : 'text-[#9CA3AF]'} />
-              Meta Ads
-            </button>
+          {/* Ad Channel Header */}
+          <div className="flex items-center gap-2 mb-4 border-b border-[#E5E7EB] pb-3">
+            <span className="text-[13px] font-bold text-[#1F57F5] pb-1 border-b-2 border-[#1F57F5] flex items-center gap-2">
+              <Globe size={14} className="text-[#1F57F5]" />
+              Google Display Ads (Visual Banner)
+            </span>
           </div>
 
-          {/* Preview Tab 1: Dynamic Google Ad Preview based on selected Campaign Type */}
-          {activePreviewTab === 'google' && (
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 shadow-xs space-y-3.5">
-              {/* 1. SEARCH CAMPAIGN PREVIEW */}
-              {((data as any).campaignType || 'SEARCH') === 'SEARCH' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
-                      Sponsored
-                    </span>
-                    <span className="text-[11px] text-[#6B7280] truncate">{displayHost(data.finalUrl)}</span>
-                  </div>
-
-                  <div>
-                    <h4 className="text-[15px] font-bold text-[#1A0DAB] hover:underline leading-snug cursor-pointer">
-                      {previewHeadline}
-                    </h4>
-                    <p className="text-[12px] text-[#006621] mt-0.5 truncate">{displayHost(data.finalUrl)}/services</p>
-                  </div>
-
-                  <p className="text-[12.5px] text-[#4D5156] leading-relaxed">
-                    {previewDescription}
-                  </p>
-
-                  {activeGroup.keywords.length > 0 && (
-                    <div className="pt-3 border-t border-[#F3F4F6]">
-                      <p className="text-[10.5px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">
-                        Targeted Keywords ({activeGroup.keywords.length})
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {activeGroup.keywords.map((k, i) => (
-                          <span key={i} className="px-2.5 py-1 bg-[#F0F2F5] text-[#374151] text-[11px] font-medium rounded-full">
-                            {k.keyword}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* 2. PERFORMANCE MAX (PMAX) MULTI-ASSET PREVIEW */}
-              {(data as any).campaignType === 'PERFORMANCE_MAX' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2.5 py-1 bg-[#EAF0FE] text-[#1F57F5] text-[10.5px] font-bold rounded-md">
-                      PMax Asset Group
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">All Channels (Search, YouTube, Display)</span>
-                  </div>
-
-                  <div className="aspect-video bg-[#F0F2F5] rounded-[10px] relative overflow-hidden flex items-center justify-center border border-[#E5E7EB]">
-                    {generatedImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={generatedImageUrl} alt="PMax Visual Asset" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center p-4">
-                        <Sparkles size={20} className="mx-auto mb-1 text-[#1F57F5]" />
-                        <p className="text-[11.5px] font-bold text-[#111827]">Visual Asset Hero</p>
-                        <p className="text-[10.5px] text-[#6B7280]">PMax scales image & video across YouTube & Display</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px] mr-2">
-                      Sponsored
-                    </span>
-                    <h4 className="text-[14px] font-bold text-[#111827] mt-1">{previewHeadline}</h4>
-                    <p className="text-[12px] text-[#4D5156] mt-1 leading-relaxed">{previewDescription}</p>
-                  </div>
-                </>
-              )}
-
-              {/* 3. DISPLAY NETWORK BANNER PREVIEW */}
-              {(data as any).campaignType === 'DISPLAY' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
-                      Display Banner Ad
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">{displayHost(data.finalUrl)}</span>
-                  </div>
-
-                  <div className="border border-[#D1D5DB] rounded-[12px] overflow-hidden bg-white shadow-xs">
-                    <div className="aspect-video bg-[#F3F4F6] relative flex items-center justify-center">
-                      {generatedImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={generatedImageUrl} alt="Display Banner Ad" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-center p-4 text-[#6B7280]">
-                          <Globe size={22} className="mx-auto mb-1 text-[#1F57F5]" />
-                          <p className="text-[11px] font-bold">Responsive Display Banner</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 flex items-center justify-between bg-[#FAFBFD]">
-                      <div className="min-w-0 pr-2">
-                        <p className="text-[12.5px] font-bold text-[#111827] truncate">{previewHeadline}</p>
-                        <p className="text-[11px] text-[#6B7280] truncate">{previewDescription}</p>
-                      </div>
-                      <button className="h-7 px-3 bg-[#1F57F5] text-white text-[11px] font-bold rounded-md shrink-0">
-                        Learn More
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* 4. YOUTUBE VIDEO AD PREVIEW */}
-              {(data as any).campaignType === 'VIDEO' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2.5 py-1 bg-[#FEE2E2] text-[#DC2626] text-[10.5px] font-bold rounded-md">
-                      YouTube Video Ad
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">In-Stream & Shorts</span>
-                  </div>
-
-                  <div className="aspect-video bg-[#0F172A] rounded-[12px] relative overflow-hidden flex flex-col justify-between p-3 text-white">
-                    <div className="flex items-center justify-between">
-                      <span className="px-2 py-0.5 bg-black/60 text-[10px] font-extrabold rounded">Ad · 0:15</span>
-                      <span className="px-2 py-0.5 bg-white/20 text-[10px] font-semibold rounded backdrop-blur-xs">
-                        Skip in 5s
-                      </span>
-                    </div>
-
-                    <div className="text-center my-auto">
-                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-1 backdrop-blur-xs">
-                        <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[10px] border-l-white ml-1" />
-                      </div>
-                      <p className="text-[12px] font-bold drop-shadow-sm">{previewHeadline}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-white/20">
-                      <span className="text-[11px] font-semibold truncate">{displayHost(data.finalUrl)}</span>
-                      <button className="h-6 px-3 bg-[#1F57F5] text-white text-[10.5px] font-bold rounded-md">
-                        Visit Site
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* 5. SHOPPING PRODUCT CARD PREVIEW */}
-              {(data as any).campaignType === 'SHOPPING' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
-                      Sponsored Shopping Listing
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">Merchant Feed</span>
-                  </div>
-
-                  <div className="border border-[#E5E7EB] rounded-[12px] p-3 flex items-center gap-3 bg-white shadow-xs">
-                    <div className="w-16 h-16 bg-[#F3F4F6] rounded-[8px] flex items-center justify-center shrink-0 border border-[#E5E7EB]">
-                      {generatedImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={generatedImageUrl} alt="Product Card" className="w-full h-full object-cover rounded-[8px]" />
-                      ) : (
-                        <span className="text-xs text-[#9CA3AF]">Product</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h5 className="text-[13px] font-bold text-[#111827] truncate">{previewHeadline}</h5>
-                      <p className="text-[13px] font-extrabold text-[#2E9E5B] mt-0.5">${data.dailyBudget || 50}.00</p>
-                      <p className="text-[11px] text-[#6B7280] mt-0.5 truncate">{displayHost(data.finalUrl)} · In Stock</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* 6. DEMAND GEN FEED PREVIEW */}
-              {(data as any).campaignType === 'DEMAND_GEN' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2.5 py-1 bg-[#FFE4E6] text-[#E11D48] text-[10.5px] font-bold rounded-md">
-                      Demand Gen Visual Feed
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">Discover & Shorts</span>
-                  </div>
-
-                  <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden bg-white shadow-xs">
-                    <div className="aspect-[4/3] bg-[#1E293B] relative overflow-hidden flex items-center justify-center text-white">
-                      {generatedImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={generatedImageUrl} alt="Demand Gen Visual" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-center p-4">
-                          <Sparkles size={22} className="mx-auto mb-1 text-[#E11D48]" />
-                          <p className="text-[12px] font-bold">Demand Gen Visual Creative</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 bg-[#FAFBFD] flex items-center justify-between">
-                      <div className="min-w-0 pr-2">
-                        <p className="text-[13px] font-bold text-[#111827] truncate">{previewHeadline}</p>
-                        <p className="text-[11px] text-[#6B7280] truncate">{previewDescription}</p>
-                      </div>
-                      <button className="h-7 px-3.5 bg-[#E11D48] text-white text-[11px] font-bold rounded-md shrink-0">
-                        Get Offer
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* 7. APP PROMOTION PREVIEW */}
-              {(data as any).campaignType === 'APP' && (
-                <>
-                  <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
-                    <span className="px-2.5 py-1 bg-[#E0F2FE] text-[#0284C7] text-[10.5px] font-bold rounded-md">
-                      Google Play App Install
-                    </span>
-                    <span className="text-[10.5px] text-[#6B7280]">Play Store</span>
-                  </div>
-
-                  <div className="border border-[#E5E7EB] rounded-[12px] p-3 flex items-center gap-3 bg-white shadow-xs">
-                    <div className="w-12 h-12 bg-[#1F57F5] rounded-[10px] flex items-center justify-center text-white font-black text-lg shrink-0">
-                      G
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h5 className="text-[13px] font-bold text-[#111827] truncate">{data.campaignName || 'Growzzy App'}</h5>
-                      <p className="text-[11px] text-[#6B7280] truncate">4.8 ★ · Productivity · Free</p>
-                    </div>
-                    <button className="h-8 px-4 bg-[#0284C7] text-white text-[11.5px] font-bold rounded-md shrink-0">
-                      Install
-                    </button>
-                  </div>
-                </>
-              )}
+          {/* Dedicated Google Display Banner Ad Preview Card */}
+          <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-[#F0F2F5]">
+              <span className="px-2 py-0.5 bg-[#E6F4EC] text-[#2E9E5B] text-[10px] font-extrabold rounded-[3px]">
+                Sponsored
+              </span>
+              <span className="text-[11px] text-[#6B7280]">{displayHost(data.finalUrl)}</span>
             </div>
-          )}
 
-          {/* Preview Tab 2: Meta Feed Ad */}
-          {activePreviewTab === 'meta' && (
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] overflow-hidden shadow-xs">
-              {/* Meta Card Header */}
-              <div className="p-3.5 flex items-center justify-between border-b border-[#F0F2F5]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold">
-                    G
-                  </div>
-                  <div>
-                    <p className="text-[12.5px] font-bold text-[#111827]">Growzzy OS</p>
-                    <p className="text-[10.5px] text-[#9CA3AF]">Sponsored · Facebook / Instagram</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Primary Text Copy */}
-              <div className="px-3.5 py-2.5 text-[12.5px] text-[#374151] leading-relaxed">
-                {previewDescription}
-              </div>
-
-              {/* Visual Ad Image */}
-              <div className="aspect-square bg-[#F0F2F5] relative overflow-hidden flex items-center justify-center">
+            <div className="border border-[#D1D5DB] rounded-[12px] overflow-hidden bg-white shadow-xs">
+              <div className="aspect-video bg-[#F3F4F6] relative flex items-center justify-center">
                 {generatedImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={generatedImageUrl} alt="Meta Visual Ad" className="w-full h-full object-cover" />
+                  <img src={generatedImageUrl} alt="Google Display Banner Ad" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="text-center p-6 text-[#9CA3AF]">
+                  <div className="text-center p-6 text-[#6B7280]">
                     <Sparkles size={24} className="mx-auto mb-2 text-[#1F57F5]" />
-                    <p className="text-[12px] font-semibold text-[#111827]">AI Visual Preview</p>
-                    <p className="text-[11px] mt-0.5">Click &apos;Generate Visual&apos; to build AI image</p>
+                    <p className="text-[12.5px] font-bold text-[#111827]">Visual Banner Creative</p>
+                    <p className="text-[11px] text-[#9CA3AF] mt-0.5">Click &apos;Generate Visual&apos; to create AI Display creative</p>
                   </div>
                 )}
               </div>
-
-              {/* Meta Footer Action Bar */}
-              <div className="p-3.5 bg-[#FAFBFD] border-t border-[#F0F2F5] flex items-center justify-between">
-                <div className="flex-1 min-w-0 pr-2">
-                  <p className="text-[10px] text-[#9CA3AF] uppercase font-mono">{displayHost(data.finalUrl)}</p>
+              <div className="p-3.5 flex items-center justify-between bg-[#FAFBFD]">
+                <div className="min-w-0 pr-2">
                   <p className="text-[13px] font-bold text-[#111827] truncate">{previewHeadline}</p>
+                  <p className="text-[11px] text-[#6B7280] truncate mt-0.5">{previewDescription}</p>
                 </div>
-                <button className="h-8 px-4 bg-[#1F57F5] text-white text-[12px] font-semibold rounded-[6px] shrink-0">
+                <button className="h-8 px-4 bg-[#1F57F5] text-white text-[12px] font-bold rounded-md shrink-0">
                   Learn More
                 </button>
               </div>
             </div>
-          )}
+
+            {activeGroup.keywords.length > 0 && (
+              <div className="pt-3 border-t border-[#F3F4F6]">
+                <p className="text-[10.5px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">
+                  Targeted Keywords ({activeGroup.keywords.length})
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeGroup.keywords.map((k, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-[#F0F2F5] text-[#374151] text-[11px] font-medium rounded-full">
+                      {k.keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Shell>
