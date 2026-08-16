@@ -50,7 +50,7 @@ export type PlanQualityReport = {
 
 const INTERNAL_COPY = /\b(campaign brief|launch direction|missing before launch|structured the brief locally|ai is temporarily unavailable|deterministic fallback)\b/i
 const PLACEHOLDER_HOSTS = new Set(["example.com", "www.example.com", "yoursite.com", "www.yoursite.com"])
-const UNSUPPORTED_CLAIMS = /(?:\bguaranteed\b|\b100%\b|\b#\s*1\b|\bbest\s+(?:in|on|across)\b|\blimited[ -]time\b)/i
+const UNSUPPORTED_CLAIMS = /(?:\bguaranteed\b|\b100%\b|\b#\s*1\b|\bbest\s+(?:in|on|across)\b|\b(?:limited\s+time\s+offer|act\s+now|don'\s*t\s*miss\s*out)\b)/i
 
 function normalized(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()

@@ -186,6 +186,7 @@ export default function NewCampaignPage() {
   const [built, setBuilt] = useState(false)
   const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
   const [campaignName, setCampaignName] = useState("")
+  const [psychologyProfile, setPsychologyProfile] = useState<any>(null)
   const [buildError, setBuildError] = useState("")
 
   // Google connection + workspace brand (real context for AI Creatives)
@@ -412,6 +413,7 @@ export default function NewCampaignPage() {
       }
       setCampaignPlanId(json.campaignPlanId)
       setCampaignName(json.plan?.campaignName || "")
+      setPsychologyProfile(json.psychologyProfile || null)
       setBuilt(true)
       window.dispatchEvent(new Event("growzzy:prompt-history-updated"))
       router.replace(`/dashboard/campaigns/new?id=${json.campaignPlanId}`)
@@ -617,6 +619,21 @@ export default function NewCampaignPage() {
               {built && (
                 <div className="mt-4 p-4 rounded-[12px] border border-[#F7D9D4] bg-[#FDF2F0]">
                   <p className="text-[13px] font-semibold text-[#E0533C] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
+
+                  {/* Psychological Insights */}
+                  {psychologyProfile && (
+                    <div className="mt-3 p-3 rounded-[8px] border border-[#E0533C]/20 bg-[#FDF2F0]">
+                      <p className="text-[12px] font-semibold text-[#E0533C] mb-2">Psychological Insights</p>
+                      <div className="space-y-2 text-[11px] text-[#374151]">
+                        <div><span className="font-medium">Target Persona:</span> {psychologyProfile.targetPersona}</div>
+                        <div><span className="font-medium">Awareness Stage:</span> {psychologyProfile.awarenessStage.replace('_', ' ')}</div>
+                        <div><span className="font-medium">Primary Emotional Trigger:</span> {psychologyProfile.primaryEmotionalTrigger}</div>
+                        <div><span className="font-medium">Key Pain Points:</span> {psychologyProfile.corePainPoints.slice(0, 2).join(', ')}{psychologyProfile.corePainPoints.length > 2 ? '...' : ''}</div>
+                        <div><span className="font-medium">Key Desires:</span> {psychologyProfile.desireOutcomes.slice(0, 2).join(', ')}{psychologyProfile.desireOutcomes.length > 2 ? '...' : ''}</div>
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-[12px] text-[#374151]">
                     "{campaignName}" was created and saved as a draft. Open the full editor to fine-tune keywords and ad copy, or review your campaign.
                   </p>

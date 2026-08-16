@@ -62,6 +62,7 @@ async function acquireSyncLock(userId: string, adAccountDbId: string) {
   return true
 }
 
+
 export async function ensureFreshGoogleToken(integrationId: string, currentAccessToken: string) {
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
@@ -110,6 +111,7 @@ export async function syncGoogleAdsCampaigns(
     syncScope?.workspaceId ||
     (await prisma.integration.findUnique({ where: { id: integrationId }, select: { workspaceId: true } }))?.workspaceId ||
     null
+
   const query = `
     SELECT
       campaign.id,
@@ -125,10 +127,8 @@ export async function syncGoogleAdsCampaigns(
       metrics.ctr,
       metrics.average_cpc
     FROM campaign
-    WHERE segments.date DURING LAST_30_DAYS
-      AND campaign.status != 'REMOVED'
-    ORDER BY metrics.cost_micros DESC
-    LIMIT 100
+    WHERE campaign.status != 'REMOVED'
+    LIMIT 200
   `
 
   const preferredLoginCustomerId = managerCustomerId || externalAccountId
@@ -155,8 +155,6 @@ export async function syncGoogleAdsCampaigns(
         const clicks = Number(metrics.clicks ?? 0)
         const impressions = Number(metrics.impressions ?? 0)
         const conversions = Number(metrics.conversions ?? 0)
-        // Google Ads reports conversion value as a plain currency amount (not micros),
-        // unlike cost/budget fields - this is what makes real ROAS reporting possible.
         const revenue = Number(metrics.conversionsValue ?? 0)
         const budgetAmount = campaignBudget.amountMicros ? Number(campaignBudget.amountMicros) / 1_000_000 : null
         const cpcVal = metrics.averageCpc ? Number(metrics.averageCpc) / 1_000_000 : null
@@ -232,10 +230,6 @@ export async function syncGoogleAdsCampaigns(
       }
     }
 
-    // Per-day breakdown for trend detection (lib/ai-recommendation-engine.ts) -
-    // the query above is an aggregate over LAST_30_DAYS with one row per
-    // campaign, which can't show whether a campaign is trending up or down.
-    // Separate query segmented by date, only for campaigns that synced above.
     if (localCampaignIdByExternalId.size > 0) {
       try {
         const todayUtc = new Date().toISOString().slice(0, 10)

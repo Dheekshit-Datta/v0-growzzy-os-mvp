@@ -15,7 +15,7 @@ import { aiErrorMetadata, aiUnavailableMessage } from "@/lib/ai-utility"
 import { assertCreditsAvailable, estimatedCredits, recordCreditUsage, CreditQuotaError } from "@/lib/ai-credits"
 import { log } from "@/lib/logger"
 
-import { buildPsychologyPromptContext } from "@/lib/ad-psychology-engine"
+import { buildPsychologyPromptContext, BuyerPsychologyProfile } from "@/lib/ad-psychology-engine"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: { code: "META_DISABLED", message: "Meta Ads is not enabled yet." } }, { status: 404 })
   }
   const workspaceId = await getRequestWorkspaceId(userId, req)
+  // Get integration if available (optional for plan generation)
   const integration = await prisma.integration.findFirst({
     where: {
       userId,
@@ -179,6 +180,18 @@ export async function POST(req: NextRequest) {
     select: { id: true, selectedAdAccountId: true, accountId: true, accountInfo: true },
   })
   const selectedAdAccountId = integration?.selectedAdAccountId || integration?.accountId || null
+
+  // Validate provided adAccountId if given
+  if (input.adAccountId) {
+    const normalizedInputId = normalizeAccountId(input.adAccountId)
+    const normalizedAccountIdFromIntegration = selectedAdAccountId ? normalizeAccountId(selectedAdAccountId) : null
+
+    if (normalizedInputId !== normalizedAccountIdFromIntegration) {
+      return NextResponse.json({ ok: false, error: { code: "ACCOUNT_SCOPE_MISMATCH", message: `The selected ${input.platform === "META" ? "Meta" : "Google"} Ads account is not active in this workspace.` } }, { status: 403 })
+    }
+  }
+
+  // Get ad account details if integration exists
   const adAccount = integration ? await prisma.adAccount.findFirst({
     where: {
       integrationId: integration.id,
@@ -189,13 +202,9 @@ export async function POST(req: NextRequest) {
     },
     select: { id: true, externalId: true },
   }) : null
-  if (input.adAccountId && normalizeAccountId(input.adAccountId) !== normalizeAccountId(adAccount?.externalId || selectedAdAccountId)) {
-    return NextResponse.json({ ok: false, error: { code: "ACCOUNT_SCOPE_MISMATCH", message: `The selected ${input.platform === "META" ? "Meta" : "Google"} Ads account is not active in this workspace.` } }, { status: 403 })
-  }
-  if (!integration || !selectedAdAccountId || !adAccount) {
-    return NextResponse.json({ ok: false, error: { code: "NO_SELECTED_AD_ACCOUNT", message: `Connect ${input.platform === "META" ? "Meta" : "Google"} Ads and select an ad account before building a launchable campaign plan.` } }, { status: 409 })
-  }
-  const adAccountId = adAccount.id
+
+  // Use adAccountId if available, otherwise null (allowed by schema)
+  const adAccountId = adAccount?.id ?? null
   const businessContext = await getBusinessContextForWorkspace(workspaceId)
 
   if (!process.env.OPENAI_API_KEY) {
@@ -209,7 +218,7 @@ export async function POST(req: NextRequest) {
     throw error
   }
 
-  const psychologyContext = buildPsychologyPromptContext({
+  const psychologyProfile = buildPsychologyPromptContext({
     offer: input.offer,
     targetCustomer: input.targetCustomer,
     goal: input.goal,
@@ -220,7 +229,29 @@ export async function POST(req: NextRequest) {
   const googlePrompt = `You are a world-class Performance Marketing Creative Director and Senior Media Buyer.
 Your goal is to engineer an elite, high-converting Google Ads campaign strategy that outperforms top digital marketing agencies.
 
-${psychologyContext}
+PSYCHOLOGICAL ANALYSIS:
+1. WHO ARE WE SELLING TO? (Persona & Awareness Level)
+   - Target Persona: ${psychologyProfile.targetPersona}
+   - Awareness Stage: ${psychologyProfile.awarenessStage}
+   - Key Insights: ${psychologyProfile.targetPersona} who are ${psychologyProfile.awarenessStage.replace('_', ' ').toLowerCase()} and experiencing ${psychologyProfile.corePainPoints.join(', ')}
+
+2. WHAT ARE WE SELLING & WHAT IS THE UNIQUE MECHANISM?
+   - Offer: ${input.offer}
+   - Destination: ${input.landingPageUrl || 'Target Landing Page'}
+   - Brand Memory & Business Context: ${businessContext || 'Standard B2B/B2C Brand'}
+
+3. WHY SHOULD THEY BUY NOW? (Psychological Triggers)
+   - Primary Emotional Lever: ${psychologyProfile.primaryEmotionalTrigger}
+   - Core Desires: ${psychologyProfile.desireOutcomes.join(', ')}
+   - Cost of Inaction: Continued ${psychologyProfile.corePainPoints[0].toLowerCase()} and missed opportunities for ${psychologyProfile.desireOutcomes[0].toLowerCase()}
+
+4. HIGH-CONVERTING VISUAL PSYCHOLOGY (For Image Prompts)
+   - Visual Pattern Interrupt Concept: ${psychologyProfile.visualPatternInterrupt}
+   - Recommended Visual Prompt Foundation: ${psychologyProfile.recommendedVisualPrompt}
+
+5. DIRECT RESPONSE COPY RULES
+   - Headlines MUST leverage psychological angles: Pain Point (${psychologyProfile.corePainPoints[0]}), Curiosity, Social Proof, Solution (${psychologyProfile.desireOutcomes[0]}), Clear Call-To-Action.
+   - Max length: 30 chars per headline. Max length: 90 chars per description.
 
 Perform a deep direct-response marketing synthesis on:
 1. User prompt & offer: ${input.offer}
@@ -247,7 +278,7 @@ Return ONLY JSON:
   "biddingStrategy": "MAXIMIZE_CONVERSIONS|MAXIMIZE_CLICKS|TARGET_CPA",
   "targetCpa": null,
   "dailyBudget": number,
-  "finalUrl": ${input.landingPageUrl ? `"${input.landingPageUrl}"` : "null"},
+  "finalUrl": ${input.landingPageUrl !== undefined ? JSON.stringify(input.landingPageUrl) : "null"},
   "locations": ["..."],
   "languages": ["English"],
   "imagePrompt": "Detailed DALL-E 3 image prompt representing the high-converting ad visual concept...",
@@ -256,7 +287,7 @@ Return ONLY JSON:
       "name": "theme",
       "theme": "target theme",
       "keywords": [{"text":"keyword","matchType":"BROAD|PHRASE|EXACT","intent":"high|medium"}],
-      "negativeKeywords": ["free", "jobs", "diy", "cheap"],
+      "negativeKeywords": ["jobs", "employment", "career", "free trial", "free download", "free software"],
       "headlines": ["8-15 headlines, max 30 chars each"],
       "descriptions": ["3-4 descriptions, max 90 chars each"]
     }
@@ -274,9 +305,23 @@ Return ONLY JSON:
 
   const metaPrompt = `You are a senior Meta Ads media buyer. Build one safe, reviewable Meta campaign draft.
 
+PSYCHOLOGICAL FOUNDATION:
+1. WHO ARE WE SELLING TO? (Persona & Awareness Level)
+   - Target Persona: ${psychologyProfile.targetPersona}
+   - Awareness Stage: ${psychologyProfile.awarenessStage}
+   - Primary Pain Point: ${psychologyProfile.corePainPoints[0]}
+
+2. WHAT ARE WE SELLING & WHAT IS THE UNIQUE MECHANISM?
+   - Offer: ${input.offer}
+   - Destination: ${input.landingPageUrl || "Not provided"}
+
+3. WHY SHOULD THEY BUY NOW? (Psychological Triggers)
+   - Primary Emotional Lever: ${psychologyProfile.primaryEmotionalTrigger}
+   - Key Desire: ${psychologyProfile.desireOutcomes[0]}
+
 Offer: ${input.offer}
 Destination: ${input.landingPageUrl || "Not provided"}
-Audience: ${input.targetCustomer}
+Audience: ${input.targetCustomer} (specifically: ${psychologyProfile.targetPersona})
 Budget: $${input.budget}/day
 Objective: ${input.metaObjective || input.goal}
 ${businessContext}
@@ -386,7 +431,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
       userId,
       workspaceId,
       adAccountId,
-      adAccountExternalId: adAccount.externalId,
+      adAccountExternalId: adAccount?.externalId ?? null,
       platform: input.platform,
       plan,
       briefInput: {
@@ -418,5 +463,10 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
     metadata: { score: plan.launchReadinessScore, platform: input.platform, campaignType: (plan as any).campaignType },
   })
 
-  return NextResponse.json({ ok: true, campaignPlanId: campaignPlan.id, plan })
+  return NextResponse.json({
+    ok: true,
+    campaignPlanId: campaignPlan.id,
+    plan,
+    psychologyProfile
+  })
 }

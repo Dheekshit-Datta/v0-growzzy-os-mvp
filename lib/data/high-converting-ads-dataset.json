@@ -1,6 +1,6 @@
 {
   "datasetVersion": "1.0.0",
-  "totalTemplates": 50,
+  "totalTemplates": 40,
   "categories": [
     {
       "niche": "B2B SaaS & AI Automation",
@@ -113,6 +113,5 @@
       "visualPromptTemplates": [
         "Friendly local technician in clean uniform standing in front of modern home with branded service vehicle, warm sunset lighting, authentic local trust photography"
       ]
-    }
   ]
 }

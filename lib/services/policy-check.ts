@@ -41,7 +41,7 @@ const WARN_RULES: Array<{ pattern: RegExp; reason: string; suggestion: string }>
     suggestion: "Describe the benefit without medical or miracle framing",
   },
   {
-    pattern: /(!{2,}|\?{2,}|[A-Z]{6,})/,
+    pattern: /(!{3,}|\?{3,}|[A-Z]{7,})/, // Increased threshold to reduce false positives
     reason: "Excessive punctuation or all-caps words violate Google editorial policy",
     suggestion: "Use sentence case and single punctuation marks",
   },

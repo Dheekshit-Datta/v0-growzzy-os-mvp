@@ -187,33 +187,38 @@ Audience: ${input.targetPersona || input.targetAudience || "Target customers"}${
     }
 
     if (!variations.length) {
+      // Generate more tailored fallback variations based on input
+      const valueProp = input.valueProp || productDescription || "our solution";
+      const painPoint = input.painPoint || "inefficient processes";
+      const targetAudience = input.targetPersona || input.targetAudience || "business owners";
+
       variations = [
         {
-          headline: `Transform Your Growth with ${businessName}`,
-          body: `Discover how ${businessName} helps ${industry !== "Not provided" ? industry : "businesses"} scale faster and convert better.`,
-          description: productDescription !== "Not provided" ? productDescription.slice(0, 100) : "High-impact solutions built for growth.",
-          cta: "Shop Now",
-          visualDirection: "Clean modern product shot with high-contrast badge",
-          whyThisWorks: "Direct outcome-focused value proposition",
-          angle: "desire",
-        },
-        {
-          headline: `Stop Wasting Time on Low Conversions`,
-          body: `Join hundreds of customers leveraging ${businessName} for proven results.`,
-          description: "Verified results backed by customer satisfaction.",
+          headline: `Solve ${painPoint} with ${businessName}`,
+          body: `Discover how ${businessName} helps ${targetAudience} overcome ${painPoint.toLowerCase()} and achieve better results.`,
+          description: productDescription !== "Not provided" ? productDescription.slice(0, 100) : "Proven solutions designed for real business challenges.",
           cta: "Learn More",
-          visualDirection: "Before and after comparison card with clear metrics",
-          whyThisWorks: "Addresses pain point directly with social proof angle",
-          angle: "urgency",
+          visualDirection: "Problem/solution visual showing before/after scenarios",
+          whyThisWorks: "Directly addresses customer pain point with clear solution",
+          angle: "pain",
         },
         {
-          headline: `The Smarter Way to Scale`,
-          body: `Experience the difference with ${businessName}. Simple setup, powerful outcomes.`,
-          description: "Get started today with clear performance tracking.",
+          headline: `Get Results Like ${targetAhesis} Do`,
+          body: `Join successful ${targetAudience} who trust ${businessName} to deliver measurable outcomes every day.`,
+          description: "Trusted by industry leaders with verified results and customer satisfaction.",
+          cta: "See How",
+          visualDirection: "Social proof visualization with customer logos and testimonials",
+          whyThisWorks: "Leverages social proof to build trust and credibility",
+          angle: "proof",
+        },
+        {
+          headline: `The Smart Choice for ${valueProp}`,
+          body: `Experience the ${businessName} advantage - specifically designed for ${targetAudience} seeking better ${valueProp.toLowerCase()}.`,
+          description: "Engineered for performance with features that matter most to your business.",
           cta: "Get Started",
-          visualDirection: "Minimalist hero card with subtle gradient background",
-          whyThisWorks: "Low-friction call to action with simple messaging",
-          angle: "curiosity",
+          visualDirection: "Clean product/service focus with benefit-oriented graphics",
+          whyThisWorks: "Highlights unique value proposition with clear differentiation",
+          angle: "desire",
         },
       ]
     }
