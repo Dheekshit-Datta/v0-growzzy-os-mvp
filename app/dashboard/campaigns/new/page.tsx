@@ -185,6 +185,8 @@ export default function NewCampaignPage() {
   const [building, setBuilding] = useState(false)
   const [built, setBuilt] = useState(false)
   const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
+  const [planStatus, setPlanStatus] = useState<"DRAFT" | "APPROVED" | "DECLINED">("DRAFT")
+  const [approvingPlan, setApprovingPlan] = useState(false)
   const [campaignName, setCampaignName] = useState("")
   const [psychologyProfile, setPsychologyProfile] = useState<any>(null)
   const [buildError, setBuildError] = useState("")
@@ -212,6 +214,7 @@ export default function NewCampaignPage() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([])
   const [creativesCount, setCreativesCount] = useState(4)
+  const creativeAbortRef = useRef<AbortController | null>(null)
 
   // Boolean search
   const [booleanQuery, setBooleanQuery] = useState("")
@@ -355,7 +358,7 @@ export default function NewCampaignPage() {
             budget,
             location: effectiveLocation || undefined,
             goal,
-            brandContext: brand || undefined,
+            brandContext: brand ? JSON.stringify(brand) : undefined,
           }),
       })
       const json = await readJson(res)
@@ -421,6 +424,7 @@ export default function NewCampaignPage() {
         throw new Error(json?.error?.message || json?.error || `Couldn't build a plan. Connect ${platformName} and select an account first.`)
       }
       setCampaignPlanId(json.campaignPlanId)
+      setPlanStatus("DRAFT")
       setCampaignName(json.plan?.campaignName || "")
       setPsychologyProfile(json.psychologyProfile || null)
       setBuilt(true)
@@ -457,17 +461,43 @@ export default function NewCampaignPage() {
     }
   }
 
+  const handlePlanDecision = async (decision: "APPROVED" | "DECLINED") => {
+    if (!campaignPlanId || approvingPlan) return
+    setApprovingPlan(true)
+    try {
+      const res = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) })
+      const json = await readJson(res)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not update plan approval.")
+      setPlanStatus(decision)
+    } catch (error: any) {
+      setBuildError(error?.message || "Could not update plan approval.")
+    } finally {
+      setApprovingPlan(false)
+    }
+  }
+
+  const handleCancelCreatives = () => {
+    creativeAbortRef.current?.abort()
+    creativeAbortRef.current = null
+    setGeneratingCreatives(false)
+    setCreativesError("Generation stopped safely. No partial creative set was saved.")
+  }
+
   const handleGenerateCreatives = async () => {
-    if (generatingCreatives) return
+    if (generatingCreatives || planStatus !== "APPROVED") return
+    const controller = new AbortController()
+    creativeAbortRef.current = controller
     setGeneratingCreatives(true)
     setCreativesError("")
     setGeneratedCreatives([])
     setGeneratedImageUrls([])
     try {
       const res = await fetch("/api/ai/generate-creatives", {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          campaignPlanId: campaignPlanId || undefined,
           businessName: brand?.name,
           industry: brand?.industry,
           brandTone: brand?.toneOfVoice,
@@ -491,8 +521,9 @@ export default function NewCampaignPage() {
       unsavedChangesRef.current = null
       setHasUnsavedChanges(false)
     } catch (err: any) {
-      setCreativesError(err?.message || "Something went wrong generating creatives.")
+      if (err?.name !== "AbortError") setCreativesError(err?.message || "Something went wrong generating creatives.")
     } finally {
+      creativeAbortRef.current = null
       setGeneratingCreatives(false)
     }
   }
@@ -661,8 +692,13 @@ export default function NewCampaignPage() {
                   )}
 
                   <p className="text-[12px] text-[#374151]">
-                    "{campaignName}" was created and saved as a draft. Open the full editor to fine-tune keywords and ad copy, or review your campaign.
+                    "{campaignName}" was created and saved as a draft. Review the plan below before any creatives are generated.
                   </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", planStatus === "APPROVED" ? "bg-[#E6F4EC] text-[#2E9E5B]" : planStatus === "DECLINED" ? "bg-[#FBE7E5] text-[#D3564C]" : "bg-[#FFF7E6] text-[#B8892B]")}>{planStatus === "APPROVED" ? "Approved" : planStatus === "DECLINED" ? "Declined" : "Approval required"}</span>
+                    {planStatus !== "APPROVED" && <button type="button" onClick={() => handlePlanDecision("APPROVED")} disabled={approvingPlan} className="rounded-[8px] bg-[#1F57F5] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-50">{approvingPlan ? "Saving…" : "Approve plan"}</button>}
+                    {planStatus === "DRAFT" && <button type="button" onClick={() => handlePlanDecision("DECLINED")} disabled={approvingPlan} className="rounded-[8px] border border-[#DDE1E7] px-3 py-2 text-[12px] font-semibold text-[#6B7280] disabled:opacity-50">Decline</button>}
+                  </div>
                   <div className="flex items-center gap-4 mt-3">
                     <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] transition-colors">
                       Open full editor <ExternalLink size={12} />
@@ -787,11 +823,13 @@ export default function NewCampaignPage() {
                   </div>
                   <button
                     onClick={handleGenerateCreatives}
-                    disabled={generatingCreatives || !creativesPrompt.trim()}
-                    className={cn("flex items-center justify-center gap-2 h-10 w-full rounded-[10px] text-[13.5px] font-semibold transition-colors", !generatingCreatives && creativesPrompt.trim() ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
+                    disabled={generatingCreatives || !creativesPrompt.trim() || planStatus !== "APPROVED"}
+                    className={cn("flex items-center justify-center gap-2 h-10 w-full rounded-[10px] text-[13.5px] font-semibold transition-colors", !generatingCreatives && creativesPrompt.trim() && planStatus === "APPROVED" ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
                   >
                     {(generatingCreatives ? (<><Loader2 size={16} className="animate-spin" />Generating creatives…</>) : (<><Sparkles size={14} />Generate {creativesCount} AI creative{creativesCount > 1 ? "s" : ""}</>))}
                   </button>
+                  {generatingCreatives && <button type="button" onClick={handleCancelCreatives} className="flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-[#D3564C]/30 text-[12px] font-semibold text-[#D3564C]"><X size={14} />Cancel image generation</button>}
+                  {planStatus !== "APPROVED" && <p className="rounded-[8px] bg-[#FFF7E6] px-3 py-2 text-[12px] text-[#9A6B11]">Approve the campaign plan before generating creatives.</p>}
                   {creativesError && <p className="text-[12px] text-[#D3564C]">{creativesError}</p>}
                 </div>
 

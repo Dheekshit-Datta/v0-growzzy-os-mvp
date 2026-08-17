@@ -8,6 +8,7 @@ import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { getActiveAdAccountScope } from "@/lib/account-scope"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { log } from "@/lib/logger"
+import { getBusinessContextForWorkspace } from "@/lib/business-context"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const workspaceFilter = workspaceWhere(workspaceId, false)
+    const brandContext = await getBusinessContextForWorkspace(workspaceId)
     const scope = await getActiveAdAccountScope(userId, workspaceId, req.nextUrl.searchParams.get("adAccountId"))
 
     const integrations = scope ? await prisma.integration.findMany({
@@ -100,6 +102,8 @@ export async function POST(req: NextRequest) {
         platform: c.platform,
       })),
       connected_platforms: integrations,
+      brand_context: brandContext || "My Brand has not been completed. Say so plainly and ask only for a website URL when the user requests campaign research.",
+      supported_ad_platforms: ["GOOGLE", "META"],
     }
 
     const response = await OpenAIService.chat(messages, context, userId)

@@ -14,6 +14,7 @@ const EnhanceSchema = z.object({
   budget: z.coerce.number().positive().optional(),
   location: z.string().max(120).optional(),
   goal: z.string().max(80).optional(),
+  brandContext: z.string().max(8000).optional(),
 })
 
 const EnhancedBriefSchema = z.object({
@@ -84,7 +85,8 @@ Return only JSON matching:
 
 User request: ${input.prompt}
 Confirmed form inputs: ${JSON.stringify({ budget: input.budget, location: input.location, goal: input.goal })}
-Saved business context: ${businessContext || "None"}`
+Saved business context: ${businessContext || input.brandContext || "None"}
+Supported ad platforms: Google Ads and Meta Ads only. Do not ask generic business questions when the saved context answers them.`
 
   let lastError = ""
   let lastFailure: "provider" | "output" = "output"

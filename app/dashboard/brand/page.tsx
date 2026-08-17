@@ -35,6 +35,16 @@ type BrandMemory = {
   productDescription?: string
 }
 
+type BrandResearch = {
+  businessModel?: string
+  icp?: string
+  competitors?: string
+  keywords?: string
+  verifiedFindings?: string
+  inferences?: string
+  citations?: string
+}
+
 type BrandData = {
   logo: string | null
   name: string
@@ -43,6 +53,7 @@ type BrandData = {
   toneOfVoice: string | null
   productDescription: string | null
   defaultLandingPageUrl: string | null
+  brandResearch?: BrandResearch | null
 }
 
 export default function BrandPage() {
@@ -54,6 +65,7 @@ export default function BrandPage() {
   const [saveError, setSaveError] = useState("")
   const [data, setData] = useState<Partial<BrandData>>({})
   const [brandMemory, setBrandMemory] = useState<BrandMemory | null>(null)
+  const [research, setResearch] = useState<BrandResearch>({})
   const fileRef = useRef<HTMLInputElement>(null)
   const brandSignals = [data.name, data.websiteUrl, data.industry, data.toneOfVoice, data.productDescription].filter(Boolean).length
   const brandCompleteness = Math.round((brandSignals / 5) * 100)
@@ -64,7 +76,10 @@ export default function BrandPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const w = json?.workspaces?.[0]
-        if (w) setData(w)
+        if (w) {
+          setData(w)
+          setResearch(w.brandResearch || {})
+        }
       })
       .finally(() => setLoading(false))
   }, [])
@@ -96,6 +111,7 @@ export default function BrandPage() {
       const memory = json.data?.brandMemory
       if (memory) {
         setBrandMemory(memory)
+        setResearch((current) => ({ ...current, businessModel: current.businessModel || memory.productDescription, verifiedFindings: current.verifiedFindings || memory.brandStory }))
         set({
           name: memory.brandName || data.name,
           productDescription: memory.productDescription || data.productDescription,
@@ -124,6 +140,7 @@ export default function BrandPage() {
           productDescription: data.productDescription || "",
           defaultLandingPageUrl: data.defaultLandingPageUrl || "",
           logo: data.logo || "",
+          brandResearch: research,
         }),
       })
       const json = await res.json().catch(() => null)
@@ -144,7 +161,10 @@ export default function BrandPage() {
         {/* Helper banner */}
         <div className="bg-[#EAF0FE] rounded-[10px] px-4 py-3 text-[12.5px] text-[#1F57F5] font-medium flex items-center justify-between gap-4">
           <span>AI Campaigns use this context for strategy, copy, creative direction, and launch checks.</span>
-          <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold">{brandCompleteness}% ready</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <a href="/api/brand/research-report" className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-bold text-[#1F57F5] hover:bg-white">Download PDF</a>
+            <span className="rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold">{brandCompleteness}% ready</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-4">
@@ -204,6 +224,14 @@ export default function BrandPage() {
                 {analyzeError && <p className="text-[12px] text-[#D3564C] mt-2 font-medium">{analyzeError}</p>}
               </div>
             )}
+
+            {/* Source-backed research is editable, but stays separate from verified brand basics. */}
+            <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">Latest research</p><h2 className="mt-1 text-[16px] font-semibold text-[#111827]">Business context used by the AI</h2></div><span className="text-[11px] text-[#6B7280]">Edit, then Save brand</span></div>
+              {(["businessModel", "icp", "competitors", "keywords", "verifiedFindings", "inferences", "citations"] as const).map((field) => (
+                <div key={field}><label className="mb-1 block text-[12px] font-medium capitalize text-[#374151]">{field.replace(/([A-Z])/g, " $1")}</label><textarea value={research[field] || ""} onChange={(event) => setResearch((current) => ({ ...current, [field]: event.target.value }))} rows={field === "citations" ? 3 : 2} placeholder={field === "citations" ? "One source URL per line" : "Add verified research or leave blank if unknown"} className="w-full resize-y rounded-[8px] border border-[#E9EBEF] bg-[#FAF9F8] px-3 py-2 text-[12.5px] leading-relaxed text-[#111827] outline-none focus:border-[#1F57F5]" /></div>
+              ))}
+            </div>
 
             {/* Main Form */}
             <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-6 space-y-5">

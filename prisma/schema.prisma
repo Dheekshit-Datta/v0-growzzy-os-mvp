@@ -119,6 +119,7 @@ model Workspace {
   currencyCode           String?              @default("USD")
   timezone               String?
   productDescription     String?
+  brandResearch          Json?
   industry               String?
   toneOfVoice            String?
   defaultLandingPageUrl  String?

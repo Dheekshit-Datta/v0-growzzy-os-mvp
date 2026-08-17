@@ -17,6 +17,7 @@ const CreativeBriefSchema = z.object({
   workspaceId: z.string().optional(),
   adAccountId: z.string().optional(),
   campaignId: z.string().optional(),
+  campaignPlanId: z.string().optional(),
   brandName: z.string().optional(),
   businessName: z.string().optional(),
   industry: z.string().optional(),
@@ -97,6 +98,10 @@ export async function POST(request: Request) {
     if (!session?.user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     const userId = await resolveUserId(session.user.id)
     const input = CreativeBriefSchema.parse(await request.json())
+    if (input.campaignPlanId) {
+      const approvedPlan = await prisma.campaignPlan.findFirst({ where: { id: input.campaignPlanId, userId, status: "APPROVED" }, select: { id: true } })
+      if (!approvedPlan) return NextResponse.json({ success: false, code: "PLAN_NOT_APPROVED", error: "Approve the campaign plan before generating creatives." }, { status: 409 })
+    }
     const textLimit = await rateLimitPolicy(userId, "creativeText")
     if (!textLimit.allowed) return rateLimitResponse(textLimit)
     if (input.generateImages !== false) {
