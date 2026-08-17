@@ -114,19 +114,19 @@ Saved business context: ${businessContext || "None"}`
     }
   }
 
-  // Provider/transient error fallback - return a structured enhanced brief based on user input
+  // Conservative fallback: preserve only user-provided facts and surface uncertainty.
   const fallbackBrief = {
-    enhancedText: `${input.prompt}\n\nTargeting customers looking for reliable solutions. Optimized for high engagement and conversion with clear value propositions and strong calls to action.`,
+    enhancedText: input.prompt,
     productOrOffer: input.prompt.slice(0, 100),
-    targetCustomer: input.location ? `Customers in ${input.location}` : "Target buyers",
-    painPoints: ["Finding quality solutions", "Best value for price"],
-    differentiators: ["Verified quality", "Fast delivery"],
-    proofPoints: ["High customer rating"],
-    geography: input.location || "United States",
-    goal: input.goal || "Conversions",
-    tone: "Professional & Persuasive",
-    restrictions: [],
-    missingQuestions: [],
+    targetCustomer: "",
+    painPoints: [],
+    differentiators: [],
+    proofPoints: [],
+    geography: input.location || "",
+    goal: input.goal || "",
+    tone: "",
+    restrictions: ["AI enhancement was unavailable; verify all claims before launch."],
+    missingQuestions: ["Who is the primary customer for this offer?", "What specific differentiator or proof can the campaign use?"],
   }
 
   return NextResponse.json({ ok: true, enhanced: fallbackBrief.enhancedText, brief: fallbackBrief })

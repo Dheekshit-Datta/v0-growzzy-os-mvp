@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
     throw error
   }
 
-  const psychologyProfile = buildPsychologyPromptContext({
+  const psychologyProfile = await buildPsychologyPromptContext({
     offer: input.offer,
     targetCustomer: input.targetCustomer,
     goal: input.goal,
@@ -398,7 +398,7 @@ Return ONLY JSON with campaignName, adSetName, countryCode (ISO-2), targeting (M
 
   let quality: ReturnType<typeof parseGoogleSearchPlan>["quality"] | undefined
   const plan = input.platform === "META"
-    ? validateMetaPlan(raw, input, object(object(integration.accountInfo).metaAssets))
+    ? validateMetaPlan(raw, input, object(object(integration?.accountInfo).metaAssets))
     : (() => {
         const result = parseGoogleSearchPlan({
           ...raw,

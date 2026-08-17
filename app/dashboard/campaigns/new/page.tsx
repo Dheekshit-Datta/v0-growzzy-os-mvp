@@ -350,7 +350,13 @@ export default function NewCampaignPage() {
       const res = await fetch("/api/ai/enhance-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), budget, location: effectiveLocation || undefined, goal }),
+          body: JSON.stringify({
+            prompt: prompt.trim(),
+            budget,
+            location: effectiveLocation || undefined,
+            goal,
+            brandContext: brand || undefined,
+          }),
       })
       const json = await readJson(res)
       if (!res.ok || !json?.enhanced || !json?.brief) throw new Error(json?.error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
@@ -367,10 +373,12 @@ export default function NewCampaignPage() {
   }
 
   const promptText = prompt.trim()
-  const effectiveLocation = location.trim() || inferLocation(promptText) || "United States"
+  const effectiveLocation = location.trim() || inferLocation(promptText)
   const hasBudget = Number.isFinite(budget) && budget > 0 ? budget : 50
-  const missingEssentials = [!promptText ? "offer" : ""].filter(Boolean)
-  const canBuildPlan = !building && promptText.length > 5
+  const brandMissing = !brand?.name || !brand?.productDescription
+  const brandLabel = brandMissing ? "My Brand needs a quick setup" : `${brand.name} context is ready`
+  const missingEssentials = [!promptText ? "offer" : "", brandMissing ? "brand context" : ""].filter(Boolean)
+  const canBuildPlan = !building && promptText.length > 5 && !brandMissing
 
   const assistantReplyFor = (
     nextPrompt = promptText,
@@ -381,6 +389,7 @@ export default function NewCampaignPage() {
     if (!nextPrompt.trim()) return "Start with one sentence about what you sell, who it is for, and what outcome you want."
     if (!nextLocation) return "I understand the offer. What location should this campaign target?"
     if (!Number.isFinite(nextBudget) || nextBudget <= 0) return "Good. What daily budget are you comfortable testing?"
+    if (brandMissing) return "Your My Brand context is incomplete. Add the business name and product or service description before I build a campaign."
     if (!nextUrl.trim()) return "This is enough to build the draft. Add a landing page before launch so the campaign can go live safely."
     return "Perfect. I have the core launch inputs. Build the plan and I will turn this into editable ad groups, keywords, and RSA copy."
   }
@@ -549,6 +558,18 @@ export default function NewCampaignPage() {
             </p>
           </div>
 
+          {/* My Brand readiness is intentionally scoped to the AI Campaign workflow. */}
+          <div className="w-full max-w-[760px] mb-4 flex items-center justify-between gap-4 rounded-[12px] border border-[#DDE1E7] bg-white px-4 py-3 text-left">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">My Brand</p>
+              <p className="mt-1 truncate text-[13px] font-medium text-[#111827]">{brandLabel}</p>
+              <p className="mt-0.5 text-[11.5px] text-[#6B7280]">AI Campaigns use this context to keep strategy, copy, and creative on-brand.</p>
+            </div>
+            <a href="/dashboard/brand" className="shrink-0 rounded-[8px] border border-[#DDE1E7] px-3 py-2 text-[12px] font-semibold text-[#1F57F5] transition-colors hover:bg-[#EAF0FE]">
+              {brandMissing ? "Complete My Brand" : "Review My Brand"}
+            </a>
+          </div>
+
           {/* Clean Prompt Intake Card */}
           <div className="w-full max-w-[760px]">
             <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #E0533C', boxShadow: '0 0 0 4px rgba(224,83,60,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
@@ -589,6 +610,11 @@ export default function NewCampaignPage() {
                 </button>
               </div>
 
+              {brandMissing && (
+                <p className="mt-3 rounded-[10px] border border-[#F7D9D4] bg-[#FDF2F0] px-3 py-2 text-[12px] text-[#A33A2B]">
+                  Complete My Brand before building. This prevents unsupported assumptions in your campaign strategy.
+                </p>
+              )}
               {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
               {buildError && (
                 <div className="mt-3 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">

@@ -55,6 +55,9 @@ export default function BrandPage() {
   const [data, setData] = useState<Partial<BrandData>>({})
   const [brandMemory, setBrandMemory] = useState<BrandMemory | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const brandSignals = [data.name, data.websiteUrl, data.industry, data.toneOfVoice, data.productDescription].filter(Boolean).length
+  const brandCompleteness = Math.round((brandSignals / 5) * 100)
+  const campaignReady = Boolean(data.name && data.productDescription)
 
   useEffect(() => {
     fetch("/api/workspaces", { cache: "no-store" })
@@ -139,8 +142,29 @@ export default function BrandPage() {
     <Shell title="My Brand">
       <div className="p-6 max-w-[840px] space-y-5">
         {/* Helper banner */}
-        <div className="bg-[#EAF0FE] rounded-[10px] px-4 py-3 text-[12.5px] text-[#1F57F5] font-medium flex items-center justify-between">
-          <span>Every campaign & AI ad creative Growzzy generates uses this brand context.</span>
+        <div className="bg-[#EAF0FE] rounded-[10px] px-4 py-3 text-[12.5px] text-[#1F57F5] font-medium flex items-center justify-between gap-4">
+          <span>AI Campaigns use this context for strategy, copy, creative direction, and launch checks.</span>
+          <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold">{brandCompleteness}% ready</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-4">
+          <div className="rounded-[14px] border border-[#E9EBEF] bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">AI Campaign readiness</p>
+                <h2 className="mt-1 text-[18px] font-semibold text-[#111827]">{campaignReady ? "Ready to build on-brand campaigns" : "Finish the essentials first"}</h2>
+              </div>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${campaignReady ? "bg-[#E6F4EC] text-[#2E9E5B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                {campaignReady ? "Ready" : "Needs setup"}
+              </span>
+            </div>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-[#6B7280]">{campaignReady ? "Your business name and offer are confirmed. Add the remaining signals to make targeting and creative even more precise." : "Add your business name and product or service description so the AI can avoid guessing."}</p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F0F2F5]"><div className="h-full rounded-full bg-[#1F57F5] transition-all" style={{ width: `${brandCompleteness}%` }} /></div>
+          </div>
+          <div className="rounded-[14px] border border-[#E9EBEF] bg-[#F8F9FA] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">Used by</p>
+            <div className="mt-3 flex flex-wrap gap-2">{["Campaign strategy", "Ad copy", "AI creatives", "Launch checks"].map((item) => <span key={item} className="rounded-full border border-[#E9EBEF] bg-white px-2.5 py-1 text-[11px] font-medium text-[#374151]">{item}</span>)}</div>
+          </div>
         </div>
 
         {loading ? (
