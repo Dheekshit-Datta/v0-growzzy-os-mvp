@@ -17,11 +17,14 @@ function sanitizeDbUrl(raw: string): string {
   return credentials + address
 }
 
-if (process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = sanitizeDbUrl(process.env.DATABASE_URL)
+const configuredDatabaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL
+const configuredDirectUrl = process.env.DIRECT_URL || process.env.POSTGRES_URL_NON_POOLING || configuredDatabaseUrl
+
+if (configuredDatabaseUrl) {
+  process.env.DATABASE_URL = sanitizeDbUrl(configuredDatabaseUrl)
 }
-if (process.env.DIRECT_URL) {
-  process.env.DIRECT_URL = sanitizeDbUrl(process.env.DIRECT_URL)
+if (configuredDirectUrl) {
+  process.env.DIRECT_URL = sanitizeDbUrl(configuredDirectUrl)
 }
 
 const prismaClientSingleton = () => {

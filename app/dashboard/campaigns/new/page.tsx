@@ -8,7 +8,7 @@ import {
   Sparkles, CheckCircle2, Circle, ArrowRight,
   Image as ImageIcon, Search, Rocket, ChevronDown,
   RefreshCw,
-  Download, Copy, Wand2, Check, ExternalLink, Loader2, X,
+  Download, Copy, Wand2, Check, ExternalLink, Loader2, X, Paperclip, ArrowUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -601,12 +601,9 @@ export default function NewCampaignPage() {
             </a>
           </div>
 
-          {/* Clean Prompt Intake Card */}
-          <div className="w-full max-w-[760px]">
-            <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #E0533C', boxShadow: '0 0 0 4px rgba(224,83,60,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
-              <div className="px-1 py-1 mb-2">
-                <p className="text-[12.5px] font-medium text-[#374151]">Start with one sentence about what you sell, who it is for, and what outcome you want.</p>
-              </div>
+          {/* Reference-style general assistant composer */}
+          <div className="w-full max-w-[768px]">
+            <div className="overflow-hidden rounded-[16px] border border-[#E6E6E6] bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-shadow focus-within:shadow-[0_3px_14px_rgba(0,0,0,0.1)]">
               <textarea
                 ref={textareaRef}
                 value={prompt}
@@ -615,29 +612,25 @@ export default function NewCampaignPage() {
                   setEnhancedBrief(null)
                   setClarifications([])
                 }}
-                placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
-                rows={6}
-                className="w-full px-3 py-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-[#FAF9F8] rounded-[10px] border border-[#E9EBEF] resize-none outline-none focus:border-[#E0533C] focus:ring-2 focus:ring-[#E0533C]/10 leading-relaxed transition-colors"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+                    event.preventDefault()
+                    if (canBuildPlan) void handleBuild()
+                  }
+                }}
+                placeholder="Ask anything..."
+                rows={4}
+                aria-label="Ask Growzzy anything"
+                className="min-h-[104px] w-full resize-none border-0 bg-transparent px-0 py-0 text-[14px] leading-relaxed text-[#171717] outline-none placeholder:text-[#8A8A8A]"
               />
-              
-              <div className="flex items-center justify-between mt-3 pt-2">
-                <button
-                  onClick={handleEnhance}
-                  disabled={!prompt.trim() || enhancing}
-                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] disabled:opacity-40 transition-colors"
-                >
-                  {enhancing ? (<><RefreshCw size={12} className="animate-spin" />Enhancing brief…</>) : (<><Wand2 size={13} />✨ AI Enhance</>)}
-                </button>
-
-                <button
-                  onClick={handleBuild}
-                  disabled={!canBuildPlan}
-                  className={cn(
-                    "flex items-center gap-1.5 h-10 px-6 rounded-full text-[13.5px] font-semibold transition-all shadow-sm",
-                    canBuildPlan ? "bg-[#E0533C] text-white hover:bg-[#C9432D]" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
-                  )}
-                >
-                  {building ? (<><Loader2 size={14} className="animate-spin" />Building plan…</>) : built ? (<><Check size={14} />Plan ready — rebuild</>) : (<><Sparkles size={14} />Build plan <ArrowRight size={14} /></>)}
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="Attach a file" className="rounded-full p-1.5 text-[#777] transition-colors hover:bg-[#F5F5F5] hover:text-[#222]"><Paperclip size={17} strokeWidth={1.7} /></button>
+                  <button type="button" aria-label="Model: Standard" className="flex h-8 items-center gap-1 rounded-[8px] border border-[#E5E5E5] px-2.5 text-[13px] text-[#222] transition-colors hover:bg-[#F7F7F7]">Standard <ChevronDown size={14} className="text-[#999]" /></button>
+                  <button type="button" onClick={handleEnhance} disabled={!prompt.trim() || enhancing} className="hidden text-[12px] font-medium text-[#777] hover:text-[#222] disabled:opacity-40 sm:inline-flex sm:items-center sm:gap-1.5">{enhancing ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}Improve</button>
+                </div>
+                <button type="button" onClick={handleBuild} disabled={!canBuildPlan} aria-label="Send message" className={cn("flex h-8 w-8 items-center justify-center rounded-full transition-colors", canBuildPlan ? "bg-[#171717] text-white hover:bg-[#333]" : "bg-[#F1F1F1] text-[#999] cursor-not-allowed")}>
+                  {building ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={16} strokeWidth={2.1} />}
                 </button>
               </div>
 
