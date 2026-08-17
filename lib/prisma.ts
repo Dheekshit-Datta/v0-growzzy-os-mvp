@@ -28,11 +28,12 @@ if (configuredDirectUrl) {
 }
 
 const prismaClientSingleton = () => {
+  const databaseUrl = process.env.DATABASE_URL || "postgresql://build:build@127.0.0.1:5432/build"
   if (!process.env.DATABASE_URL) {
-    console.error("[prisma] CRITICAL: database configuration is missing.")
+    console.warn("[prisma] DATABASE_URL is missing; using an unreachable build-time fallback. Database requests will return a configuration error.")
   }
   return new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL } },
+    datasources: { db: { url: databaseUrl } },
     log: ["error", "warn"],
   })
 }
