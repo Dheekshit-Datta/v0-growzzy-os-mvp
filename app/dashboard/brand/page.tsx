@@ -1,850 +1,754 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Shell } from "@/components/dashboard-v2/shell"
+import { PageHeader, SectionCard } from "@/components/growzzy/primitives"
+import { StatusPill } from "@/components/growzzy/status-pill"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
 import {
-  Globe, Sparkles, Plus, Trash2, X, Check, Loader2, Download,
-  ExternalLink, Zap, Building2, Users, Target, ShieldCheck, ArrowRight
+  Sparkles,
+  Check,
+  Globe,
+  Loader2,
+  ExternalLink,
+  Plus,
+  X,
+  Trash2,
+  Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  loadBrand,
+  saveBrand,
+  brandIsReady,
+  emptyBrand,
+  type BrandProfile,
+  type BrandSegment,
+  type BrandCompetitor,
+} from "@/lib/brand-store"
 
-export interface AudienceSegment {
-  id: string
-  title: string
-  painPoints: string
-}
-
-export interface Competitor {
-  id: string
-  name: string
-  description: string
-}
-
-const TONES = [
-  {
-    id: "Friendly",
-    name: "Friendly",
-    example: "Hey! Grab yours before they're gone ⚡",
-  },
-  {
-    id: "Professional",
-    name: "Professional",
-    example: "Trusted by 10,000+ businesses worldwide.",
-  },
-  {
-    id: "Playful",
-    name: "Playful",
-    example: "Warning: dangerously good products inside 💎",
-  },
-  {
-    id: "Premium",
-    name: "Premium",
-    example: "Crafted for those who notice the details.",
-  },
+const palettes = [
+  { name: "Growzzy", primary: "#1F57F5", accent: "#EAF0FE" },
+  { name: "Ember", primary: "#F97316", accent: "#FEF0E6" },
+  { name: "Forest", primary: "#059669", accent: "#E7F5EF" },
+  { name: "Rose", primary: "#E11D48", accent: "#FCE7EC" },
+  { name: "Slate", primary: "#0F172A", accent: "#E9EBEF" },
 ]
 
-const COLOR_PALETTES = [
-  { id: "Growzzy", name: "Growzzy", hex: "#1F57F5" },
-  { id: "Ember", name: "Ember", hex: "#F97316" },
-  { id: "Forest", name: "Forest", hex: "#10B981" },
-  { id: "Rose", name: "Rose", hex: "#F43F5E" },
-  { id: "Slate", name: "Slate", hex: "#0F172A" },
+const tones = [
+  { value: "friendly", label: "Friendly", sample: "Hey! Grab yours before they're gone ✨" },
+  {
+    value: "professional",
+    label: "Professional",
+    sample: "Trusted by 10,000+ businesses worldwide.",
+  },
+  { value: "playful", label: "Playful", sample: "Warning: dangerously good products inside 💎" },
+  { value: "premium", label: "Premium", sample: "Crafted for those who notice the details." },
 ]
+
+function ChipEditor({
+  items,
+  onChange,
+  placeholder,
+}: {
+  items: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+}) {
+  const [draft, setDraft] = useState("")
+  const add = () => {
+    const v = draft.trim()
+    if (!v || items.includes(v)) return
+    onChange([...items, v])
+    setDraft("")
+  }
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((t) => (
+          <span
+            key={t}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-foreground"
+          >
+            {t}
+            <button
+              type="button"
+              aria-label={`Remove ${t}`}
+              onClick={() => onChange(items.filter((x) => x !== t))}
+              className="text-muted-foreground hover:text-[#D3564C]"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              add()
+            }
+          }}
+          placeholder={placeholder}
+          className="h-8 text-[12.5px]"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={add}
+          className="h-8 shrink-0 gap-1"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export default function BrandPage() {
-  const [loading, setLoading] = useState(true)
+  const [brand, setBrand] = useState<BrandProfile>(emptyBrand)
+  const [urlInput, setUrlInput] = useState("")
   const [analyzing, setAnalyzing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [errorMsg, setErrorMsg] = useState("")
+  const [hydrated, setHydrated] = useState(false)
 
-  // Brand Core State
-  const [websiteUrl, setWebsiteUrl] = useState("https://markitxai.vercel.app/")
-  const [lastAnalysed, setLastAnalysed] = useState<string>("8/17/2026, 7:37:53 PM")
-  const [sourcesRead, setSourcesRead] = useState<string[]>(["https://markitxai.vercel.app/"])
-
-  const [businessName, setBusinessName] = useState("MARKITX")
-  const [industry, setIndustry] = useState("Artificial Intelligence / Business Software")
-  const [businessModel, setBusinessModel] = useState("B2B Software/Service")
-  const [defaultLandingPage, setDefaultLandingPage] = useState("https://markitxai.vercel.app/")
-
-  const [whatYouSell, setWhatYouSell] = useState(
-    "AI infrastructure solutions, including multi-agent systems, automated AI workflows, and custom AI agents."
-  )
-  const [productDescription, setProductDescription] = useState(
-    "MARKITX provides advanced AI infrastructure designed to automate and run business operations. Their offerings include multi-agent systems for complex tasks, automated workflows to streamline processes, and custom-built AI agents tailored to specific operational needs, aiming to reduce direct human intervention in daily operations."
-  )
-  const [positioning, setPositioning] = useState(
-    "MARKITX positions itself as an essential infrastructure provider for businesses seeking to automate and optimize their operations through sophisticated AI multi-agent systems and custom AI solutions."
-  )
-  const [idealCustomer, setIdealCustomer] = useState(
-    "Businesses looking to automate and optimize their operations using advanced AI technology."
-  )
-
-  // Differentiators
-  const [differentiators, setDifferentiators] = useState<string[]>([
-    "Focus on 'infrastructure' for AI rather than just applications",
-    "Specialization in multi-agent systems",
-    "Custom AI agent development for specific operational needs",
-    "Goal of running operations 'without you in every process' highlighting high automation potential",
-  ])
-  const [newDiffInput, setNewDiffInput] = useState("")
-
-  // Audience Segments
-  const [audienceSegments, setAudienceSegments] = useState<AudienceSegment[]>([
-    {
-      id: "1",
-      title: "Operations-Heavy Businesses",
-      painPoints:
-        "Inefficient manual processes, high operational costs, bottlenecks in workflows, desire for scalability without proportional headcount increase.\n\nSeeking significant operational efficiency improvements, facing competitive pressure to innovate, needing to reduce human error in repetitive tasks.",
-    },
-    {
-      id: "2",
-      title: "Forward-Thinking Enterprises",
-      painPoints:
-        "Struggling to integrate advanced AI into existing systems, lack of internal expertise for custom AI development, desire to leverage cutting-edge AI for strategic advantage.\n\nStrategic initiatives to become AI-first, exploring new technologies for competitive differentiation, looking for robust and scalable AI solutions.",
-    },
-    {
-      id: "3",
-      title: "Businesses with Complex Workflows",
-      painPoints:
-        "Difficulty coordinating multiple interdependent processes, challenges in automating nuanced decision-making, need for intelligent automation beyond simple RPA.\n\nIdentifying multi-step, dynamic processes that could benefit from intelligent agents, seeking solutions that can learn and adapt, aiming for higher levels of operational autonomy.",
-    },
-  ])
-
-  // Competitors
-  const [competitors, setCompetitors] = useState<Competitor[]>([])
-
-  // Search & Creative Signals
-  const [highIntentKeywords, setHighIntentKeywords] = useState<string[]>([
-    "AI infrastructure for businesses",
-    "multi-agent systems for operations",
-    "automated AI workflows",
-    "custom AI agents for business",
-    "AI business automation solutions",
-    "enterprise AI infrastructure",
-    "AI for operational efficiency",
-    "business process automation AI",
-    "AI agent development services",
-    "intelligent automation for businesses",
-    "AI solutions for workflow optimization",
-    "no-code AI business automation",
-  ])
-  const [newKeywordInput, setNewKeywordInput] = useState("")
-
-  const [creativeAngles, setCreativeAngles] = useState<string[]>([
-    "Imagine your business running itself: Automate operations with MARKITX AI infrastructure.",
-    "Unlock true efficiency: MARKITX builds custom AI agents that manage your critical workflows.",
-    "Beyond automation: Leverage multi-agent AI systems to transform your business operations with MARKITX.",
-    "Free up your team for innovation. MARKITX AI handles the heavy lifting, autonomously.",
-    "Future-proof your business: Implement advanced AI infrastructure designed for intelligent, self-running operations.",
-  ])
-  const [newAngleInput, setNewAngleInput] = useState("")
-
-  // Voice & Colors
-  const [selectedTone, setSelectedTone] = useState("Professional")
-  const [selectedColor, setSelectedColor] = useState("Growzzy")
-
-  // Load from workspace / LocalStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("growzzy_brand_context_full")
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (parsed.websiteUrl) setWebsiteUrl(parsed.websiteUrl)
-        if (parsed.businessName) setBusinessName(parsed.businessName)
-        if (parsed.industry) setIndustry(parsed.industry)
-        if (parsed.businessModel) setBusinessModel(parsed.businessModel)
-        if (parsed.defaultLandingPage) setDefaultLandingPage(parsed.defaultLandingPage)
-        if (parsed.whatYouSell) setWhatYouSell(parsed.whatYouSell)
-        if (parsed.productDescription) setProductDescription(parsed.productDescription)
-        if (parsed.positioning) setPositioning(parsed.positioning)
-        if (parsed.idealCustomer) setIdealCustomer(parsed.idealCustomer)
-        if (parsed.differentiators) setDifferentiators(parsed.differentiators)
-        if (parsed.audienceSegments) setAudienceSegments(parsed.audienceSegments)
-        if (parsed.competitors) setCompetitors(parsed.competitors)
-        if (parsed.highIntentKeywords) setHighIntentKeywords(parsed.highIntentKeywords)
-        if (parsed.creativeAngles) setCreativeAngles(parsed.creativeAngles)
-        if (parsed.selectedTone) setSelectedTone(parsed.selectedTone)
-        if (parsed.selectedColor) setSelectedColor(parsed.selectedColor)
-        if (parsed.sourcesRead) setSourcesRead(parsed.sourcesRead)
-        if (parsed.lastAnalysed) setLastAnalysed(parsed.lastAnalysed)
-      }
-    } catch {}
-
-    fetch("/api/workspaces")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        const w = json?.workspaces?.[0]
-        if (w) {
-          if (w.name) setBusinessName(w.name)
-          if (w.websiteUrl) setWebsiteUrl(w.websiteUrl)
-          if (w.industry) setIndustry(w.industry)
-          if (w.productDescription) setProductDescription(w.productDescription)
-          if (w.toneOfVoice) setSelectedTone(w.toneOfVoice)
-          if (w.defaultLandingPageUrl) setDefaultLandingPage(w.defaultLandingPageUrl)
-        }
-      })
-      .finally(() => setLoading(false))
+    const loaded = loadBrand()
+    setBrand(loaded)
+    setUrlInput(loaded.website)
+    setHydrated(true)
   }, [])
 
-  // Deep Analyse Action
-  const handleDeepAnalyse = async () => {
-    if (!websiteUrl || analyzing) return
+  const set =
+    <K extends keyof BrandProfile>(k: K) =>
+    (v: BrandProfile[K]) =>
+      setBrand((b) => ({ ...b, [k]: v }))
+
+  const ready = brandIsReady(brand)
+
+  const runAnalysis = async () => {
+    if (!urlInput.trim()) {
+      toast.error("Add your website URL first.")
+      return
+    }
     setAnalyzing(true)
-    setErrorMsg("")
     try {
       const res = await fetch("/api/brand/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl }),
+        body: JSON.stringify({ websiteUrl: urlInput.trim() }),
       })
       const json = await res.json()
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Failed to analyze website brand")
+      if (!res.ok || !json.ok) {
+        throw new Error(json?.error?.message || json?.message || "Couldn't analyse that website.")
       }
-      const mem = json.data?.brandMemory
-      if (mem) {
-        if (mem.brandName) setBusinessName(mem.brandName)
-        if (mem.industry) setIndustry(mem.industry)
-        if (mem.businessModel) setBusinessModel(mem.businessModel)
-        if (mem.whatYouSell) setWhatYouSell(mem.whatYouSell)
-        if (mem.productDescription) setProductDescription(mem.productDescription)
-        if (mem.positioning) setPositioning(mem.positioning)
-        if (mem.idealCustomer) setIdealCustomer(mem.idealCustomer)
-        if (Array.isArray(mem.differentiators) && mem.differentiators.length > 0) {
-          setDifferentiators(mem.differentiators)
-        }
-        if (Array.isArray(mem.audienceSegments) && mem.audienceSegments.length > 0) {
-          setAudienceSegments(
-            mem.audienceSegments.map((s: any, idx: number) => ({
-              id: String(idx + 1),
-              title: s.title || `Segment ${idx + 1}`,
-              painPoints: s.painPoints || "",
-            }))
-          )
-        }
-        if (Array.isArray(mem.highIntentKeywords) && mem.highIntentKeywords.length > 0) {
-          setHighIntentKeywords(mem.highIntentKeywords)
-        }
-        if (Array.isArray(mem.creativeAngles) && mem.creativeAngles.length > 0) {
-          setCreativeAngles(mem.creativeAngles)
-        }
-        if (mem.toneOfVoice) setSelectedTone(mem.toneOfVoice)
-        if (mem.colorTheme) setSelectedColor(mem.colorTheme)
-        if (mem.sourcesRead) setSourcesRead(mem.sourcesRead)
-
-        const nowStr = new Date().toLocaleString()
-        setLastAnalysed(nowStr)
+      const m = json.data?.brandMemory || {}
+      const next: BrandProfile = {
+        ...brand,
+        website: json.data?.brandMemory?.defaultLandingPage || urlInput.trim(),
+        defaultLandingPage:
+          brand.defaultLandingPage || json.data?.brandMemory?.defaultLandingPage || urlInput.trim(),
+        businessName: m.brandName || brand.businessName,
+        industry: m.industry || brand.industry,
+        businessModel: m.businessModel || brand.businessModel,
+        whatTheySell: m.whatYouSell || brand.whatTheySell,
+        productDescription: m.productDescription || brand.productDescription,
+        positioning: m.positioning || brand.positioning,
+        differentiators: m.differentiators ?? brand.differentiators,
+        audience: m.idealCustomer || brand.audience,
+        segments: (m.audienceSegments ?? []).map(
+          (s: { title: string; painPoints: string }): BrandSegment => ({
+            segment: s.title,
+            pains: s.painPoints,
+            triggers: "",
+          }),
+        ),
+        competitors: (m.competitors ?? []).map(
+          (c: { name: string; description: string }): BrandCompetitor => ({
+            name: c.name,
+            url: "",
+            angle: c.description,
+          }),
+        ),
+        keywords: m.highIntentKeywords ?? brand.keywords,
+        creativeAngles: m.creativeAngles ?? brand.creativeAngles,
+        tone: (m.toneOfVoice || "Professional").toLowerCase() || brand.tone,
+        analyzedAt: new Date().toISOString(),
+        sources: m.sourcesRead ?? brand.sources,
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Error analyzing website")
+      setBrand(next)
+      saveBrand(next)
+      toast.success(`Analysed ${next.businessName}. Growzzy now knows your business.`)
+    } catch (e: any) {
+      toast.error(e?.message || "Couldn't analyse that website.")
     } finally {
       setAnalyzing(false)
     }
   }
 
-  // Save Brand Context Action
-  const handleSaveBrandContext = async () => {
-    setSaving(true)
-    setErrorMsg("")
-    try {
-      const fullContext = {
-        websiteUrl,
-        businessName,
-        industry,
-        businessModel,
-        defaultLandingPage,
-        whatYouSell,
-        productDescription,
-        positioning,
-        idealCustomer,
-        differentiators,
-        audienceSegments,
-        competitors,
-        highIntentKeywords,
-        creativeAngles,
-        selectedTone,
-        selectedColor,
-        sourcesRead,
-        lastAnalysed,
-      }
+  const save = () => {
+    saveBrand(brand)
+    toast.success("Brand context saved. Growzzy uses it on every campaign.")
+  }
 
-      localStorage.setItem("growzzy_brand_context_full", JSON.stringify(fullContext))
-      localStorage.setItem("growzzy_brand_name", businessName)
-      localStorage.setItem("growzzy_brand_offer", whatYouSell)
-
-      // Persist to Workspace DB
-      await fetch("/api/workspaces", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: businessName,
-          websiteUrl,
-          industry,
-          productDescription,
-          toneOfVoice: selectedTone,
-          defaultLandingPageUrl: defaultLandingPage,
-        }),
-      })
-
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Failed to save brand context")
-    } finally {
-      setSaving(false)
+  const exportReport = async () => {
+    if (!brandIsReady(brand)) {
+      toast.error("Analyse or complete your brand before exporting a report.")
+      return
     }
+    const { jsPDF } = await import("jspdf")
+    const pdf = new jsPDF({ unit: "pt", format: "a4" })
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margin = 48
+    const contentWidth = pageWidth - margin * 2
+    let y = 54
+
+    const ensureSpace = (height: number) => {
+      if (y + height <= pageHeight - 48) return
+      pdf.addPage()
+      y = 54
+    }
+    const line = (text: string, size = 10, color: [number, number, number] = [16, 22, 31]) => {
+      pdf.setFont("helvetica", "normal")
+      pdf.setFontSize(size)
+      pdf.setTextColor(...color)
+      const rows = pdf.splitTextToSize(text || "Not provided", contentWidth) as string[]
+      ensureSpace(rows.length * (size + 4))
+      pdf.text(rows, margin, y)
+      y += rows.length * (size + 4) + 5
+    }
+    const heading = (text: string) => {
+      ensureSpace(34)
+      y += 10
+      pdf.setFont("helvetica", "bold")
+      pdf.setFontSize(14)
+      pdf.setTextColor(31, 87, 245)
+      pdf.text(text, margin, y)
+      y += 20
+    }
+
+    pdf.setFillColor(31, 87, 245)
+    pdf.rect(0, 0, pageWidth, 10, "F")
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(23)
+    pdf.setTextColor(16, 22, 31)
+    pdf.text(`${brand.businessName} — Brand Research`, margin, y)
+    y += 22
+    line(
+      `Prepared by Growzzy OS${brand.analyzedAt ? ` · Research updated ${new Date(brand.analyzedAt).toLocaleDateString()}` : ""}`,
+      9,
+      [90, 101, 119],
+    )
+
+    heading("Business model")
+    line(`Industry: ${brand.industry}`)
+    line(`Model: ${brand.businessModel}`)
+    line(`Offer: ${brand.whatTheySell}`)
+    line(brand.productDescription)
+    line(`Positioning: ${brand.positioning}`)
+
+    heading("Ideal customer profile")
+    line(brand.audience)
+    brand.segments.forEach((segment, index) => {
+      line(`${index + 1}. ${segment.segment}`, 11)
+      line(`Pains: ${segment.pains}`, 9, [90, 101, 119])
+      line(`Buying triggers: ${segment.triggers}`, 9, [90, 101, 119])
+    })
+
+    heading("Competitors")
+    brand.competitors.forEach((competitor, index) => {
+      line(`${index + 1}. ${competitor.name}${competitor.url ? ` — ${competitor.url}` : ""}`, 10)
+      if (competitor.angle) line(competitor.angle, 9, [90, 101, 119])
+    })
+
+    heading("High-intent keywords")
+    line(brand.keywords.length ? brand.keywords.join(" · ") : "No keywords recorded.")
+
+    heading("Citations and sources")
+    ;(brand.sources ?? []).forEach((source, index) => line(`${index + 1}. ${source}`, 9))
+    if (!brand.sources?.length) line("No source citations were recorded for this profile.", 9)
+
+    const safeName = (brand.businessName || "brand").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    pdf.save(`${safeName}-research-report.pdf`)
+    toast.success("Brand research PDF downloaded.")
   }
 
-  // Export PDF / Print
-  const handleExportPDF = () => {
-    window.print()
-  }
+  const tone = tones.find((t) => t.value === brand.tone) ?? tones[0]
+  const palette = palettes.find((p) => p.name === brand.palette.name) ?? palettes[0]
 
-  // Helper Adders & Removers
-  const addDifferentiator = () => {
-    if (!newDiffInput.trim()) return
-    setDifferentiators([...differentiators, newDiffInput.trim()])
-    setNewDiffInput("")
-  }
-
-  const removeDifferentiator = (index: number) => {
-    setDifferentiators(differentiators.filter((_, i) => i !== index))
-  }
-
-  const addKeyword = () => {
-    if (!newKeywordInput.trim()) return
-    setHighIntentKeywords([...highIntentKeywords, newKeywordInput.trim()])
-    setNewKeywordInput("")
-  }
-
-  const removeKeyword = (index: number) => {
-    setHighIntentKeywords(highIntentKeywords.filter((_, i) => i !== index))
-  }
-
-  const addAngle = () => {
-    if (!newAngleInput.trim()) return
-    setCreativeAngles([...creativeAngles, newAngleInput.trim()])
-    setNewAngleInput("")
-  }
-
-  const removeAngle = (index: number) => {
-    setCreativeAngles(creativeAngles.filter((_, i) => i !== index))
-  }
-
-  const addAudienceSegment = () => {
-    const newId = String(audienceSegments.length + 1)
-    setAudienceSegments([
-      ...audienceSegments,
-      {
-        id: newId,
-        title: "New Target Audience Segment",
-        painPoints: "Describe the primary pain points, challenges, and motivations for this customer segment.",
-      },
-    ])
-  }
-
-  const removeAudienceSegment = (id: string) => {
-    setAudienceSegments(audienceSegments.filter((s) => s.id !== id))
-  }
-
-  const addCompetitor = () => {
-    const newId = String(competitors.length + 1)
-    setCompetitors([
-      ...competitors,
-      {
-        id: newId,
-        name: "Competitor Brand",
-        description: "Competitor positioning and difference in market strategy.",
-      },
-    ])
-  }
-
-  const removeCompetitor = (id: string) => {
-    setCompetitors(competitors.filter((c) => c.id !== id))
+  if (!hydrated) {
+    return (
+      <Shell>
+        <PageHeader
+          title="My Brand"
+          subtitle="Growzzy reads your live website so it never has to ask what your business is."
+        />
+      </Shell>
+    )
   }
 
   return (
     <Shell>
-      <div className="max-w-[1340px] mx-auto pb-20 space-y-6">
-        {/* Top Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-          <div>
-            <h1 className="text-[26px] font-bold text-[#111827] tracking-tight">My Brand</h1>
-            <p className="text-[13px] text-[#6B7280] mt-0.5">
-              Growzzy reads your live website so it never has to ask what your business is.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportPDF}
-              className="h-10 px-4 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-2 transition-colors shadow-2xs"
-            >
-              <Download size={15} className="text-[#6B7280]" />
+      <PageHeader
+        title="My Brand"
+        subtitle="Growzzy reads your live website so it never has to ask what your business is."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportReport} className="gap-1.5">
+              <Download className="h-4 w-4" />
               Export PDF
-            </button>
-            <button
-              onClick={handleSaveBrandContext}
-              disabled={saving}
-              className="h-10 px-5 bg-[#1F57F5] rounded-[10px] text-[13px] font-bold text-white hover:bg-[#1849D6] flex items-center gap-2 transition-colors shadow-2xs"
-            >
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-              {saved ? "Saved successfully!" : "Save brand context"}
-            </button>
+            </Button>
+            <Button onClick={save} className="gap-1.5">
+              <Check className="h-4 w-4" />
+              Save brand context
+            </Button>
           </div>
-        </div>
+        }
+      />
 
-        {errorMsg && (
-          <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-[10px]">
-            {errorMsg}
-          </div>
-        )}
-
-        {/* 2-Column Main Layout */}
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-          {/* Left Main Form Column */}
-          <div className="flex-1 w-full space-y-6">
-            {/* 1. Website analysis Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
-              <h3 className="text-[16px] font-bold text-[#111827]">Website analysis</h3>
-
-              <div className="space-y-2">
-                <label className="block text-[12px] font-semibold text-[#374151]">Your website URL</label>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <div className="relative flex-1 w-full">
-                    <Globe size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                    <input
-                      type="url"
-                      value={websiteUrl}
-                      onChange={(e) => setWebsiteUrl(e.target.value)}
-                      placeholder="https://yourwebsite.com"
-                      className="w-full h-11 pl-10 pr-3.5 bg-white border border-[#D1D5DB] rounded-[10px] text-[13.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                    />
-                  </div>
-                  <button
-                    onClick={handleDeepAnalyse}
-                    disabled={analyzing || !websiteUrl}
-                    className="w-full sm:w-auto h-11 px-5 bg-[#1F57F5] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#1849D6] transition-colors flex items-center justify-center gap-2 shrink-0 shadow-2xs"
-                  >
-                    {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
-                    {analyzing ? "Analyzing live website…" : "Deep-analyse my business"}
-                  </button>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          <SectionCard title="Website analysis">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <Label className="text-[12px]">Your website URL</Label>
+                <div className="relative mt-1">
+                  <Globe className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="yourbrand.com"
+                    className="pl-8"
+                  />
                 </div>
-                <p className="text-[12px] text-[#6B7280] leading-relaxed pt-1">
-                  Growzzy reads your real pages, searches the live web for your category and competitors, then builds the brand context every campaign is written from.
-                </p>
-                <p className="text-[11px] text-[#9CA3AF] pt-1">
-                  Last analysed {lastAnalysed} · {sourcesRead.length} live sources read
-                </p>
               </div>
+              <Button onClick={runAnalysis} disabled={analyzing} className="gap-1.5">
+                {analyzing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {analyzing ? "Analysing your business…" : "Deep-analyse my business"}
+              </Button>
             </div>
-
-            {/* 2. Business Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
-              <h3 className="text-[16px] font-bold text-[#111827]">Business</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Business name</label>
-                  <input
-                    type="text"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Industry</label>
-                  <input
-                    type="text"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Business model</label>
-                  <input
-                    type="text"
-                    value={businessModel}
-                    onChange={(e) => setBusinessModel(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Default landing page</label>
-                  <input
-                    type="url"
-                    value={defaultLandingPage}
-                    onChange={(e) => setDefaultLandingPage(e.target.value)}
-                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                </div>
+            <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
+              Growzzy reads your real pages, searches the live web for your category and
+              competitors, then builds the brand context every campaign is written from.
+            </p>
+            {!ready && !analyzing && (
+              <div className="mt-3 rounded-[10px] border border-border bg-[#FBF0DA]/50 p-3 text-[12.5px] text-foreground">
+                Brand context is empty — the AI will keep asking you to set this up until it&apos;s
+                filled.
               </div>
+            )}
+            {brand.analyzedAt && (
+              <div className="mt-3 text-[11.5px] text-muted-foreground">
+                Last analysed {new Date(brand.analyzedAt).toLocaleString()}
+                {brand.sources?.length ? ` · ${brand.sources.length} live sources read` : ""}
+              </div>
+            )}
+          </SectionCard>
 
+          <SectionCard title="Business">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">What you sell</label>
-                <textarea
+                <Label className="text-[12px]">Business name</Label>
+                <Input
+                  value={brand.businessName}
+                  onChange={(e) => set("businessName")(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-[12px]">Industry</Label>
+                <Input
+                  value={brand.industry}
+                  onChange={(e) => set("industry")(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-[12px]">Business model</Label>
+                <Input
+                  value={brand.businessModel}
+                  onChange={(e) => set("businessModel")(e.target.value)}
+                  className="mt-1"
+                  placeholder="e.g. D2C ecommerce, B2B SaaS"
+                />
+              </div>
+              <div>
+                <Label className="text-[12px]">Default landing page</Label>
+                <Input
+                  value={brand.defaultLandingPage}
+                  onChange={(e) => set("defaultLandingPage")(e.target.value)}
+                  className="mt-1"
+                  placeholder="https://"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-[12px]">What you sell</Label>
+                <Textarea
                   rows={2}
-                  value={whatYouSell}
-                  onChange={(e) => setWhatYouSell(e.target.value)}
-                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
+                  value={brand.whatTheySell}
+                  onChange={(e) => set("whatTheySell")(e.target.value)}
+                  className="mt-1"
                 />
               </div>
-
-              <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Product description</label>
-                <textarea
-                  rows={4}
-                  value={productDescription}
-                  onChange={(e) => setProductDescription(e.target.value)}
-                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Positioning</label>
-                <textarea
+              <div className="sm:col-span-2">
+                <Label className="text-[12px]">Product description</Label>
+                <Textarea
                   rows={3}
-                  value={positioning}
-                  onChange={(e) => setPositioning(e.target.value)}
-                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
+                  value={brand.productDescription}
+                  onChange={(e) => set("productDescription")(e.target.value)}
+                  className="mt-1"
                 />
               </div>
-
-              <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Ideal customer</label>
-                <input
-                  type="text"
-                  value={idealCustomer}
-                  onChange={(e) => setIdealCustomer(e.target.value)}
-                  className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+              <div className="sm:col-span-2">
+                <Label className="text-[12px]">Positioning</Label>
+                <Textarea
+                  rows={2}
+                  value={brand.positioning}
+                  onChange={(e) => set("positioning")(e.target.value)}
+                  className="mt-1"
                 />
               </div>
-
-              {/* Differentiators */}
-              <div className="space-y-2 pt-2">
-                <label className="block text-[12px] font-semibold text-[#374151]">Differentiators</label>
-                <div className="flex flex-wrap gap-2">
-                  {differentiators.map((d, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-full flex items-center gap-1.5 border border-[#E5E7EB]"
-                    >
-                      {d}
-                      <button onClick={() => removeDifferentiator(i)} className="text-[#9CA3AF] hover:text-[#111827]">
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 pt-1.5">
-                  <input
-                    type="text"
-                    value={newDiffInput}
-                    onChange={(e) => setNewDiffInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addDifferentiator()}
-                    placeholder="Add a differentiator and press Enter"
-                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                  <button
-                    onClick={addDifferentiator}
-                    type="button"
-                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                </div>
+              <div className="sm:col-span-2">
+                <Label className="text-[12px]">Ideal customer</Label>
+                <Input
+                  value={brand.audience}
+                  onChange={(e) => set("audience")(e.target.value)}
+                  className="mt-1"
+                />
               </div>
             </div>
+            <div className="mt-4">
+              <div className="mb-1.5 text-[12px] font-medium text-foreground">Differentiators</div>
+              <ChipEditor
+                items={brand.differentiators}
+                onChange={set("differentiators")}
+                placeholder="Add a differentiator and press Enter"
+              />
+            </div>
+          </SectionCard>
 
-            {/* 3. Audience Segments Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[16px] font-bold text-[#111827]">Audience segments</h3>
-                <button
-                  onClick={addAudienceSegment}
-                  className="h-8 px-3.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-1.5"
-                >
-                  <Plus size={13} /> Add segment
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {audienceSegments.map((segment) => (
-                  <div key={segment.id} className="p-4 bg-[#F9FAFB] rounded-[12px] border border-[#E5E7EB] space-y-2 relative">
-                    <div className="flex items-center justify-between">
-                      <input
-                        type="text"
-                        value={segment.title}
+          <SectionCard
+            title="Audience segments"
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() =>
+                  set("segments")([...brand.segments, { segment: "", pains: "", triggers: "" }])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add segment
+              </Button>
+            }
+          >
+            {brand.segments.length === 0 ? (
+              <p className="text-[12.5px] text-muted-foreground">
+                No segments yet — analyse your website or add one manually.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {brand.segments.map((seg, i) => (
+                  <div key={i} className="rounded-[10px] border border-border p-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={seg.segment}
                         onChange={(e) =>
-                          setAudienceSegments(
-                            audienceSegments.map((s) => (s.id === segment.id ? { ...s, title: e.target.value } : s))
+                          set("segments")(
+                            brand.segments.map((x, xi) =>
+                              xi === i ? { ...x, segment: e.target.value } : x,
+                            ),
                           )
                         }
-                        className="font-bold text-[13.5px] text-[#111827] bg-transparent border-b border-transparent focus:border-[#1F57F5] outline-none flex-1 mr-2"
+                        placeholder="Segment name"
+                        className="h-8 text-[12.5px] font-medium"
                       />
                       <button
-                        onClick={() => removeAudienceSegment(segment.id)}
-                        className="text-[#9CA3AF] hover:text-red-500 transition-colors p-1"
+                        type="button"
+                        aria-label="Remove segment"
+                        onClick={() =>
+                          set("segments")(brand.segments.filter((_, xi) => xi !== i))
+                        }
+                        className="shrink-0 text-muted-foreground hover:text-[#D3564C]"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <textarea
-                      rows={3}
-                      value={segment.painPoints}
+                    <Textarea
+                      rows={2}
+                      value={seg.pains}
                       onChange={(e) =>
-                        setAudienceSegments(
-                          audienceSegments.map((s) => (s.id === segment.id ? { ...s, painPoints: e.target.value } : s))
+                        set("segments")(
+                          brand.segments.map((x, xi) =>
+                            xi === i ? { ...x, pains: e.target.value } : x,
+                          ),
                         )
                       }
-                      className="w-full p-2.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#374151] leading-relaxed outline-none focus:border-[#1F57F5]"
+                      placeholder="Pains"
+                      className="mt-2 text-[12.5px]"
+                    />
+                    <Textarea
+                      rows={2}
+                      value={seg.triggers}
+                      onChange={(e) =>
+                        set("segments")(
+                          brand.segments.map((x, xi) =>
+                            xi === i ? { ...x, triggers: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      placeholder="Buying triggers"
+                      className="mt-2 text-[12.5px]"
                     />
                   </div>
                 ))}
               </div>
-            </div>
+            )}
+          </SectionCard>
 
-            {/* 4. Competitors Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[16px] font-bold text-[#111827]">Competitors</h3>
-                <button
-                  onClick={addCompetitor}
-                  className="h-8 px-3.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-1.5"
-                >
-                  <Plus size={13} /> Add competitor
-                </button>
-              </div>
-
-              {competitors.length === 0 ? (
-                <p className="text-[12.5px] text-[#9CA3AF] py-2">
-                  No competitors yet — analyse your website or add one manually.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {competitors.map((comp) => (
-                    <div key={comp.id} className="p-3.5 bg-[#F9FAFB] rounded-[10px] border border-[#E5E7EB] flex items-start justify-between gap-3">
-                      <div className="flex-1 space-y-1">
-                        <input
-                          type="text"
-                          value={comp.name}
-                          onChange={(e) =>
-                            setCompetitors(competitors.map((c) => (c.id === comp.id ? { ...c, name: e.target.value } : c)))
-                          }
-                          className="font-bold text-[13px] text-[#111827] bg-transparent border-b border-transparent focus:border-[#1F57F5] outline-none w-full"
-                        />
-                        <textarea
-                          rows={2}
-                          value={comp.description}
-                          onChange={(e) =>
-                            setCompetitors(
-                              competitors.map((c) => (c.id === comp.id ? { ...c, description: e.target.value } : c))
-                            )
-                          }
-                          className="w-full p-2 bg-white border border-[#D1D5DB] rounded-[6px] text-[12px] text-[#374151]"
-                        />
-                      </div>
+          <SectionCard
+            title="Competitors"
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() =>
+                  set("competitors")([...brand.competitors, { name: "", url: "", angle: "" }])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add competitor
+              </Button>
+            }
+          >
+            {brand.competitors.length === 0 ? (
+              <p className="text-[12.5px] text-muted-foreground">
+                No competitors yet — analyse your website or add one manually.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {brand.competitors.map((c, i) => (
+                  <div key={i} className="rounded-[10px] border border-border p-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={c.name}
+                        onChange={(e) =>
+                          set("competitors")(
+                            brand.competitors.map((x, xi) =>
+                              xi === i ? { ...x, name: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        placeholder="Competitor name"
+                        className="h-8 text-[12.5px] font-medium"
+                      />
+                      <Input
+                        value={c.url}
+                        onChange={(e) =>
+                          set("competitors")(
+                            brand.competitors.map((x, xi) =>
+                              xi === i ? { ...x, url: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        placeholder="https://"
+                        className="h-8 text-[12.5px]"
+                      />
+                      {c.url && (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="shrink-0 text-primary"
+                          aria-label={`Visit ${c.name}`}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                       <button
-                        onClick={() => removeCompetitor(comp.id)}
-                        className="text-[#9CA3AF] hover:text-red-500 p-1"
+                        type="button"
+                        aria-label="Remove competitor"
+                        onClick={() =>
+                          set("competitors")(brand.competitors.filter((_, xi) => xi !== i))
+                        }
+                        className="shrink-0 text-muted-foreground hover:text-[#D3564C]"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 5. Search & Creative Signals Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
-              <h3 className="text-[16px] font-bold text-[#111827]">Search & creative signals</h3>
-
-              {/* Keywords */}
-              <div className="space-y-2">
-                <label className="block text-[12px] font-semibold text-[#374151]">High-intent keywords</label>
-                <div className="flex flex-wrap gap-2">
-                  {highIntentKeywords.map((kw, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-full flex items-center gap-1.5 border border-[#E5E7EB]"
-                    >
-                      {kw}
-                      <button onClick={() => removeKeyword(i)} className="text-[#9CA3AF] hover:text-[#111827]">
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 pt-1.5">
-                  <input
-                    type="text"
-                    value={newKeywordInput}
-                    onChange={(e) => setNewKeywordInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addKeyword()}
-                    placeholder="Add a keyword and press Enter"
-                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                  <button
-                    onClick={addKeyword}
-                    type="button"
-                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Creative Angles */}
-              <div className="space-y-2 pt-2 border-t border-[#F3F4F6]">
-                <label className="block text-[12px] font-semibold text-[#374151]">Creative angles</label>
-                <div className="flex flex-wrap gap-2">
-                  {creativeAngles.map((angle, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1.5 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-[10px] flex items-center gap-2 border border-[#E5E7EB] max-w-full"
-                    >
-                      <span className="truncate">{angle}</span>
-                      <button onClick={() => removeAngle(i)} className="text-[#9CA3AF] hover:text-[#111827] shrink-0">
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 pt-1.5">
-                  <input
-                    type="text"
-                    value={newAngleInput}
-                    onChange={(e) => setNewAngleInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addAngle()}
-                    placeholder="Add a creative angle and press Enter"
-                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
-                  />
-                  <button
-                    onClick={addAngle}
-                    type="button"
-                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 6. Voice & Colors Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
-              <h3 className="text-[16px] font-bold text-[#111827]">Voice & colors</h3>
-
-              {/* Tone of Voice */}
-              <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-2.5">Tone of voice</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  {TONES.map((tone) => (
-                    <button
-                      key={tone.id}
-                      type="button"
-                      onClick={() => setSelectedTone(tone.name)}
-                      className={cn(
-                        "p-3.5 rounded-[12px] border text-left transition-all",
-                        selectedTone === tone.name
-                          ? "bg-[#EAF0FE] border-[#1F57F5] ring-2 ring-[#1F57F5]/20 shadow-xs"
-                          : "bg-white border-[#E5E7EB] hover:border-[#D1D5DB]"
-                      )}
-                    >
-                      <p className="text-[13px] font-bold text-[#111827]">{tone.name}</p>
-                      <p className="text-[11px] text-[#6B7280] mt-1 leading-snug">{tone.example}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Color Palettes */}
-              <div className="pt-2 border-t border-[#F3F4F6]">
-                <label className="block text-[12px] font-semibold text-[#374151] mb-2.5">Palette theme</label>
-                <div className="flex items-center gap-3">
-                  {COLOR_PALETTES.map((pal) => (
-                    <button
-                      key={pal.id}
-                      type="button"
-                      onClick={() => setSelectedColor(pal.name)}
-                      className={cn(
-                        "flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-semibold transition-all",
-                        selectedColor === pal.name
-                          ? "border-[#1F57F5] bg-[#EAF0FE] text-[#1F57F5] ring-1 ring-[#1F57F5]"
-                          : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-                      )}
-                    >
-                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: pal.hex }} />
-                      {pal.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Sidebar Column */}
-          <div className="w-full lg:w-[380px] space-y-6 shrink-0 lg:sticky lg:top-6">
-            {/* Live Preview Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 space-y-4 shadow-2xs">
-              <h3 className="text-[15px] font-bold text-[#111827]">Live preview</h3>
-
-              {/* Header profile */}
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold shadow-2xs">
-                  {businessName.charAt(0).toUpperCase() || "M"}
-                </div>
-                <p className="text-[13px] font-bold text-[#111827]">{businessName || "MARKITX"}</p>
-              </div>
-
-              {/* Ad Card Mockup */}
-              <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4 space-y-2.5 shadow-xs">
-                <div>
-                  <span className="text-[10px] font-extrabold text-[#6B7280] uppercase tracking-wider block mb-0.5">
-                    Sponsored
-                  </span>
-                  <h4 className="text-[13.5px] font-bold text-[#111827]">
-                    {businessName || "MARKITX"} — {selectedTone} ad
-                  </h4>
-                </div>
-
-                <p className="text-[12px] text-[#4B5563] leading-relaxed line-clamp-6">
-                  {productDescription || whatYouSell || "AI infrastructure solutions, including multi-agent systems, automated AI workflows, and custom AI agents."}
-                </p>
-
-                <button className="h-7 px-4 bg-[#1F57F5] text-white text-[11.5px] font-bold rounded-full hover:bg-[#1849D6] transition-colors flex items-center gap-1.5">
-                  <Zap size={11} /> Shop now
-                </button>
-              </div>
-
-              <p className="text-[11.5px] text-[#9CA3AF] leading-relaxed">
-                Growzzy only advertises on Google Ads and Meta Ads — this is how your ads will feel.
-              </p>
-            </div>
-
-            {/* Sources read Card */}
-            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 space-y-3 shadow-2xs">
-              <h3 className="text-[15px] font-bold text-[#111827]">Sources read</h3>
-              <div className="space-y-2">
-                {sourcesRead.map((source, i) => (
-                  <a
-                    key={i}
-                    href={source}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[12px] text-[#1F57F5] hover:underline flex items-center gap-1.5 truncate"
-                  >
-                    <ExternalLink size={12} className="shrink-0 text-[#9CA3AF]" />
-                    <span className="truncate">{source}</span>
-                  </a>
+                    <Textarea
+                      rows={2}
+                      value={c.angle}
+                      onChange={(e) =>
+                        set("competitors")(
+                          brand.competitors.map((x, xi) =>
+                            xi === i ? { ...x, angle: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      placeholder="Their angle / how they position"
+                      className="mt-2 text-[12.5px]"
+                    />
+                  </div>
                 ))}
               </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Search & creative signals">
+            <div>
+              <div className="mb-1.5 text-[12px] font-medium text-foreground">
+                High-intent keywords
+              </div>
+              <ChipEditor
+                items={brand.keywords}
+                onChange={set("keywords")}
+                placeholder="Add a keyword and press Enter"
+              />
             </div>
-          </div>
+            <div className="mt-4">
+              <div className="mb-1.5 text-[12px] font-medium text-foreground">Creative angles</div>
+              <ChipEditor
+                items={brand.creativeAngles}
+                onChange={set("creativeAngles")}
+                placeholder="Add a creative angle and press Enter"
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Voice & colors">
+            <Label className="text-[12px]">Tone of voice</Label>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {tones.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => set("tone")(t.value)}
+                  className={cn(
+                    "rounded-[10px] border p-2.5 text-left transition-colors",
+                    brand.tone === t.value
+                      ? "border-primary bg-[#EAF0FE]"
+                      : "border-border hover:border-primary/30",
+                  )}
+                >
+                  <div className="text-[12.5px] font-semibold">{t.label}</div>
+                  <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                    {t.sample}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {palettes.map((p) => (
+                <button
+                  key={p.name}
+                  onClick={() => set("palette")(p)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] transition-colors",
+                    palette.name === p.name
+                      ? "border-primary bg-[#EAF0FE] text-primary"
+                      : "border-border bg-background hover:border-primary/30",
+                  )}
+                >
+                  <span className="h-4 w-4 rounded-full" style={{ background: p.primary }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </SectionCard>
         </div>
+
+        <aside className="sticky top-4">
+          <SectionCard title="Live preview">
+            <div className="overflow-hidden rounded-[14px] border border-border">
+              <div
+                className="flex h-16 items-center gap-3 px-4"
+                style={{ background: palette.accent }}
+              >
+                <div
+                  className="grid h-8 w-8 place-items-center rounded-lg text-[13px] font-bold text-white"
+                  style={{ background: palette.primary }}
+                >
+                  {(brand.businessName || "G").slice(0, 1).toUpperCase()}
+                </div>
+                <div className="text-[13.5px] font-semibold text-foreground">
+                  {brand.businessName || "Your brand"}
+                </div>
+              </div>
+              <div className="bg-background p-4">
+                <div className="mb-1 text-[11px] text-muted-foreground">Sponsored</div>
+                <div
+                  className="mb-1 text-[15px] font-medium leading-tight"
+                  style={{ color: palette.primary }}
+                >
+                  {brand.businessName
+                    ? `${brand.businessName} — ${tone.label} ad`
+                    : "Your headline appears here"}
+                </div>
+                <div className="text-[12.5px] text-foreground/80">
+                  {brand.productDescription || tone.sample}
+                </div>
+                <button
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium text-white"
+                  style={{ background: palette.primary }}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Shop now
+                </button>
+              </div>
+            </div>
+            <p className="mt-3 text-[11.5px] text-muted-foreground">
+              Growzzy only advertises on Google Ads and Meta Ads — this is how your ads will feel.
+            </p>
+            <div className="mt-3">
+              <Link
+                href="/dashboard/campaigns/new"
+                className="text-[12.5px] font-medium text-primary hover:underline"
+              >
+                Open campaign agent →
+              </Link>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <StatusPill variant={ready ? "success" : "warn"}>
+                {ready ? "Brand ready" : "Brand missing"}
+              </StatusPill>
+            </div>
+          </SectionCard>
+
+          {brand.sources?.length ? (
+            <SectionCard title="Sources read" className="mt-4">
+              <ul className="space-y-1">
+                {brand.sources.slice(0, 10).map((s) => (
+                  <li key={s} className="truncate text-[11.5px]">
+                    <a
+                      href={s}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-primary hover:underline"
+                    >
+                      {s}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          ) : null}
+        </aside>
       </div>
     </Shell>
   )
