@@ -4,7 +4,7 @@ import { authConfig } from "./auth.config"
 import { isAllowedBrowserMutation } from "./lib/request-origin"
 
 const { auth } = NextAuth(authConfig)
-const publicRoutes = ["/", "/privacy", "/terms", "/compliance"]
+const publicRoutes = ["/", "/privacy", "/terms", "/compliance", "/api/demo-mode"]
 
 export default auth((req) => {
   const isLoggedIn = Boolean(req.auth)
@@ -34,6 +34,11 @@ export default auth((req) => {
   }
 
   if (isDashboardPage && !isLoggedIn && !isDemoMode) {
+    if (process.env.NODE_ENV !== "production") {
+      const demoUrl = new URL("/api/demo-mode", req.nextUrl)
+      demoUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search)
+      return NextResponse.redirect(demoUrl)
+    }
     const loginUrl = new URL("/auth", req.nextUrl)
     loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search)
     return NextResponse.redirect(loginUrl)
