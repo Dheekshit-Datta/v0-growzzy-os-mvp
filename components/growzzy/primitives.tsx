@@ -15,7 +15,7 @@ export function SectionCard({
   padding?: boolean;
 }) {
   return (
-    <section className={cn("rounded-[14px] border border-border bg-card shadow-[0_1px_2px_rgba(16,22,31,0.03),0_1px_1px_rgba(16,22,31,0.02)]", className)}>
+    <section className={cn("card-surface", className)}>
       {(title || action) && (
         <header className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border">
           <h3 className="text-[16px] font-semibold text-foreground">{title}</h3>
@@ -43,7 +43,7 @@ export function EmptyState({
   return (
     <div className={cn("flex flex-col items-center justify-center py-12 px-6 text-center", className)}>
       {icon && (
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#EAF0FE] text-[#1F57F5]">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary-tint text-primary">
           {icon}
         </div>
       )}

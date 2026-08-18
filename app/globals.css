@@ -9,6 +9,8 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-tint: var(--primary-tint);
   --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -20,20 +22,26 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-danger: var(--danger);
   --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
   --color-surface: var(--surface);
   --color-surface-soft: var(--surface-soft);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-brand-soft: var(--brand-soft);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-canvas: var(--canvas);
   --color-meta: var(--meta);
   --color-google: var(--google);
   --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-border-hover: var(--border-hover);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -42,6 +50,7 @@
   --color-muted-200: var(--muted-200);
   --color-muted-600: var(--muted-600);
 
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-satoshi: "Satoshi", "satoshi Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, Arial, sans-serif;
 
   --shadow-xs: 0 1px 2px rgba(30,30,28,0.04);
@@ -118,10 +127,20 @@
   /* Functional Status Colors */
   --success: var(--status-good-text);
   --success-bg: var(--status-good-bg);
+  --warn: #B8892B;
+  --warn-bg: #FBF0DA;
   --warning: var(--status-warn-text);
   --warning-bg: var(--status-warn-bg);
   --danger: var(--status-bad-text);
   --danger-bg: var(--status-bad-bg);
+  --info: #4B6584;
+  --info-bg: #EEF1F5;
+
+  /* Lovable brand-aligned extras */
+  --primary-tint: #EAF0FE;
+  --canvas: #F6F7F9;
+  --input: #E9EBEF;
+  --ring: #1F57F5;
 
   /* Neutrals & Surfaces */
   --background: var(--bg-app);
@@ -517,4 +536,24 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   position: relative;
   overflow: hidden;
+}
+
+/* Lovable-style utilities — match the design tokens used in growzzy primitives */
+@utility group-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+@utility card-surface {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 22, 31, 0.03), 0 1px 1px rgba(16, 22, 31, 0.02);
+}
+
+@utility hairline {
+  border-color: var(--border);
 }

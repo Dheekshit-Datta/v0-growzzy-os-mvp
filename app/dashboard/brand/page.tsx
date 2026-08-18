@@ -80,7 +80,7 @@ function ChipEditor({
               type="button"
               aria-label={`Remove ${t}`}
               onClick={() => onChange(items.filter((x) => x !== t))}
-              className="text-muted-foreground hover:text-[#D3564C]"
+              className="text-muted-foreground hover:text-danger"
             >
               <X className="h-3 w-3" />
             </button>
@@ -346,7 +346,7 @@ export default function BrandPage() {
               competitors, then builds the brand context every campaign is written from.
             </p>
             {!ready && !analyzing && (
-              <div className="mt-3 rounded-[10px] border border-border bg-[#FBF0DA]/50 p-3 text-[12.5px] text-foreground">
+              <div className="mt-3 rounded-[10px] border border-border bg-warn-bg/50 p-3 text-[12.5px] text-foreground">
                 Brand context is empty — the AI will keep asking you to set this up until it&apos;s
                 filled.
               </div>
@@ -484,7 +484,7 @@ export default function BrandPage() {
                         onClick={() =>
                           set("segments")(brand.segments.filter((_, xi) => xi !== i))
                         }
-                        className="shrink-0 text-muted-foreground hover:text-[#D3564C]"
+                        className="shrink-0 text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -587,7 +587,7 @@ export default function BrandPage() {
                         onClick={() =>
                           set("competitors")(brand.competitors.filter((_, xi) => xi !== i))
                         }
-                        className="shrink-0 text-muted-foreground hover:text-[#D3564C]"
+                        className="shrink-0 text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

@@ -14,16 +14,16 @@ type Variant =
   | "primary";
 
 const styles: Record<Variant, string> = {
-  live: "bg-[#E6F4EC] text-[#2E9E5B]",
-  success: "bg-[#E6F4EC] text-[#2E9E5B]",
-  paused: "bg-[#FBF0DA] text-[#B8892B]",
-  warn: "bg-[#FBF0DA] text-[#B8892B]",
-  learning: "bg-[#EEF1F5] text-[#4B6584]",
-  info: "bg-[#EEF1F5] text-[#4B6584]",
-  rejected: "bg-[#FBE7E5] text-[#D3564C]",
-  danger: "bg-[#FBE7E5] text-[#D3564C]",
+  live: "bg-success-bg text-success",
+  success: "bg-success-bg text-success",
+  paused: "bg-warn-bg text-warn",
+  warn: "bg-warn-bg text-warn",
+  learning: "bg-info-bg text-info",
+  info: "bg-info-bg text-info",
+  rejected: "bg-danger-bg text-danger",
+  danger: "bg-danger-bg text-danger",
   draft: "bg-muted text-muted-foreground",
-  primary: "bg-[#EAF0FE] text-[#1F57F5]",
+  primary: "bg-primary-tint text-primary",
 };
 
 export function StatusPill({
