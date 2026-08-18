@@ -1,16 +1,15 @@
 const contentSecurityPolicy = [
-  "default-src 'self' http://localhost:* ws://localhost:*",
+  "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'self' http://localhost:*",
-  "frame-src 'self' http://localhost:*",
+  "frame-ancestors 'none'",
   "object-src 'none'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*`,
-  "style-src 'self' 'unsafe-inline' http://localhost:*",
-  "font-src 'self' data: http://localhost:*",
-  "img-src 'self' data: blob: https: http://localhost:*",
-  "media-src 'self' blob: https://d8j0ntlcm91z4.cloudfront.net http://localhost:*",
-  "connect-src 'self' http://localhost:* ws://localhost:* https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: https://d8j0ntlcm91z4.cloudfront.net",
+  "connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ')
@@ -26,15 +25,6 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
-  },
-  async rewrites() {
-    const lovableUrl = process.env.LOVABLE_APP_URL || 'http://localhost:8080'
-    return [
-      {
-        source: '/lovable-app/:path*',
-        destination: `${lovableUrl}/:path*`,
-      },
-    ]
   },
   headers: async () => [
     {
@@ -54,7 +44,7 @@ const nextConfig = {
         },
         {
           key: 'X-Frame-Options',
-          value: 'SAMEORIGIN',
+          value: 'DENY',
         },
         {
           key: 'X-XSS-Protection',
