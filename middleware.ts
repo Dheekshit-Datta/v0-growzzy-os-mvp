@@ -29,15 +29,17 @@ export default auth((req) => {
     return NextResponse.json({ ok: false, error: { code: "CROSS_ORIGIN_MUTATION", message: "Cross-origin mutation blocked." } }, { status: 403 })
   }
 
+  if (pathname === "/" && process.env.NODE_ENV !== "production") {
+    return NextResponse.redirect(new URL("/dashboard", req.nextUrl))
+  }
+
   if (isPublicRoute) {
     return NextResponse.next()
   }
 
   if (isDashboardPage && !isLoggedIn && !isDemoMode) {
     if (process.env.NODE_ENV !== "production") {
-      const demoUrl = new URL("/api/demo-mode", req.nextUrl)
-      demoUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search)
-      return NextResponse.redirect(demoUrl)
+      return NextResponse.next()
     }
     const loginUrl = new URL("/auth", req.nextUrl)
     loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search)
