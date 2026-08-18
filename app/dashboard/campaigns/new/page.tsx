@@ -1,857 +1,379 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Shell } from "@/components/dashboard-v2/shell"
-import CampaignBuilderPage from "../builder/page"
 import {
-  Sparkles, CheckCircle2, Circle, ArrowRight,
-  Image as ImageIcon, Search, Rocket, ChevronDown,
-  RefreshCw,
-  Download, Copy, Wand2, Check, ExternalLink, Loader2, X,
+  Compass, Rocket, Wand2, Megaphone, Paperclip, ChevronDown,
+  CornerDownLeft, Loader2, Sparkles, User, Bot, ArrowRight,
+  RefreshCw, Copy, Check, ExternalLink, Globe
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const CHIPS = [
-  { id: "objective", label: "Ad Objective" },
-  { id: "audience", label: "Target Audience" },
-  { id: "age", label: "Age" },
-  { id: "location", label: "Location" },
-  { id: "budget", label: "Budget" },
-]
-
-const KEYWORD_MAP: Record<string, RegExp> = {
-  objective: /sell|promote|generate leads?|drive|awareness|install/i,
-  audience: /women|men|audience|people|customers?|target/i,
-  age: /\b\d{2}\s*[-–]\s*\d{2}\b|\bage\b|\byears?\b/i,
-  location: /india|us|uk|city|cities|tier|country|region|location/i,
-  budget: /\$|\b\d+\s*(?:\/day|per day|daily|budget)\b|budget/i,
-}
-
-const AD_STYLES = ["Luxury", "Bold", "Minimal", "Festive", "Corporate", "Playful"]
-const ASPECT_RATIOS = [
-  { label: "1:1", desc: "Square" },
-  { label: "4:5", desc: "Portrait" },
-  { label: "16:9", desc: "Landscape" },
-  { label: "9:16", desc: "Story" }
-]
-const GOALS = [
-  { value: "LEADS", label: "Generate leads" },
-  { value: "SALES", label: "Drive sales" },
-  { value: "TRAFFIC", label: "Website traffic" },
-  { value: "AWARENESS", label: "Brand awareness" }
-]
-const PLATFORMS = [
-  { value: "GOOGLE", label: "Google Ads" },
-  { value: "META", label: "Meta Ads" }
-]
-const META_OBJECTIVES = [
-  { value: "AWARENESS", label: "Awareness" },
-  { value: "TRAFFIC", label: "Traffic" },
-  { value: "ENGAGEMENT", label: "Engagement" },
-  { value: "LEADS", label: "Leads" },
-  { value: "SALES", label: "Sales" },
-  { value: "APP_PROMOTION", label: "App Promotion" }
-]
-const META_ENABLED = process.env.NEXT_PUBLIC_ENABLE_META_ADS === "true"
-
-const TEMPLATES = [
-  { label: "Leads", goal: "LEADS", budget: 1, prompt: "Generate local leads for my service. Focus on people ready to book a consultation this week." },
-  { label: "Sales", goal: "SALES", budget: 1, prompt: "Drive sales for my online store. Focus on high-intent shoppers looking for this product now." },
-  { label: "Traffic", goal: "TRAFFIC", budget: 1, prompt: "Send qualified traffic to my website. Focus on people researching this category before buying." },
-  { label: "Local service", goal: "LEADS", budget: 1, prompt: "Get calls and form leads for my local service business from nearby customers." }
-]
-
-type Tab = "campaign" | "boolean" | "creatives" | "launch"
-
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "campaign", label: "Campaign", icon: Sparkles },
-  { id: "boolean", label: "Boolean search", icon: Search },
-  { id: "creatives", label: "AI Creatives", icon: ImageIcon },
-  { id: "launch", label: "Launch Ads", icon: Rocket }
-]
-
-type CreativeVariation = {
-  headline: string
-  body?: string
-  description?: string
-  cta?: string
-  score?: number
-}
-
-type EnhancedBrief = {
-  enhancedText: string
-  productOrOffer: string
-  targetCustomer: string
-  painPoints: string[]
-  differentiators: string[]
-  proofPoints: string[]
-  geography: string
-  goal: string
-  tone: string
-  restrictions: string[]
-  missingQuestions: string[]
-}
-
-async function readJson(res: Response) {
-  try {
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-function CreativeCard({
-  variation,
-  imageUrl,
-  ratio,
-  onPreview,
-}: {
-  variation: CreativeVariation
-  imageUrl: string | null
-  ratio: string
-  onPreview: (url: string) => void
-}) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = () => {
-    navigator.clipboard.writeText([variation.headline, variation.body || variation.description || ""].filter(Boolean).join("\n")).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <div className="sku-card overflow-hidden group">
-      <div
-        className="w-full relative overflow-hidden bg-[#F0F2F5] flex items-center justify-center"
-        style={{
-          aspectRatio: ratio === "16:9" ? "16/9" : ratio === "4:5" ? "4/5" : ratio === "9:16" ? "9/16" : "1/1",
-          maxHeight: 200,
-        }}
-      >
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <button type="button" onClick={() => onPreview(imageUrl)} className="w-full h-full cursor-zoom-in" aria-label={`Preview ${variation.headline}`}>
-            <img src={imageUrl} alt={variation.headline} className="w-full h-full object-cover" />
-          </button>
-        ) : (
-          <div className="flex flex-col items-center gap-1.5 p-4 text-center">
-            <ImageIcon size={20} className="text-[#D1D5DB]" />
-            <p className="text-[10.5px] text-[#9CA3AF]">Image unavailable — copy still generated by AI</p>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-          <button onClick={handleCopy} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] shadow hover:bg-[#F0F2F5] transition-colors">
-            {copied ? <Check size={14} className="text-[#2E9E5B]" /> : <Copy size={14} />}
-          </button>
-          {imageUrl && (
-            <a href={imageUrl} download target="_blank" rel="noreferrer" className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#374151] shadow hover:bg-[#F0F2F5] transition-colors">
-              <Download size={14} />
-            </a>
-          )}
-        </div>
-      </div>
-      <div className="px-3 py-2.5">
-        <p className="text-[12px] font-semibold text-[#111827] leading-snug line-clamp-2">{variation.headline}</p>
-        <p className="text-[10.5px] text-[#9CA3AF] mt-0.5 line-clamp-2">{variation.body || variation.description}</p>
-        {variation.cta && (
-          <span className="inline-flex items-center mt-1.5 text-[10px] font-bold text-[#1F57F5] bg-[#EAF0FE] px-2 py-0.5 rounded-full">{variation.cta}</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function inferLocation(text: string) {
-  const value = text.toLowerCase()
-  if (/\bindia|mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|kolkata|pune\b/.test(value)) return "India"
-  if (/\buk|united kingdom|london|england\b/.test(value)) return "United Kingdom"
-  if (/\bus|usa|united states|america|new york|california\b/.test(value)) return "United States"
-  return ""
+interface ChatMessage {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  timestamp: string
 }
 
 export default function NewCampaignPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("campaign")
-  const [prompt, setPrompt] = useState("")
-  const [budget, setBudget] = useState(50)
-  const [location, setLocation] = useState("")
-  const [landingPageUrl, setLandingPageUrl] = useState("")
-  const [goal, setGoal] = useState("LEADS")
-  const [platform, setPlatform] = useState("GOOGLE")
-  const [metaObjective, setMetaObjective] = useState("")
-  const [detected, setDetected] = useState<Set<string>>(new Set())
-  const [enhancing, setEnhancing] = useState(false)
-  const [enhanceError, setEnhanceError] = useState("")
-  const [enhancedBrief, setEnhancedBrief] = useState<EnhancedBrief | null>(null)
-  const [clarifications, setClarifications] = useState<string[]>([])
-  const [building, setBuilding] = useState(false)
-  const [built, setBuilt] = useState(false)
-  const [campaignPlanId, setCampaignPlanId] = useState<string | null>(null)
-  const [campaignName, setCampaignName] = useState("")
-  const [psychologyProfile, setPsychologyProfile] = useState<any>(null)
-  const [buildError, setBuildError] = useState("")
-
-  // Google connection + workspace brand (real context for AI Creatives)
-  const [googleConnected, setGoogleConnected] = useState<boolean | null>(() => {
-    if (typeof window === "undefined") return null
-    const cached = window.sessionStorage.getItem("growzzy_google_connected")
-    return cached === null ? null : cached === "true"
-  })
-  const [metaConnected, setMetaConnected] = useState<boolean | null>(() => {
-    if (typeof window === "undefined") return null
-    const cached = window.sessionStorage.getItem("growzzy_meta_connected")
-    return cached === null ? null : cached === "true"
-  })
-  const [brand, setBrand] = useState<{ name?: string; industry?: string; toneOfVoice?: string; productDescription?: string } | null>(null)
-
-  // Creatives state
-  const [creativesPrompt, setCreativesPrompt] = useState("")
-  const [selectedStyle, setSelectedStyle] = useState("Luxury")
-  const [selectedRatio, setSelectedRatio] = useState("1:1")
-  const [generatingCreatives, setGeneratingCreatives] = useState(false)
-  const [creativesError, setCreativesError] = useState("")
-  const [generatedCreatives, setGeneratedCreatives] = useState<CreativeVariation[]>([])
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
-  const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([])
-  const [creativesCount, setCreativesCount] = useState(4)
-
-  // Boolean search
-  const [booleanQuery, setBooleanQuery] = useState("")
-  const [booleanLoading, setBooleanLoading] = useState(false)
-  const [booleanError, setBooleanError] = useState("")
-  const [booleanResult, setBooleanResult] = useState<{ interpretation: string; keywords: { text: string; matchType: string; rationale: string }[]; negativeKeywords: string[] } | null>(null)
-
-  // Launch
-  const [launching, setLaunching] = useState(false)
-  const [launchError, setLaunchError] = useState("")
-  const [launched, setLaunched] = useState<{ externalCampaignId?: string } | null>(null)
-
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const editorPlanId = searchParams.get("id") || searchParams.get("plan")
-
-  // Track if there are unsaved changes
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const unsavedChangesRef = useRef<{ lastValue: string } | null>(null)
-
-  useEffect(() => {
-    const s = new Set<string>()
-    for (const [k, r] of Object.entries(KEYWORD_MAP)) {
-      if (r.test(prompt)) s.add(k)
-    }
-    setDetected(s)
-  }, [prompt])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [prompt, setPrompt] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<"Standard" | "Direct Response" | "Fast Draft" | "Deep Strategy">("Standard")
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [brandName, setBrandName] = useState("MARKITX")
+  const [brandContext, setBrandContext] = useState("")
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const reuseId = searchParams.get("reuse")
-    if (!reuseId) return
-    fetch(`/api/ai/campaign-plan/${reuseId}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        const brief = json?.data?.briefInput
-        if (!brief) return
-        if (brief.offer) setPrompt(brief.offer)
-        if (brief.budget) setBudget(brief.budget)
-        if (brief.location) setLocation(brief.location)
-        if (brief.landingPageUrl) setLandingPageUrl(brief.landingPageUrl)
-        if (brief.goal) setGoal(brief.goal)
-        if (brief.enhancedBrief) {
-          setEnhancedBrief(brief.enhancedBrief)
-          setClarifications(Array.isArray(brief.clarifications) ? brief.clarifications.map((item: any) => String(item?.answer || "")) : [])
-        }
-        if (brief.platform === "META" && META_ENABLED) setPlatform("META")
-        if (brief.metaObjective) setMetaObjective(brief.metaObjective)
-      })
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // Read from localStorage brand memory if available
+    try {
+      const stored = localStorage.getItem("growzzy_brand_name")
+      if (stored) setBrandName(stored)
+      const full = localStorage.getItem("growzzy_brand_context_full")
+      if (full) {
+        setBrandContext(full)
+        const parsed = JSON.parse(full)
+        if (parsed.businessName) setBrandName(parsed.businessName)
+      }
+    } catch {}
 
-  useEffect(() => {
-    fetch("/api/integrations/status", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        const google = !!json?.google?.connected && !!json?.google?.hasAdsAccount
-        const meta = !!json?.meta?.connected && !!json?.meta?.hasAdsAccount
-        setGoogleConnected(google)
-        setMetaConnected(meta)
-        window.sessionStorage.setItem("growzzy_google_connected", String(google))
-        window.sessionStorage.setItem("growzzy_meta_connected", String(meta))
-      })
-      .catch(() => {})
-    fetch("/api/workspaces", { cache: "no-store" })
+    fetch("/api/workspaces")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const w = json?.workspaces?.[0]
-        if (w) setBrand({ name: w.name, industry: w.industry, toneOfVoice: w.toneOfVoice, productDescription: w.productDescription })
+        if (w?.name) setBrandName(w.name)
       })
       .catch(() => {})
   }, [])
 
-  // Track unsaved changes
   useEffect(() => {
-    // Track changes to form fields
-    const handleChange = () => {
-      setHasUnsavedChanges(true)
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = (textToSend || prompt).trim()
+    if (!text || loading) return
+
+    const userMsg: ChatMessage = {
+      id: String(Date.now()),
+      role: "user",
+      content: text,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }
 
-    // Listen to changes in form fields
-    const inputs = [
-      prompt, budget, location, landingPageUrl, goal, platform, metaObjective,
-      enhancedBrief?.targetCustomer,
-      JSON.stringify(enhancedBrief?.painPoints || []),
-      JSON.stringify(enhancedBrief?.differentiators || []),
-      JSON.stringify(enhancedBrief?.proofPoints || []),
-      JSON.stringify(enhancedBrief?.restrictions || []),
-      JSON.stringify(clarifications || [])
-    ]
+    const nextMessages = [...messages, userMsg]
+    setMessages(nextMessages)
+    setPrompt("")
+    setLoading(true)
 
-    // We'll use a deep equality check via JSON.stringify for objects/arrays
-    const inputString = inputs.join('|')
-
-    // Simple change detection - in a real app you might use a more sophisticated approach
-    if (inputString !== unsavedChangesRef.current?.lastValue) {
-      unsavedChangesRef.current = { lastValue: inputString }
-      handleChange()
-    }
-  }, [prompt, budget, location, landingPageUrl, goal, platform, metaObjective,
-      enhancedBrief?.targetCustomer,
-      JSON.stringify(enhancedBrief?.painPoints || []),
-      JSON.stringify(enhancedBrief?.differentiators || []),
-      JSON.stringify(enhancedBrief?.proofPoints || []),
-      JSON.stringify(enhancedBrief?.restrictions || []),
-      JSON.stringify(clarifications || [])])
-
-  // Handle beforeunload to warn about unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges && !built) {
-        // Cancel the event
-        e.preventDefault() // Chrome requires preventDefault()
-        e.returnValue = '' // Required for Safari
-
-        // Show confirmation dialog
-        return 'You have unsaved changes. Are you sure you want to leave?'
-      }
-    }
-
-    // Add event listener
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    // Clean up
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
-  }, [hasUnsavedChanges, built])
-
-  const handleEnhance = async () => {
-    if (!prompt.trim() || enhancing) return
-    setEnhancing(true)
-    setEnhanceError("")
     try {
-      const res = await fetch("/api/ai/enhance-prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), budget, location: effectiveLocation || undefined, goal }),
-      })
-      const json = await readJson(res)
-      if (!res.ok || !json?.enhanced || !json?.brief) throw new Error(json?.error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
-      setEnhancedBrief(json.brief)
-      setClarifications((json.brief.missingQuestions || []).map(() => ""))
-      // Reset unsaved flags when enhancement succeeds
-      unsavedChangesRef.current = null
-      setHasUnsavedChanges(false)
-    } catch (error: any) {
-      setEnhanceError(error?.message || "AI Enhance is temporarily unavailable. Your original brief has not been changed.")
-    } finally {
-      setEnhancing(false)
-    }
-  }
-
-  const promptText = prompt.trim()
-  const effectiveLocation = location.trim() || inferLocation(promptText) || "United States"
-  const hasBudget = Number.isFinite(budget) && budget > 0 ? budget : 50
-  const missingEssentials = [!promptText ? "offer" : ""].filter(Boolean)
-  const canBuildPlan = !building && promptText.length > 5
-
-  const assistantReplyFor = (
-    nextPrompt = promptText,
-    nextLocation = effectiveLocation,
-    nextBudget = budget,
-    nextUrl = landingPageUrl,
-  ) => {
-    if (!nextPrompt.trim()) return "Start with one sentence about what you sell, who it is for, and what outcome you want."
-    if (!nextLocation) return "I understand the offer. What location should this campaign target?"
-    if (!Number.isFinite(nextBudget) || nextBudget <= 0) return "Good. What daily budget are you comfortable testing?"
-    if (!nextUrl.trim()) return "This is enough to build the draft. Add a landing page before launch so the campaign can go live safely."
-    return "Perfect. I have the core launch inputs. Build the plan and I will turn this into editable ad groups, keywords, and RSA copy."
-  }
-
-  const handleBuild = async () => {
-    if (!canBuildPlan) return
-    setBuilding(true)
-    setBuildError("")
-    try {
-      const res = await fetch("/api/ai/campaign-builder", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          offer: prompt.trim(),
-          targetCustomer: enhancedBrief?.targetCustomer || prompt.trim().slice(0, 200),
-          budget,
-          location: effectiveLocation,
-          goal,
-          landingPageUrl: landingPageUrl.trim() || undefined,
-          enhancedBrief: enhancedBrief || undefined,
-          clarifications: enhancedBrief?.missingQuestions?.map((question, index) => ({ question, answer: clarifications[index]?.trim() || "" })).filter((item) => item.answer) || undefined,
-          platform,
-          metaObjective: platform === "META" ? metaObjective : undefined,
+          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+          brandContext,
         }),
       })
-      const json = await readJson(res)
-      if (!res.ok || !json?.campaignPlanId) {
-        const platformName = platform === "META" ? "Meta Ads" : "Google Ads"
-        throw new Error(json?.error?.message || json?.error || `Couldn't build a plan. Connect ${platformName} and select an account first.`)
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to get AI response")
       }
-      setCampaignPlanId(json.campaignPlanId)
-      setCampaignName(json.plan?.campaignName || "")
-      setPsychologyProfile(json.psychologyProfile || null)
-      setBuilt(true)
-      window.dispatchEvent(new Event("growzzy:prompt-history-updated"))
-      router.replace(`/dashboard/campaigns/new?id=${json.campaignPlanId}`)
-      // Reset unsaved flags when build succeeds
-      unsavedChangesRef.current = null
-      setHasUnsavedChanges(false)
+
+      const botMsg: ChatMessage = {
+        id: String(Date.now() + 1),
+        role: "assistant",
+        content: data.message?.content || "I have analyzed your request.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+
+      setMessages([...nextMessages, botMsg])
     } catch (err: any) {
-      setBuildError(err?.message || "Something went wrong building your plan.")
+      const errorMsg: ChatMessage = {
+        id: String(Date.now() + 1),
+        role: "assistant",
+        content: `Error: ${err.message || "Failed to reach AI assistant."}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+      setMessages([...nextMessages, errorMsg])
     } finally {
-      setBuilding(false)
+      setLoading(false)
     }
   }
 
-  const handleBooleanSearch = async () => {
-    if (!booleanQuery.trim() || booleanLoading) return
-    setBooleanLoading(true)
-    setBooleanError("")
-    setBooleanResult(null)
-    try {
-      const res = await fetch("/api/ai/boolean-audience", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: booleanQuery.trim() }),
-      })
-      const json = await readJson(res)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Couldn't translate this query.")
-      setBooleanResult({ interpretation: json.interpretation, keywords: json.keywords, negativeKeywords: json.negativeKeywords })
-    } catch (err: any) {
-      setBooleanError(err?.message || "Something went wrong searching this audience.")
-    } finally {
-      setBooleanLoading(false)
-    }
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const handleGenerateCreatives = async () => {
-    if (generatingCreatives) return
-    setGeneratingCreatives(true)
-    setCreativesError("")
-    setGeneratedCreatives([])
-    setGeneratedImageUrls([])
-    try {
-      const res = await fetch("/api/ai/generate-creatives", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          businessName: brand?.name,
-          industry: brand?.industry,
-          brandTone: brand?.toneOfVoice,
-          objective: goal,
-          platform,
-          format: "Display",
-          adFormat: selectedRatio,
-          visualStyle: selectedStyle,
-          productDescription: creativesPrompt.trim() || brand?.productDescription,
-          valueProp: creativesPrompt.trim() || undefined,
-          variations: creativesCount,
-          generateImages: true,
-        }),
-      })
-      const json = await readJson(res)
-      if (!res.ok || !json?.success) throw new Error(json?.error || "Couldn't generate creatives.")
-      setGeneratedCreatives(json.variations || [])
-      setGeneratedImageUrls(json.imageUrls || [])
-      if (json.imageError) setCreativesError(json.imageError)
-      // Reset unsaved flags when creatives are generated
-      unsavedChangesRef.current = null
-      setHasUnsavedChanges(false)
-    } catch (err: any) {
-      setCreativesError(err?.message || "Something went wrong generating creatives.")
-    } finally {
-      setGeneratingCreatives(false)
-    }
+  const handleOpenInBuilder = (campaignPrompt: string) => {
+    router.push(`/dashboard/campaigns/builder?prompt=${encodeURIComponent(campaignPrompt)}`)
   }
 
-  const handleLaunch = async () => {
-    if (!campaignPlanId || launching) return
-    setLaunching(true)
-    setLaunchError("")
-    try {
-      const res = await fetch(`/api/ai/campaign-plan/${campaignPlanId}/launch`, { method: "POST" })
-      const json = await readJson(res)
-      if (!res.ok || !json?.ok) throw new Error(json?.error?.message || json?.error || "Launch failed. Please review the plan and try again.")
-      setLaunched({ externalCampaignId: json?.data?.externalCampaignId })
-      window.dispatchEvent(new Event("growzzy:onboarding-progress-updated"))
-      setTimeout(() => router.push("/dashboard/ads"), 1400)
-      // Reset unsaved flags when launch succeeds
-      unsavedChangesRef.current = null
-      setHasUnsavedChanges(false)
-    } catch (err: any) {
-      setLaunchError(err?.message || "Launch failed.")
-    } finally {
-      setLaunching(false)
-    }
-  }
-
-  const platformName = platform === "META" ? "Meta Ads" : "Google Ads"
-  const platformConnected = platform === "META" ? metaConnected : googleConnected
-  const launchChecklist = [
-    { label: "Campaign strategy built", done: built },
-    { label: "AI creatives generated (optional)", done: generatedCreatives.length > 0, optional: true },
-    { label: `${platformName} connected`, done: platformConnected },
+  const quickPrompts = [
+    {
+      id: "launch",
+      icon: Compass,
+      title: `Launch a campaign for ${brandName}`,
+      description: `Build a lead-gen campaign for ${brandName} promoting AI infrastructure solutions, including multi-agent systems, automated AI workflows, and custom AI agents. targeting Operations-Heavy Businesses`,
+      prompt: `Build a high-converting lead-gen Google Ads campaign for ${brandName} promoting AI infrastructure solutions, multi-agent systems, and automated AI workflows targeting Operations-Heavy Businesses.`,
+    },
+    {
+      id: "own_keyword",
+      icon: Rocket,
+      title: `Own "AI infrastructure for businesses"`,
+      description: `Build a Google Ads campaign for ${brandName} around "AI infrastructure for businesses" and similar high-intent searches`,
+      prompt: `Build a Google Ads campaign for ${brandName} around "AI infrastructure for businesses", "enterprise AI workflows", and high-intent commercial keywords.`,
+    },
+    {
+      id: "creative_pack",
+      icon: Wand2,
+      title: "Creative + copy pack",
+      description: `Create ad copy and a visual for ${brandName} in our professional tone for Operations-Heavy Businesses`,
+      prompt: `Create direct-response ad copy headlines, descriptions, and high-CTR visual banner prompts for ${brandName} targeting Operations-Heavy Businesses.`,
+    },
+    {
+      id: "competitors",
+      icon: Megaphone,
+      title: "Study my competitors",
+      description: `Research who competes with ${brandName} and how we should position against them`,
+      prompt: `Perform competitive positioning analysis for ${brandName} vs legacy automation agencies and formulate direct-response counter-angles.`,
+    },
   ]
-  const canLaunch = built && platformConnected && !!campaignPlanId
-
-  if (editorPlanId) return <CampaignBuilderPage />
 
   return (
-    <Shell title="">
-      <div className="flex h-full">
-        <div
-          className="w-[200px] shrink-0 border-r border-[#DDE1E7] flex flex-col overflow-y-auto"
-          style={{ background: 'linear-gradient(180deg, #f8f9fb 0%, #f3f5f7 100%)' }}
-        >
-          <div className="px-3 pt-4 pb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10.5px] font-semibold text-[#9CA3AF] uppercase tracking-[0.08em]">Recent</span>
-            </div>
-            <p className="text-[11px] text-[#9CA3AF] italic px-2 py-1">
-              <a href="/dashboard/prompts" className="hover:text-[#1F57F5] transition-colors underline">View saved briefs →</a>
-            </p>
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0 overflow-y-auto">
-          <div className="w-full max-w-[760px] text-center mb-8">
-            <h1 className="text-[30px] text-[#111827] leading-tight mb-2 tracking-tight text-balance" style={{ fontWeight: 500 }}>
-              {built ? "Campaign plan ready." : "Run ad campaigns in minutes."}
-            </h1>
-            <p className="text-[14px] text-[#6B7280] leading-relaxed">
-              {built
-                ? `"${campaignName}" is ready. Generate creatives and launch when ready, or open the full editor for fine control.`
-                : "Tell Growzzy what you want to promote. AI builds the strategy, targeting and ads for you."}
-            </p>
-          </div>
-
-          {/* Clean Prompt Intake Card */}
-          <div className="w-full max-w-[760px]">
-            <div className="bg-white rounded-[16px] overflow-hidden p-4" style={{ border: '2px solid #E0533C', boxShadow: '0 0 0 4px rgba(224,83,60,0.08), 0 4px 20px rgba(0,0,0,0.08)' }}>
-              <div className="px-1 py-1 mb-2">
-                <p className="text-[12.5px] font-medium text-[#374151]">Start with one sentence about what you sell, who it is for, and what outcome you want.</p>
-              </div>
-              <textarea
-                ref={textareaRef}
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value)
-                  setEnhancedBrief(null)
-                  setClarifications([])
-                }}
-                placeholder="I want to sell artificial jewelry on my Shopify store to women aged 30-50 in India's Tier 1 cities..."
-                rows={6}
-                className="w-full px-3 py-2 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] bg-[#FAF9F8] rounded-[10px] border border-[#E9EBEF] resize-none outline-none focus:border-[#E0533C] focus:ring-2 focus:ring-[#E0533C]/10 leading-relaxed transition-colors"
-              />
-              
-              <div className="flex items-center justify-between mt-3 pt-2">
-                <button
-                  onClick={handleEnhance}
-                  disabled={!prompt.trim() || enhancing}
-                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] disabled:opacity-40 transition-colors"
-                >
-                  {enhancing ? (<><RefreshCw size={12} className="animate-spin" />Enhancing brief…</>) : (<><Wand2 size={13} />✨ AI Enhance</>)}
-                </button>
-
-                <button
-                  onClick={handleBuild}
-                  disabled={!canBuildPlan}
-                  className={cn(
-                    "flex items-center gap-1.5 h-10 px-6 rounded-full text-[13.5px] font-semibold transition-all shadow-sm",
-                    canBuildPlan ? "bg-[#E0533C] text-white hover:bg-[#C9432D]" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed"
-                  )}
-                >
-                  {building ? (<><Loader2 size={14} className="animate-spin" />Building plan…</>) : built ? (<><Check size={14} />Plan ready — rebuild</>) : (<><Sparkles size={14} />Build plan <ArrowRight size={14} /></>)}
-                </button>
+    <Shell>
+      <div className="max-w-[920px] mx-auto min-h-[calc(100vh-140px)] flex flex-col justify-between py-6 px-4">
+        {/* Messages Stream OR Welcome Cards */}
+        {messages.length === 0 ? (
+          <div className="my-auto py-8">
+            {/* Brand Logo & Greeting Header */}
+            <div className="text-center space-y-3">
+              <div className="w-11 h-11 rounded-[14px] bg-black text-white flex items-center justify-center font-black text-xl mx-auto shadow-sm tracking-tight">
+                G<span className="text-[#1F57F5] text-xs -mt-2 ml-0.5">7</span>
               </div>
 
-              {enhanceError && <p className="text-[12px] text-[#D3564C] mt-2">{enhanceError}</p>}
-              {buildError && (
-                <div className="mt-3 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
-                  <p className="text-[12.5px] font-medium text-[#D3564C]">{buildError}</p>
-                </div>
-              )}
+              <h1 className="text-[32px] sm:text-[36px] font-extrabold text-[#111827] tracking-tight">
+                Hello, {brandName}
+              </h1>
 
-              {enhancedBrief && (
-                <div className="sku-card mt-4 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[12px] font-semibold text-[#111827]">What Growzzy understood</p>
-                      <p className="text-[11px] text-[#6B7280] mt-0.5">Offer: {enhancedBrief.productOrOffer} · Audience: {enhancedBrief.targetCustomer}</p>
-                    </div>
-                    <span className="text-[10px] font-semibold text-[#E0533C] bg-[#FDF2F0] px-2 py-1 rounded-full border border-[#F7D9D4]">AI enhanced</span>
-                  </div>
-                  <textarea
-                    value={enhancedBrief.enhancedText}
-                    onChange={(event) => setEnhancedBrief((current) => current ? { ...current, enhancedText: event.target.value } : current)}
-                    maxLength={2000}
-                    rows={4}
-                    aria-label="Enhanced campaign brief"
-                    className="sku-input w-full mt-3 px-3 py-2 text-[12px] leading-relaxed resize-y"
-                  />
-                </div>
-              )}
-
-              {built && (
-                <div className="mt-4 p-4 rounded-[12px] border border-[#F7D9D4] bg-[#FDF2F0]">
-                  <p className="text-[13px] font-semibold text-[#E0533C] mb-1 flex items-center gap-1.5"><Check size={14} /> Campaign plan generated</p>
-
-                  {/* Psychological Insights */}
-                  {psychologyProfile && (
-                    <div className="mt-3 p-3 rounded-[8px] border border-[#E0533C]/20 bg-[#FDF2F0]">
-                      <p className="text-[12px] font-semibold text-[#E0533C] mb-2">Psychological Insights</p>
-                      <div className="space-y-2 text-[11px] text-[#374151]">
-                        <div><span className="font-medium">Target Persona:</span> {psychologyProfile.targetPersona}</div>
-                        <div><span className="font-medium">Awareness Stage:</span> {psychologyProfile.awarenessStage.replace('_', ' ')}</div>
-                        <div><span className="font-medium">Primary Emotional Trigger:</span> {psychologyProfile.primaryEmotionalTrigger}</div>
-                        <div><span className="font-medium">Key Pain Points:</span> {psychologyProfile.corePainPoints.slice(0, 2).join(', ')}{psychologyProfile.corePainPoints.length > 2 ? '...' : ''}</div>
-                        <div><span className="font-medium">Key Desires:</span> {psychologyProfile.desireOutcomes.slice(0, 2).join(', ')}{psychologyProfile.desireOutcomes.length > 2 ? '...' : ''}</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <p className="text-[12px] text-[#374151]">
-                    "{campaignName}" was created and saved as a draft. Open the full editor to fine-tune keywords and ad copy, or review your campaign.
-                  </p>
-                  <div className="flex items-center gap-4 mt-3">
-                    <a href={`/dashboard/campaigns/builder?id=${campaignPlanId}`} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#E0533C] hover:text-[#C9432D] transition-colors">
-                      Open full editor <ExternalLink size={12} />
-                    </a>
-                  </div>
-                </div>
-              )}
+              <div className="text-[14px] sm:text-[14.5px] text-[#6B7280] max-w-[540px] mx-auto leading-relaxed">
+                <p>I already know {brandName} — your offer, audience and competitors.</p>
+                <p>Ask me anything, or tell me what to launch.</p>
+              </div>
             </div>
-          </div>
 
-          {/* Boolean search tab */}
-          {activeTab === "boolean" && (
-            <div className="w-full max-w-[680px]">
-              <div className="sku-card p-5">
-                <p className="text-[14px] font-semibold text-[#111827] mb-1">Boolean Audience Search</p>
-                <p className="text-[12.5px] text-[#6B7280] mb-4">
-                  Describe your audience with AND/OR/NOT operators. AI translates it into real Google Search keywords — Google Ads has no native boolean audience targeting, so this maps your intent to search terms real people would type.
-                </p>
-                <div className="space-y-3">
-                  <textarea
-                    value={booleanQuery}
-                    onChange={(e) => setBooleanQuery(e.target.value)}
-                    rows={4}
-                    placeholder={`e.g. (women OR female) AND (fashion OR jewelry) AND (India OR Mumbai) AND age:30-50`}
-                    className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
-                  />
-                  <div className="flex gap-2">
-                    {["AND", "OR", "NOT", "( )", "age:", "location:"].map((op) => (
-                      <button key={op} onClick={() => setBooleanQuery((q) => q + (q ? " " : "") + op)} className="h-7 px-2.5 text-[11.5px] font-semibold text-[#374151] rounded-[6px] sku-btn">
-                        {op}
-                      </button>
-                    ))}
-                  </div>
+            {/* 2x2 Quick Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+              {quickPrompts.map((item) => {
+                const Icon = item.icon
+                return (
                   <button
-                    onClick={handleBooleanSearch}
-                    disabled={!booleanQuery.trim() || booleanLoading}
-                    className={cn("flex items-center gap-1.5 h-9 px-5 rounded-[8px] text-[13px] font-semibold transition-colors", booleanQuery.trim() && !booleanLoading ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSendMessage(item.prompt)}
+                    className="p-5 bg-white border border-[#E5E7EB] rounded-[16px] text-left hover:border-[#1F57F5]/50 hover:shadow-md transition-all group relative flex flex-col justify-between cursor-pointer"
                   >
-                    {(booleanLoading ? (<><Loader2 size={13} className="animate-spin" />Translating…</>) : (<><Search size={13} />Search audience</>))}
-                  </button>
-                  {booleanError && <p className="text-[12px] text-[#D3564C]">{booleanError}</p>}
-                </div>
-
-                {booleanResult && (
-                  <div className="sku-card p-5 mt-4">
-                    <p className="text-[12.5px] text-[#374151] mb-3">{booleanResult.interpretation}</p>
-                    <p className="text-[11.5px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Suggested keywords</p>
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {booleanResult.keywords.map((k, i) => (
-                        <span key={i} title={k.rationale} className="inline-flex items-center h-6 px-2 rounded-full text-[11px] font-medium bg-[#EAF0FE] text-[#1F57F5]" >
-                          {k.text} <span className="ml-1 text-[9.5px] text-[#1F57F5]/60">{k.matchType}</span>
-                        </span>
-                      ))}
-                    </div>
-                    {booleanResult.negativeKeywords.length > 0 && (
-                      <>
-                        <p className="text-[11.5px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Suggested negatives</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {booleanResult.negativeKeywords.map((k, i) => (
-                            <span key={i} className="inline-flex items-center h-6 px-2 rounded-full text-[11px] font-medium bg-[#FBE7E5] text-[#D3564C]">−{k}</span>
-                          ))}
+                    <div>
+                      <div className="flex items-center gap-3 mb-2.5">
+                        <div className="w-8 h-8 rounded-full bg-[#EAF0FE] text-[#1F57F5] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <Icon size={16} />
                         </div>
-                      </>
-                    )}
-                    <p className="text-[11px] text-[#9CA3AF] mt-3">Use these in the Campaign tab's brief, or paste them into the full editor's keyword list.</p>
+                        <h3 className="text-[14px] font-bold text-[#111827] group-hover:text-[#1F57F5] transition-colors leading-snug">
+                          {item.title}
+                        </h3>
+                      </div>
+                      <p className="text-[12px] text-[#6B7280] leading-relaxed line-clamp-3">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Multi-Turn Chat Stream */
+          <div className="flex-1 space-y-6 overflow-y-auto pb-6 pt-2">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">
+                  G
+                </div>
+                <span className="text-[13px] font-bold text-[#111827]">Growzzy Growth Agent</span>
+              </div>
+              <button
+                onClick={() => setMessages([])}
+                className="text-[12px] text-[#6B7280] hover:text-[#111827] flex items-center gap-1"
+              >
+                <RefreshCw size={12} /> New Thread
+              </button>
+            </div>
+
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex gap-3",
+                  msg.role === "user" ? "justify-end" : "justify-start"
+                )}
+              >
+                {msg.role === "assistant" && (
+                  <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-2xs">
+                    <Bot size={16} />
+                  </div>
+                )}
+
+                <div
+                  className={cn(
+                    "max-w-[85%] rounded-[18px] p-4 text-[13.5px] leading-relaxed relative group shadow-2xs",
+                    msg.role === "user"
+                      ? "bg-[#1F57F5] text-white rounded-br-xs"
+                      : "bg-white border border-[#E5E7EB] text-[#111827] rounded-bl-xs"
+                  )}
+                >
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+
+                  {msg.role === "assistant" && (
+                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#F0F2F5] text-[11px] text-[#9CA3AF]">
+                      <span>{msg.timestamp}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleCopy(msg.id, msg.content)}
+                          className="hover:text-[#111827] flex items-center gap-1"
+                        >
+                          {copiedId === msg.id ? <Check size={12} className="text-green-600" /> : <Copy size={12} />}
+                          <span>{copiedId === msg.id ? "Copied" : "Copy"}</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenInBuilder(msg.content.slice(0, 300))}
+                          className="px-2.5 py-1 bg-[#EAF0FE] text-[#1F57F5] font-bold rounded-md hover:bg-[#D5E3FD] transition-colors flex items-center gap-1"
+                        >
+                          <Rocket size={11} /> Open in Builder
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {msg.role === "user" && (
+                  <div className="w-8 h-8 rounded-full bg-[#111827] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-1">
+                    <User size={15} />
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ))}
 
-          {/* AI Creatives tab */}
-          {activeTab === "creatives" && (
-            <div className="w-full max-w-[720px]">
-              <div className="sku-card p-5 mb-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <ImageIcon size={15} className="text-[#1F57F5]" />
-                  <p className="text-[14px] font-semibold text-[#111827]">AI Ad Creatives</p>
+            {loading && (
+              <div className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-1">
+                  <Bot size={16} />
                 </div>
-                <div className="space-y-3.5">
-                  <div>
-                    <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Describe the ad visual</label>
-                    <textarea
-                      value={creativesPrompt}
-                      onChange={(e) => setCreativesPrompt(e.target.value)}
-                      rows={3}
-                      placeholder="A luxury jewelry ad showing a woman at a festive wedding event, warm gold tones, elegant and premium feel..."
-                      className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Ad Style</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {AD_STYLES.map((s) => (
-                          <button key={s} onClick={() => setSelectedStyle(s)} className={cn("h-7 px-2.5 text-[11.5px] rounded-[6px] transition-colors", selectedStyle === s ? "bg-[#EAF0FE] text-[#1F57F5] font-semibold" : "text-[#4B5563] font-medium sku-btn")}>
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[12px] font-semibold text-[374151] mb-1.5">Aspect Ratio</label>
-                      <div className="flex gap-1.5">
-                        {ASPECT_RATIOS.map(({ label, desc }) => (
-                          <button key={label} onClick={() => setSelectedRatio(label)} className={cn("flex flex-col items-center px-2 py-1.5 rounded-[6px] transition-colors", selectedRatio === label ? "bg-[#EAF0FE] text-[#1F57F5]" : "text-[#4B5563] sku-btn")}>
-                            <span className="text-[11.5px] font-bold leading-none">{label}</span>
-                            <span className="text-[9.5px] text-[#9CA3AF] leading-none mt-0.5">{desc}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[12px] font-semibold text-[374151] mb-1.5">No. of variants</label>
-                      <div className="relative">
-                        <select value={creativesCount} onChange={(e) => setCreativesCount(Number(e.target.value))} className="w-full h-9 pl-3 pr-8 text-[12.5px] text-[#111827] outline-none appearance-none rounded-[8px] sku-input">
-                          {[1, 2, 3, 4].map((n) => (<option key={n} value={n}>{n} variant{n > 1 ? "s" : ""}</option>))}
-                        </select>
-                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-effects-none" />
-                      </div>
-                    </div>
-                  </div>
+                <div className="p-4 bg-white border border-[#E5E7EB] rounded-[18px] text-[13px] text-[#6B7280] flex items-center gap-2">
+                  <Loader2 size={15} className="animate-spin text-[#1F57F5]" />
+                  <span>Growzzy is analyzing market data and formulating strategy…</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {/* Bottom AI Search / Chat Input Box */}
+        <div className="mt-4 relative">
+          <div className="border-2 border-[#3B82F6] rounded-[20px] bg-white p-4 shadow-xs focus-within:ring-4 focus-within:ring-[#3B82F6]/10 transition-all">
+            <textarea
+              rows={2}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+              placeholder="Ask anything, or describe what to launch..."
+              className="w-full bg-transparent text-[14px] text-[#111827] placeholder:text-[#9CA3AF] outline-none resize-none leading-relaxed"
+            />
+
+            {/* Input Controls Bar */}
+            <div className="flex items-center justify-between pt-3 border-t border-[#F3F4F6] mt-2">
+              {/* Left Controls: Paperclip & Mode Selector */}
+              <div className="flex items-center gap-2 relative">
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-full text-[#9CA3AF] hover:text-[#374151] hover:bg-[#F3F4F6] flex items-center justify-center transition-colors"
+                  title="Attach website or reference file"
+                >
+                  <Paperclip size={15} />
+                </button>
+
+                {/* Mode Selector Pill */}
+                <div className="relative">
                   <button
-                    onClick={handleGenerateCreatives}
-                    disabled={generatingCreatives || !creativesPrompt.trim()}
-                    className={cn("flex items-center justify-center gap-2 h-10 w-full rounded-[10px] text-[13.5px] font-semibold transition-colors", !generatingCreatives && creativesPrompt.trim() ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
+                    type="button"
+                    onClick={() => setModeMenuOpen(!modeMenuOpen)}
+                    className="h-7 px-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-full text-[11.5px] font-semibold text-[#374151] hover:bg-[#F3F4F6] flex items-center gap-1.5 transition-colors"
                   >
-                    {(generatingCreatives ? (<><Loader2 size={16} className="animate-spin" />Generating creatives…</>) : (<><Sparkles size={14} />Generate {creativesCount} AI creative{creativesCount > 1 ? "s" : ""}</>))}
+                    <span>{mode}</span>
+                    <ChevronDown size={12} className="text-[#9CA3AF]" />
                   </button>
-                  {creativesError && <p className="text-[12px] text-[#D3564C]">{creativesError}</p>}
-                </div>
 
-                {generatedCreatives.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-[13.5px] font-semibold text-[#111827]">{generatedCreatives.length} creative{generatedCreatives.length > 1 ? "s" : ""} generated and saved</p>
-                        <p className="text-[10.5px] text-[#6B7280]">Visual assets stay in Ad Studio; Google Search campaigns publish text ads only.</p>
-                      </div>
-                      <button onClick={handleGenerateCreatives} className="flex items-center gap-1 text-[12px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">
-                        <RefreshCw size={12} /> Regenerate
-                      </button>
-                    </div>
-                    <div className={cn("grid gap-4", generatedCreatives.length === 1 ? "grid-cols-1 max-w-[280px]" : generatedCreatives.length === 2 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
-                      {generatedCreatives.map((c, i) => (
-                        <CreativeCard key={i} variation={c} imageUrl={generatedImageUrls[i] || null} ratio={selectedRatio} onPreview={setPreviewImageUrl} />
+                  {modeMenuOpen && (
+                    <div className="absolute bottom-full mb-1 left-0 w-44 bg-white border border-[#E5E7EB] rounded-[12px] shadow-lg py-1.5 z-20">
+                      {(["Standard", "Direct Response", "Fast Draft", "Deep Strategy"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            setMode(m)
+                            setModeMenuOpen(false)
+                          }}
+                          className={cn(
+                            "w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#F9FAFB] flex items-center justify-between",
+                            mode === m ? "font-bold text-[#1F57F5] bg-[#EAF0FE]/50" : "text-[#374151]"
+                          )}
+                        >
+                          {m}
+                        </button>
                       ))}
                     </div>
-                    <div className="mt-4">
-                      <button onClick={() => setActiveTab("launch")} className="flex items-center gap-1.5 h-9 px-5 text-white text-[13px] font-semibold rounded-[8px] sku-btn-primary">
-                        <Rocket size={13} /> Continue to Launch <ArrowRight size={13} />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Launch Ads tab */}
-          {activeTab === "launch" && (
-            <div className="w-full max-w-[680px]">
-              <div className="sku-card p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Rocket size={16} className="text-[#1F57F5]" />
-                  <p className="text-[14px] font-semibold text-[#111827]">Launch to {platformName}</p>
-                </div>
-                {!campaignPlanId && (
-                  <div className="p-3 rounded-[10px] bg-[#FBF0DA] text-[#B8892B] text-[12.5px] font-medium mb-4">
-                    Build a campaign plan in the Campaign tab first.
-                  </div>
+              {/* Right Control: Submit Circle Button */}
+              <button
+                type="button"
+                onClick={() => handleSendMessage()}
+                disabled={!prompt.trim() || loading}
+                className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center transition-all",
+                  prompt.trim() && !loading
+                    ? "bg-[#1F2937] hover:bg-black text-white shadow-2xs cursor-pointer"
+                    : "bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed"
                 )}
-                <div className="space-y-3">
-                  {launchChecklist.map(({ label, done, optional }) => (
-                    <div key={label} className="flex items-center gap-3 p-3 rounded-[10px]" style={{ background: done === true ? '#E6F4EC' : 'linear-gradient(145deg, #f8f9fb 0%, #f0f2f5 100%)' }}>
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={done === true ? { background: 'linear-gradient(135deg, #34c471 0%, #2E9E5B 100%)', color: 'white' } : { background: 'linear-gradient(145deg, #e8eaed 0%, #f4f5f7 100%)', color: '#9CA3AF' }}>
-                        {done ? <Check size={13} /> : <Circle size={12} />}
-                      </div>
-                      <span className={cn("text-[13px]", done === true ? "font-semibold text-[#2E9E5B]" : "font-medium text-[#4B5563]")}>{done === null ? "Checking connection..." : label}</span>
-                      {done === false && !optional && label === `${platformName} connected` && (
-                        <a href={platform === "META" ? "/api/integrations/meta/connect" : "/api/integrations/google/connect"} className="ml-auto text-[11.5px] font-semibold text-[#1F57F5] hover:text-[#1849d6] transition-colors">Connect →</a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {launchError && (
-                  <div className="mt-4 p-3 rounded-[10px] border border-[#D3564C]/30 bg-[#FBE7E5]">
-                    <p className="text-[12.5px] font-medium text-[#D3564C]">{launchError}</p>
-                  </div>
-                )}
-                {launched ? (
-                  <div className="mt-5 p-4 rounded-[10px] border border-[#2E9E5B]/30 bg-[#E6F4EC] text-center">
-                    <p className="text-[13px] font-semibold text-[#2E9E5B] flex items-center justify-center gap-1.5"><Check size={14} /> Launched to {platformName} (paused)</p>
-                    <p className="text-[11.5px] text-[#374151] mt-1">Redirecting to Ads Manager…</p>
-                  </div>
+              >
+                {loading ? (
+                  <Loader2 size={16} className="animate-spin text-white" />
                 ) : (
-                  <button
-                    onClick={handleLaunch}
-                    disabled={!canLaunch || launching}
-                    className={cn("mt-5 flex items-center justify-center gap-2 h-11 w-full rounded-[10px] text-[14px] font-semibold transition-colors", canLaunch && !launching ? "text-white sku-btn-primary" : "bg-[#E9EBEF] text-[#9CA3AF] cursor-not-allowed")}
-                  >
-                    {(launching ? (<><Loader2 size={16} className="animate-spin" />Launching…</>) : (<><Rocket size={15} />Launch {platformName} Campaign</>))}
-                  </button>
+                  <CornerDownLeft size={16} />
                 )}
-              </div>
+              </button>
             </div>
-          )}
-          {previewImageUrl && (
-            <div className="fixed inset-0 z-50 bg-black/70 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Creative preview" onClick={() => setPreviewImageUrl(null)}>
-              <div className="relative max-w-[92vw] max-h-[92vh]" onClick={(event) => event.stopPropagation()}>
-                <button type="button" aria-label="Close preview" onClick={() => setPreviewImageUrl(null)} className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full bg-white shadow flex items-center justify-center text-[#111827]"><X size={16} /></button>
-                <img src={previewImageUrl} alt="Generated creative preview" className="max-w-[92vw] max-h-[88vh] object-contain rounded-[8px]" />
-              </div>
-            </div>
-          )}
+          </div>
+
+          <p className="text-[11.5px] text-[#9CA3AF] text-center mt-3">
+            Growzzy can make mistakes. Review every campaign before launching.
+          </p>
         </div>
       </div>
     </Shell>

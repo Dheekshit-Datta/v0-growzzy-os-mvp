@@ -1,395 +1,850 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { Upload, Check, ChevronDown, Loader2, Sparkles, Wand2, Globe, Palette, Type, ShieldCheck } from "lucide-react"
+import {
+  Globe, Sparkles, Plus, Trash2, X, Check, Loader2, Download,
+  ExternalLink, Zap, Building2, Users, Target, ShieldCheck, ArrowRight
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 
-function FormField({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-[13px] font-medium text-[#374151]">{label}</label>
-      {children}
-      {helper && <p className="text-[11.5px] text-[#9CA3AF]">{helper}</p>}
-    </div>
-  )
+export interface AudienceSegment {
+  id: string
+  title: string
+  painPoints: string
 }
 
-type BrandMemory = {
-  brandName?: string
-  tagline?: string
-  archetype?: string
-  brandStory?: string
-  toneOfVoice?: string
-  voiceProfile?: { attribute: string; intensity: string }[]
-  colorPalette?: {
-    primaryHex?: string
-    secondaryHex?: string
-    accentHex?: string
-    backgroundHex?: string
-    description?: string
-  }
-  typography?: {
-    headingFont?: string
-    bodyFont?: string
-  }
-  productDescription?: string
-}
-
-type BrandData = {
-  logo: string | null
+export interface Competitor {
+  id: string
   name: string
-  websiteUrl: string | null
-  industry: string | null
-  toneOfVoice: string | null
-  productDescription: string | null
-  defaultLandingPageUrl: string | null
+  description: string
 }
+
+const TONES = [
+  {
+    id: "Friendly",
+    name: "Friendly",
+    example: "Hey! Grab yours before they're gone ⚡",
+  },
+  {
+    id: "Professional",
+    name: "Professional",
+    example: "Trusted by 10,000+ businesses worldwide.",
+  },
+  {
+    id: "Playful",
+    name: "Playful",
+    example: "Warning: dangerously good products inside 💎",
+  },
+  {
+    id: "Premium",
+    name: "Premium",
+    example: "Crafted for those who notice the details.",
+  },
+]
+
+const COLOR_PALETTES = [
+  { id: "Growzzy", name: "Growzzy", hex: "#1F57F5" },
+  { id: "Ember", name: "Ember", hex: "#F97316" },
+  { id: "Forest", name: "Forest", hex: "#10B981" },
+  { id: "Rose", name: "Rose", hex: "#F43F5E" },
+  { id: "Slate", name: "Slate", hex: "#0F172A" },
+]
 
 export default function BrandPage() {
   const [loading, setLoading] = useState(true)
+  const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
-  const [analyzeError, setAnalyzeError] = useState("")
-  const [saveError, setSaveError] = useState("")
-  const [data, setData] = useState<Partial<BrandData>>({})
-  const [brandMemory, setBrandMemory] = useState<BrandMemory | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [errorMsg, setErrorMsg] = useState("")
 
+  // Brand Core State
+  const [websiteUrl, setWebsiteUrl] = useState("https://markitxai.vercel.app/")
+  const [lastAnalysed, setLastAnalysed] = useState<string>("8/17/2026, 7:37:53 PM")
+  const [sourcesRead, setSourcesRead] = useState<string[]>(["https://markitxai.vercel.app/"])
+
+  const [businessName, setBusinessName] = useState("MARKITX")
+  const [industry, setIndustry] = useState("Artificial Intelligence / Business Software")
+  const [businessModel, setBusinessModel] = useState("B2B Software/Service")
+  const [defaultLandingPage, setDefaultLandingPage] = useState("https://markitxai.vercel.app/")
+
+  const [whatYouSell, setWhatYouSell] = useState(
+    "AI infrastructure solutions, including multi-agent systems, automated AI workflows, and custom AI agents."
+  )
+  const [productDescription, setProductDescription] = useState(
+    "MARKITX provides advanced AI infrastructure designed to automate and run business operations. Their offerings include multi-agent systems for complex tasks, automated workflows to streamline processes, and custom-built AI agents tailored to specific operational needs, aiming to reduce direct human intervention in daily operations."
+  )
+  const [positioning, setPositioning] = useState(
+    "MARKITX positions itself as an essential infrastructure provider for businesses seeking to automate and optimize their operations through sophisticated AI multi-agent systems and custom AI solutions."
+  )
+  const [idealCustomer, setIdealCustomer] = useState(
+    "Businesses looking to automate and optimize their operations using advanced AI technology."
+  )
+
+  // Differentiators
+  const [differentiators, setDifferentiators] = useState<string[]>([
+    "Focus on 'infrastructure' for AI rather than just applications",
+    "Specialization in multi-agent systems",
+    "Custom AI agent development for specific operational needs",
+    "Goal of running operations 'without you in every process' highlighting high automation potential",
+  ])
+  const [newDiffInput, setNewDiffInput] = useState("")
+
+  // Audience Segments
+  const [audienceSegments, setAudienceSegments] = useState<AudienceSegment[]>([
+    {
+      id: "1",
+      title: "Operations-Heavy Businesses",
+      painPoints:
+        "Inefficient manual processes, high operational costs, bottlenecks in workflows, desire for scalability without proportional headcount increase.\n\nSeeking significant operational efficiency improvements, facing competitive pressure to innovate, needing to reduce human error in repetitive tasks.",
+    },
+    {
+      id: "2",
+      title: "Forward-Thinking Enterprises",
+      painPoints:
+        "Struggling to integrate advanced AI into existing systems, lack of internal expertise for custom AI development, desire to leverage cutting-edge AI for strategic advantage.\n\nStrategic initiatives to become AI-first, exploring new technologies for competitive differentiation, looking for robust and scalable AI solutions.",
+    },
+    {
+      id: "3",
+      title: "Businesses with Complex Workflows",
+      painPoints:
+        "Difficulty coordinating multiple interdependent processes, challenges in automating nuanced decision-making, need for intelligent automation beyond simple RPA.\n\nIdentifying multi-step, dynamic processes that could benefit from intelligent agents, seeking solutions that can learn and adapt, aiming for higher levels of operational autonomy.",
+    },
+  ])
+
+  // Competitors
+  const [competitors, setCompetitors] = useState<Competitor[]>([])
+
+  // Search & Creative Signals
+  const [highIntentKeywords, setHighIntentKeywords] = useState<string[]>([
+    "AI infrastructure for businesses",
+    "multi-agent systems for operations",
+    "automated AI workflows",
+    "custom AI agents for business",
+    "AI business automation solutions",
+    "enterprise AI infrastructure",
+    "AI for operational efficiency",
+    "business process automation AI",
+    "AI agent development services",
+    "intelligent automation for businesses",
+    "AI solutions for workflow optimization",
+    "no-code AI business automation",
+  ])
+  const [newKeywordInput, setNewKeywordInput] = useState("")
+
+  const [creativeAngles, setCreativeAngles] = useState<string[]>([
+    "Imagine your business running itself: Automate operations with MARKITX AI infrastructure.",
+    "Unlock true efficiency: MARKITX builds custom AI agents that manage your critical workflows.",
+    "Beyond automation: Leverage multi-agent AI systems to transform your business operations with MARKITX.",
+    "Free up your team for innovation. MARKITX AI handles the heavy lifting, autonomously.",
+    "Future-proof your business: Implement advanced AI infrastructure designed for intelligent, self-running operations.",
+  ])
+  const [newAngleInput, setNewAngleInput] = useState("")
+
+  // Voice & Colors
+  const [selectedTone, setSelectedTone] = useState("Professional")
+  const [selectedColor, setSelectedColor] = useState("Growzzy")
+
+  // Load from workspace / LocalStorage on mount
   useEffect(() => {
-    fetch("/api/workspaces", { cache: "no-store" })
+    try {
+      const stored = localStorage.getItem("growzzy_brand_context_full")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed.websiteUrl) setWebsiteUrl(parsed.websiteUrl)
+        if (parsed.businessName) setBusinessName(parsed.businessName)
+        if (parsed.industry) setIndustry(parsed.industry)
+        if (parsed.businessModel) setBusinessModel(parsed.businessModel)
+        if (parsed.defaultLandingPage) setDefaultLandingPage(parsed.defaultLandingPage)
+        if (parsed.whatYouSell) setWhatYouSell(parsed.whatYouSell)
+        if (parsed.productDescription) setProductDescription(parsed.productDescription)
+        if (parsed.positioning) setPositioning(parsed.positioning)
+        if (parsed.idealCustomer) setIdealCustomer(parsed.idealCustomer)
+        if (parsed.differentiators) setDifferentiators(parsed.differentiators)
+        if (parsed.audienceSegments) setAudienceSegments(parsed.audienceSegments)
+        if (parsed.competitors) setCompetitors(parsed.competitors)
+        if (parsed.highIntentKeywords) setHighIntentKeywords(parsed.highIntentKeywords)
+        if (parsed.creativeAngles) setCreativeAngles(parsed.creativeAngles)
+        if (parsed.selectedTone) setSelectedTone(parsed.selectedTone)
+        if (parsed.selectedColor) setSelectedColor(parsed.selectedColor)
+        if (parsed.sourcesRead) setSourcesRead(parsed.sourcesRead)
+        if (parsed.lastAnalysed) setLastAnalysed(parsed.lastAnalysed)
+      }
+    } catch {}
+
+    fetch("/api/workspaces")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const w = json?.workspaces?.[0]
-        if (w) setData(w)
+        if (w) {
+          if (w.name) setBusinessName(w.name)
+          if (w.websiteUrl) setWebsiteUrl(w.websiteUrl)
+          if (w.industry) setIndustry(w.industry)
+          if (w.productDescription) setProductDescription(w.productDescription)
+          if (w.toneOfVoice) setSelectedTone(w.toneOfVoice)
+          if (w.defaultLandingPageUrl) setDefaultLandingPage(w.defaultLandingPageUrl)
+        }
       })
       .finally(() => setLoading(false))
   }, [])
 
-  const set = (patch: Partial<BrandData>) => setData((prev) => ({ ...prev, ...patch }))
-
-  const handleLogoFile = (file: File) => {
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Logo must be under 2MB")
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => set({ logo: reader.result as string })
-    reader.readAsDataURL(file)
-  }
-
-  const analyzeWebsite = async () => {
-    if (!data.websiteUrl || analyzing) return
+  // Deep Analyse Action
+  const handleDeepAnalyse = async () => {
+    if (!websiteUrl || analyzing) return
     setAnalyzing(true)
-    setAnalyzeError("")
+    setErrorMsg("")
     try {
       const res = await fetch("/api/brand/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl: data.websiteUrl }),
+        body: JSON.stringify({ websiteUrl }),
       })
       const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error?.message || "Failed to analyze website brand")
-      const memory = json.data?.brandMemory
-      if (memory) {
-        setBrandMemory(memory)
-        set({
-          name: memory.brandName || data.name,
-          productDescription: memory.productDescription || data.productDescription,
-          toneOfVoice: memory.toneOfVoice || data.toneOfVoice,
-        })
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error?.message || "Failed to analyze website brand")
+      }
+      const mem = json.data?.brandMemory
+      if (mem) {
+        if (mem.brandName) setBusinessName(mem.brandName)
+        if (mem.industry) setIndustry(mem.industry)
+        if (mem.businessModel) setBusinessModel(mem.businessModel)
+        if (mem.whatYouSell) setWhatYouSell(mem.whatYouSell)
+        if (mem.productDescription) setProductDescription(mem.productDescription)
+        if (mem.positioning) setPositioning(mem.positioning)
+        if (mem.idealCustomer) setIdealCustomer(mem.idealCustomer)
+        if (Array.isArray(mem.differentiators) && mem.differentiators.length > 0) {
+          setDifferentiators(mem.differentiators)
+        }
+        if (Array.isArray(mem.audienceSegments) && mem.audienceSegments.length > 0) {
+          setAudienceSegments(
+            mem.audienceSegments.map((s: any, idx: number) => ({
+              id: String(idx + 1),
+              title: s.title || `Segment ${idx + 1}`,
+              painPoints: s.painPoints || "",
+            }))
+          )
+        }
+        if (Array.isArray(mem.highIntentKeywords) && mem.highIntentKeywords.length > 0) {
+          setHighIntentKeywords(mem.highIntentKeywords)
+        }
+        if (Array.isArray(mem.creativeAngles) && mem.creativeAngles.length > 0) {
+          setCreativeAngles(mem.creativeAngles)
+        }
+        if (mem.toneOfVoice) setSelectedTone(mem.toneOfVoice)
+        if (mem.colorTheme) setSelectedColor(mem.colorTheme)
+        if (mem.sourcesRead) setSourcesRead(mem.sourcesRead)
+
+        const nowStr = new Date().toLocaleString()
+        setLastAnalysed(nowStr)
       }
     } catch (err: any) {
-      setAnalyzeError(err?.message || "Brand analysis failed. Please check the URL.")
+      setErrorMsg(err?.message || "Error analyzing website")
     } finally {
       setAnalyzing(false)
     }
   }
 
-  const save = async () => {
+  // Save Brand Context Action
+  const handleSaveBrandContext = async () => {
     setSaving(true)
-    setSaveError("")
+    setErrorMsg("")
     try {
-      const res = await fetch("/api/workspaces", {
+      const fullContext = {
+        websiteUrl,
+        businessName,
+        industry,
+        businessModel,
+        defaultLandingPage,
+        whatYouSell,
+        productDescription,
+        positioning,
+        idealCustomer,
+        differentiators,
+        audienceSegments,
+        competitors,
+        highIntentKeywords,
+        creativeAngles,
+        selectedTone,
+        selectedColor,
+        sourcesRead,
+        lastAnalysed,
+      }
+
+      localStorage.setItem("growzzy_brand_context_full", JSON.stringify(fullContext))
+      localStorage.setItem("growzzy_brand_name", businessName)
+      localStorage.setItem("growzzy_brand_offer", whatYouSell)
+
+      // Persist to Workspace DB
+      await fetch("/api/workspaces", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: data.name || undefined,
-          websiteUrl: data.websiteUrl || "",
-          industry: data.industry || "",
-          toneOfVoice: data.toneOfVoice || "",
-          productDescription: data.productDescription || "",
-          defaultLandingPageUrl: data.defaultLandingPageUrl || "",
-          logo: data.logo || "",
+          name: businessName,
+          websiteUrl,
+          industry,
+          productDescription,
+          toneOfVoice: selectedTone,
+          defaultLandingPageUrl: defaultLandingPage,
         }),
       })
-      const json = await res.json().catch(() => null)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Could not save brand context")
-      window.dispatchEvent(new Event("growzzy:workspace-updated"))
+
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save brand context")
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to save brand context")
     } finally {
       setSaving(false)
     }
   }
 
+  // Export PDF / Print
+  const handleExportPDF = () => {
+    window.print()
+  }
+
+  // Helper Adders & Removers
+  const addDifferentiator = () => {
+    if (!newDiffInput.trim()) return
+    setDifferentiators([...differentiators, newDiffInput.trim()])
+    setNewDiffInput("")
+  }
+
+  const removeDifferentiator = (index: number) => {
+    setDifferentiators(differentiators.filter((_, i) => i !== index))
+  }
+
+  const addKeyword = () => {
+    if (!newKeywordInput.trim()) return
+    setHighIntentKeywords([...highIntentKeywords, newKeywordInput.trim()])
+    setNewKeywordInput("")
+  }
+
+  const removeKeyword = (index: number) => {
+    setHighIntentKeywords(highIntentKeywords.filter((_, i) => i !== index))
+  }
+
+  const addAngle = () => {
+    if (!newAngleInput.trim()) return
+    setCreativeAngles([...creativeAngles, newAngleInput.trim()])
+    setNewAngleInput("")
+  }
+
+  const removeAngle = (index: number) => {
+    setCreativeAngles(creativeAngles.filter((_, i) => i !== index))
+  }
+
+  const addAudienceSegment = () => {
+    const newId = String(audienceSegments.length + 1)
+    setAudienceSegments([
+      ...audienceSegments,
+      {
+        id: newId,
+        title: "New Target Audience Segment",
+        painPoints: "Describe the primary pain points, challenges, and motivations for this customer segment.",
+      },
+    ])
+  }
+
+  const removeAudienceSegment = (id: string) => {
+    setAudienceSegments(audienceSegments.filter((s) => s.id !== id))
+  }
+
+  const addCompetitor = () => {
+    const newId = String(competitors.length + 1)
+    setCompetitors([
+      ...competitors,
+      {
+        id: newId,
+        name: "Competitor Brand",
+        description: "Competitor positioning and difference in market strategy.",
+      },
+    ])
+  }
+
+  const removeCompetitor = (id: string) => {
+    setCompetitors(competitors.filter((c) => c.id !== id))
+  }
+
   return (
-    <Shell title="My Brand">
-      <div className="p-6 max-w-[840px] space-y-5">
-        {/* Helper banner */}
-        <div className="bg-[#EAF0FE] rounded-[10px] px-4 py-3 text-[12.5px] text-[#1F57F5] font-medium flex items-center justify-between">
-          <span>Every campaign & AI ad creative Growzzy generates uses this brand context.</span>
+    <Shell>
+      <div className="max-w-[1340px] mx-auto pb-20 space-y-6">
+        {/* Top Header Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+          <div>
+            <h1 className="text-[26px] font-bold text-[#111827] tracking-tight">My Brand</h1>
+            <p className="text-[13px] text-[#6B7280] mt-0.5">
+              Growzzy reads your live website so it never has to ask what your business is.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportPDF}
+              className="h-10 px-4 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-2 transition-colors shadow-2xs"
+            >
+              <Download size={15} className="text-[#6B7280]" />
+              Export PDF
+            </button>
+            <button
+              onClick={handleSaveBrandContext}
+              disabled={saving}
+              className="h-10 px-5 bg-[#1F57F5] rounded-[10px] text-[13px] font-bold text-white hover:bg-[#1849D6] flex items-center gap-2 transition-colors shadow-2xs"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+              {saved ? "Saved successfully!" : "Save brand context"}
+            </button>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-10 flex items-center justify-center text-[#9CA3AF]">
-            <Loader2 className="animate-spin" size={20} />
+        {errorMsg && (
+          <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-[10px]">
+            {errorMsg}
           </div>
-        ) : (
-          <div className="space-y-5">
-            {/* Empty State Website Intake Hero Banner */}
-            {(!data.websiteUrl || !data.productDescription) && (
-              <div className="bg-gradient-to-br from-[#EAF0FE] via-white to-[#F0F4FF] rounded-[16px] border-2 border-[#1F57F5]/30 p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={18} className="text-[#1F57F5]" />
-                  <h2 className="text-[16px] font-bold text-[#111827]">Auto-Build Brand Memory from Website</h2>
-                </div>
-                <p className="text-[13px] text-[#4B5563] mb-4 leading-relaxed">
-                  Enter your website URL below. Growzzy will deeply analyze your business, extract your brand story, color palette, typography, and tone of voice so every AI campaign, ad copy, and graphic is automatically personalized for your business.
-                </p>
-                <div className="flex gap-2 max-w-[560px]">
-                  <input
-                    type="url"
-                    placeholder="https://yourwebsite.com"
-                    value={data.websiteUrl || ""}
-                    onChange={(e) => set({ websiteUrl: e.target.value })}
-                    className="w-full h-10 px-3.5 bg-white border border-[#D1D5DB] rounded-[10px] text-[13.5px] text-[#111827] placeholder-[#9CA3AF] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={analyzeWebsite}
-                    disabled={analyzing || !data.websiteUrl}
-                    className="flex items-center gap-2 h-10 px-5 bg-[#1F57F5] text-white text-[13.5px] font-semibold rounded-[10px] hover:bg-[#1849d6] transition-colors disabled:opacity-50 whitespace-nowrap shadow-sm"
-                  >
-                    {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                    {analyzing ? "Analyzing Website…" : "✨ Build Brand Memory"}
-                  </button>
-                </div>
-                {analyzeError && <p className="text-[12px] text-[#D3564C] mt-2 font-medium">{analyzeError}</p>}
-              </div>
-            )}
+        )}
 
-            {/* Main Form */}
-            <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-6 space-y-5">
-              {/* Logo upload */}
-              <FormField label="Brand logo">
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 bg-[#F6F7F9] rounded-[10px] border-2 border-dashed border-[#E9EBEF] flex items-center justify-center overflow-hidden">
-                    {data.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={data.logo} alt="Brand logo" className="w-full h-full object-cover" />
-                    ) : (
-                      <Upload size={18} className="text-[#D1D5DB]" />
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/svg+xml"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && handleLogoFile(e.target.files[0])}
-                    />
-                    <button
-                      onClick={() => fileRef.current?.click()}
-                      className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors"
-                    >
-                      <Upload size={13} />
-                      Upload logo
-                    </button>
-                    <p className="text-[11px] text-[#9CA3AF] mt-1">PNG, JPG or SVG · Max 2MB</p>
-                  </div>
-                </div>
-              </FormField>
+        {/* 2-Column Main Layout */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* Left Main Form Column */}
+          <div className="flex-1 w-full space-y-6">
+            {/* 1. Website analysis Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
+              <h3 className="text-[16px] font-bold text-[#111827]">Website analysis</h3>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Business name">
-                  <input
-                    placeholder="Your business name"
-                    value={data.name || ""}
-                    onChange={(e) => set({ name: e.target.value })}
-                    className="w-full h-9 px-3 bg-[#F6F7F9] border border-[#E9EBEF] rounded-[8px] text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 transition-colors"
-                  />
-                </FormField>
-                <FormField label="Website URL">
-                  <div className="flex gap-2">
+              <div className="space-y-2">
+                <label className="block text-[12px] font-semibold text-[#374151]">Your website URL</label>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Globe size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                     <input
                       type="url"
-                      placeholder="https://yoursite.com"
-                      value={data.websiteUrl || ""}
-                      onChange={(e) => set({ websiteUrl: e.target.value })}
-                      className="w-full h-9 px-3 bg-[#F6F7F9] border border-[#E9EBEF] rounded-[8px] text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 transition-colors"
+                      value={websiteUrl}
+                      onChange={(e) => setWebsiteUrl(e.target.value)}
+                      placeholder="https://yourwebsite.com"
+                      className="w-full h-11 pl-10 pr-3.5 bg-white border border-[#D1D5DB] rounded-[10px] text-[13.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
                     />
-                    <button
-                      type="button"
-                      onClick={analyzeWebsite}
-                      disabled={analyzing || !data.websiteUrl}
-                      className="flex items-center gap-1.5 h-9 px-3 bg-[#EAF0FE] text-[#1F57F5] text-[12px] font-semibold rounded-[8px] hover:bg-[#dbe6fe] transition-colors disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                      {analyzing ? "Analyzing…" : "Analyze Website"}
-                    </button>
                   </div>
-                  {analyzeError && <p className="text-[11px] text-[#D3564C] mt-1">{analyzeError}</p>}
-                </FormField>
-                <FormField label="Industry">
-                  <div className="relative">
-                    <select
-                      value={data.industry || ""}
-                      onChange={(e) => set({ industry: e.target.value })}
-                      className="w-full h-9 pl-3 pr-8 bg-[#F6F7F9] border border-[#E9EBEF] rounded-[8px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 transition-colors appearance-none"
-                    >
-                      <option value="">Select industry</option>
-                      <option>E-commerce / Retail</option>
-                      <option>Real Estate</option>
-                      <option>Healthcare</option>
-                      <option>Finance</option>
-                      <option>Education</option>
-                      <option>Technology / SaaS</option>
-                      <option>Fashion & Apparel</option>
-                      <option>Food & Beverage</option>
-                      <option>Travel & Hospitality</option>
-                      <option>Other</option>
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                  </div>
-                </FormField>
-                <FormField label="Tone of voice">
-                  <div className="relative">
-                    <select
-                      value={data.toneOfVoice || "Professional"}
-                      onChange={(e) => set({ toneOfVoice: e.target.value })}
-                      className="w-full h-9 pl-3 pr-8 bg-[#F6F7F9] border border-[#E9EBEF] rounded-[8px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 transition-colors appearance-none"
-                    >
-                      <option>Professional</option>
-                      <option>Friendly & casual</option>
-                      <option>Luxury & premium</option>
-                      <option>Bold & direct</option>
-                      <option>Empathetic</option>
-                      <option>Playful</option>
-                    </select>
-                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
-                  </div>
-                </FormField>
-                <div className="col-span-2">
-                  <FormField
-                    label="Product / service description"
-                    helper="What do you sell, who buys it, and what makes you different? The AI uses this for every campaign."
+                  <button
+                    onClick={handleDeepAnalyse}
+                    disabled={analyzing || !websiteUrl}
+                    className="w-full sm:w-auto h-11 px-5 bg-[#1F57F5] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#1849D6] transition-colors flex items-center justify-center gap-2 shrink-0 shadow-2xs"
                   >
-                    <textarea
-                      rows={4}
-                      placeholder="Describe your product or service in detail..."
-                      value={data.productDescription || ""}
-                      onChange={(e) => set({ productDescription: e.target.value })}
-                      className="w-full px-3 py-2.5 bg-[#F6F7F9] border border-[#E9EBEF] rounded-[8px] text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none focus:border-[#1F57F5] focus:ring-2 focus:ring-[#1F57F5]/10 transition-colors resize-none leading-relaxed"
-                    />
-                  </FormField>
+                    {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
+                    {analyzing ? "Analyzing live website…" : "Deep-analyse my business"}
+                  </button>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#E9EBEF]">
-                {saveError && <p className="text-[11.5px] text-[#D3564C]">{saveError}</p>}
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 h-9 px-5 bg-[#1F57F5] text-white text-[13px] font-semibold rounded-[8px] hover:bg-[#1849d6] transition-colors disabled:opacity-60"
-                >
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  {saving ? "Saving…" : saved ? "Saved!" : "Save brand kit"}
-                </button>
+                <p className="text-[12px] text-[#6B7280] leading-relaxed pt-1">
+                  Growzzy reads your real pages, searches the live web for your category and competitors, then builds the brand context every campaign is written from.
+                </p>
+                <p className="text-[11px] text-[#9CA3AF] pt-1">
+                  Last analysed {lastAnalysed} · {sourcesRead.length} live sources read
+                </p>
               </div>
             </div>
 
-            {/* Extracted Brand Memory Units Card */}
-            {brandMemory && (
-              <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-6 space-y-4 shadow-sm">
-                <div className="flex items-center justify-between border-b border-[#E9EBEF] pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-[#1F57F5]" />
-                    <h3 className="text-[14px] font-semibold text-[#111827]">Extracted Brand Memory Units</h3>
-                  </div>
-                  <span className="text-[11px] font-bold text-[#10B981] bg-[#ECFDF5] px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <ShieldCheck size={12} /> 100% Extracted
-                  </span>
+            {/* 2. Business Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
+              <h3 className="text-[16px] font-bold text-[#111827]">Business</h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Business name</label>
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Archetype & Tagline */}
-                  <div className="bg-[#F8F9FA] rounded-[10px] p-3.5 border border-[#E9EBEF]">
-                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Brand Archetype & Tagline</p>
-                    <p className="text-[13px] font-bold text-[#111827] mt-1">{brandMemory.archetype || "The Innovator"}</p>
-                    {brandMemory.tagline && <p className="text-[12px] italic text-[#4B5563] mt-0.5">"{brandMemory.tagline}"</p>}
-                    {brandMemory.brandStory && <p className="text-[11.5px] text-[#6B7280] mt-2 line-clamp-2">{brandMemory.brandStory}</p>}
-                  </div>
-
-                  {/* Color Palette Swatches */}
-                  <div className="bg-[#F8F9FA] rounded-[10px] p-3.5 border border-[#E9EBEF]">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Palette size={13} className="text-[#1F57F5]" />
-                      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Brand Color Palette</p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      {[
-                        { label: "Primary", hex: brandMemory.colorPalette?.primaryHex || "#0B0B0B" },
-                        { label: "Secondary", hex: brandMemory.colorPalette?.secondaryHex || "#1F57F5" },
-                        { label: "Accent", hex: brandMemory.colorPalette?.accentHex || "#10B981" },
-                        { label: "Bg", hex: brandMemory.colorPalette?.backgroundHex || "#F9FAFB" },
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex-1 text-center">
-                          <div className="w-full h-8 rounded-[6px] border border-black/10 shadow-inner" style={{ backgroundColor: item.hex }} />
-                          <p className="text-[10px] font-mono text-[#374151] mt-1">{item.hex}</p>
-                          <p className="text-[9.5px] text-[#9CA3AF]">{item.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Voice Profile Intensity */}
-                  <div className="bg-[#F8F9FA] rounded-[10px] p-3.5 border border-[#E9EBEF]">
-                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-2">Brand Voice Intensity</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(brandMemory.voiceProfile || [
-                        { attribute: "Professional", intensity: "High" },
-                        { attribute: "Confident", intensity: "High" },
-                        { attribute: "Direct", intensity: "Moderate" },
-                      ]).map((item, i) => (
-                        <span key={i} className="text-[11px] font-medium bg-white text-[#374151] border border-[#E9EBEF] px-2.5 py-1 rounded-full">
-                          {item.attribute} <span className="text-[10px] text-[#1F57F5] font-bold">({item.intensity})</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Typography */}
-                  <div className="bg-[#F8F9FA] rounded-[10px] p-3.5 border border-[#E9EBEF]">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Type size={13} className="text-[#1F57F5]" />
-                      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Extracted Typography</p>
-                    </div>
-                    <p className="text-[12px] text-[#374151]">
-                      <span className="font-semibold">Headings:</span> {brandMemory.typography?.headingFont || "Inter, sans-serif"}
-                    </p>
-                    <p className="text-[12px] text-[#374151] mt-1">
-                      <span className="font-semibold">Body:</span> {brandMemory.typography?.bodyFont || "Roboto, sans-serif"}
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Industry</label>
+                  <input
+                    type="text"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Business model</label>
+                  <input
+                    type="text"
+                    value={businessModel}
+                    onChange={(e) => setBusinessModel(e.target.value)}
+                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Default landing page</label>
+                  <input
+                    type="url"
+                    value={defaultLandingPage}
+                    onChange={(e) => setDefaultLandingPage(e.target.value)}
+                    className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
                 </div>
               </div>
-            )}
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">What you sell</label>
+                <textarea
+                  rows={2}
+                  value={whatYouSell}
+                  onChange={(e) => setWhatYouSell(e.target.value)}
+                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Product description</label>
+                <textarea
+                  rows={4}
+                  value={productDescription}
+                  onChange={(e) => setProductDescription(e.target.value)}
+                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Positioning</label>
+                <textarea
+                  rows={3}
+                  value={positioning}
+                  onChange={(e) => setPositioning(e.target.value)}
+                  className="w-full p-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5] leading-relaxed resize-y"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Ideal customer</label>
+                <input
+                  type="text"
+                  value={idealCustomer}
+                  onChange={(e) => setIdealCustomer(e.target.value)}
+                  className="w-full h-10 px-3 bg-white border border-[#D1D5DB] rounded-[10px] text-[13px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                />
+              </div>
+
+              {/* Differentiators */}
+              <div className="space-y-2 pt-2">
+                <label className="block text-[12px] font-semibold text-[#374151]">Differentiators</label>
+                <div className="flex flex-wrap gap-2">
+                  {differentiators.map((d, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-full flex items-center gap-1.5 border border-[#E5E7EB]"
+                    >
+                      {d}
+                      <button onClick={() => removeDifferentiator(i)} className="text-[#9CA3AF] hover:text-[#111827]">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1.5">
+                  <input
+                    type="text"
+                    value={newDiffInput}
+                    onChange={(e) => setNewDiffInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addDifferentiator()}
+                    placeholder="Add a differentiator and press Enter"
+                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
+                  <button
+                    onClick={addDifferentiator}
+                    type="button"
+                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Audience Segments Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px] font-bold text-[#111827]">Audience segments</h3>
+                <button
+                  onClick={addAudienceSegment}
+                  className="h-8 px-3.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-1.5"
+                >
+                  <Plus size={13} /> Add segment
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {audienceSegments.map((segment) => (
+                  <div key={segment.id} className="p-4 bg-[#F9FAFB] rounded-[12px] border border-[#E5E7EB] space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="text"
+                        value={segment.title}
+                        onChange={(e) =>
+                          setAudienceSegments(
+                            audienceSegments.map((s) => (s.id === segment.id ? { ...s, title: e.target.value } : s))
+                          )
+                        }
+                        className="font-bold text-[13.5px] text-[#111827] bg-transparent border-b border-transparent focus:border-[#1F57F5] outline-none flex-1 mr-2"
+                      />
+                      <button
+                        onClick={() => removeAudienceSegment(segment.id)}
+                        className="text-[#9CA3AF] hover:text-red-500 transition-colors p-1"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={segment.painPoints}
+                      onChange={(e) =>
+                        setAudienceSegments(
+                          audienceSegments.map((s) => (s.id === segment.id ? { ...s, painPoints: e.target.value } : s))
+                        )
+                      }
+                      className="w-full p-2.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#374151] leading-relaxed outline-none focus:border-[#1F57F5]"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Competitors Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px] font-bold text-[#111827]">Competitors</h3>
+                <button
+                  onClick={addCompetitor}
+                  className="h-8 px-3.5 bg-white border border-[#D1D5DB] rounded-[8px] text-[12px] font-semibold text-[#374151] hover:bg-[#F9FAFB] flex items-center gap-1.5"
+                >
+                  <Plus size={13} /> Add competitor
+                </button>
+              </div>
+
+              {competitors.length === 0 ? (
+                <p className="text-[12.5px] text-[#9CA3AF] py-2">
+                  No competitors yet — analyse your website or add one manually.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {competitors.map((comp) => (
+                    <div key={comp.id} className="p-3.5 bg-[#F9FAFB] rounded-[10px] border border-[#E5E7EB] flex items-start justify-between gap-3">
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="text"
+                          value={comp.name}
+                          onChange={(e) =>
+                            setCompetitors(competitors.map((c) => (c.id === comp.id ? { ...c, name: e.target.value } : c)))
+                          }
+                          className="font-bold text-[13px] text-[#111827] bg-transparent border-b border-transparent focus:border-[#1F57F5] outline-none w-full"
+                        />
+                        <textarea
+                          rows={2}
+                          value={comp.description}
+                          onChange={(e) =>
+                            setCompetitors(
+                              competitors.map((c) => (c.id === comp.id ? { ...c, description: e.target.value } : c))
+                            )
+                          }
+                          className="w-full p-2 bg-white border border-[#D1D5DB] rounded-[6px] text-[12px] text-[#374151]"
+                        />
+                      </div>
+                      <button
+                        onClick={() => removeCompetitor(comp.id)}
+                        className="text-[#9CA3AF] hover:text-red-500 p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Search & Creative Signals Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
+              <h3 className="text-[16px] font-bold text-[#111827]">Search & creative signals</h3>
+
+              {/* Keywords */}
+              <div className="space-y-2">
+                <label className="block text-[12px] font-semibold text-[#374151]">High-intent keywords</label>
+                <div className="flex flex-wrap gap-2">
+                  {highIntentKeywords.map((kw, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-full flex items-center gap-1.5 border border-[#E5E7EB]"
+                    >
+                      {kw}
+                      <button onClick={() => removeKeyword(i)} className="text-[#9CA3AF] hover:text-[#111827]">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1.5">
+                  <input
+                    type="text"
+                    value={newKeywordInput}
+                    onChange={(e) => setNewKeywordInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+                    placeholder="Add a keyword and press Enter"
+                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
+                  <button
+                    onClick={addKeyword}
+                    type="button"
+                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Creative Angles */}
+              <div className="space-y-2 pt-2 border-t border-[#F3F4F6]">
+                <label className="block text-[12px] font-semibold text-[#374151]">Creative angles</label>
+                <div className="flex flex-wrap gap-2">
+                  {creativeAngles.map((angle, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1.5 bg-[#F3F4F6] text-[#374151] text-[12px] font-medium rounded-[10px] flex items-center gap-2 border border-[#E5E7EB] max-w-full"
+                    >
+                      <span className="truncate">{angle}</span>
+                      <button onClick={() => removeAngle(i)} className="text-[#9CA3AF] hover:text-[#111827] shrink-0">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1.5">
+                  <input
+                    type="text"
+                    value={newAngleInput}
+                    onChange={(e) => setNewAngleInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addAngle()}
+                    placeholder="Add a creative angle and press Enter"
+                    className="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-[8px] text-[12.5px] text-[#111827] outline-none focus:border-[#1F57F5]"
+                  />
+                  <button
+                    onClick={addAngle}
+                    type="button"
+                    className="h-9 px-4 bg-white border border-[#D1D5DB] text-[#374151] text-[12px] font-semibold rounded-[8px] hover:bg-[#F9FAFB] flex items-center gap-1"
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Voice & Colors Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-6 space-y-5 shadow-2xs">
+              <h3 className="text-[16px] font-bold text-[#111827]">Voice & colors</h3>
+
+              {/* Tone of Voice */}
+              <div>
+                <label className="block text-[12px] font-semibold text-[#374151] mb-2.5">Tone of voice</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  {TONES.map((tone) => (
+                    <button
+                      key={tone.id}
+                      type="button"
+                      onClick={() => setSelectedTone(tone.name)}
+                      className={cn(
+                        "p-3.5 rounded-[12px] border text-left transition-all",
+                        selectedTone === tone.name
+                          ? "bg-[#EAF0FE] border-[#1F57F5] ring-2 ring-[#1F57F5]/20 shadow-xs"
+                          : "bg-white border-[#E5E7EB] hover:border-[#D1D5DB]"
+                      )}
+                    >
+                      <p className="text-[13px] font-bold text-[#111827]">{tone.name}</p>
+                      <p className="text-[11px] text-[#6B7280] mt-1 leading-snug">{tone.example}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color Palettes */}
+              <div className="pt-2 border-t border-[#F3F4F6]">
+                <label className="block text-[12px] font-semibold text-[#374151] mb-2.5">Palette theme</label>
+                <div className="flex items-center gap-3">
+                  {COLOR_PALETTES.map((pal) => (
+                    <button
+                      key={pal.id}
+                      type="button"
+                      onClick={() => setSelectedColor(pal.name)}
+                      className={cn(
+                        "flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-semibold transition-all",
+                        selectedColor === pal.name
+                          ? "border-[#1F57F5] bg-[#EAF0FE] text-[#1F57F5] ring-1 ring-[#1F57F5]"
+                          : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
+                      )}
+                    >
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: pal.hex }} />
+                      {pal.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Right Sidebar Column */}
+          <div className="w-full lg:w-[380px] space-y-6 shrink-0 lg:sticky lg:top-6">
+            {/* Live Preview Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 space-y-4 shadow-2xs">
+              <h3 className="text-[15px] font-bold text-[#111827]">Live preview</h3>
+
+              {/* Header profile */}
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#1F57F5] text-white flex items-center justify-center text-xs font-bold shadow-2xs">
+                  {businessName.charAt(0).toUpperCase() || "M"}
+                </div>
+                <p className="text-[13px] font-bold text-[#111827]">{businessName || "MARKITX"}</p>
+              </div>
+
+              {/* Ad Card Mockup */}
+              <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4 space-y-2.5 shadow-xs">
+                <div>
+                  <span className="text-[10px] font-extrabold text-[#6B7280] uppercase tracking-wider block mb-0.5">
+                    Sponsored
+                  </span>
+                  <h4 className="text-[13.5px] font-bold text-[#111827]">
+                    {businessName || "MARKITX"} — {selectedTone} ad
+                  </h4>
+                </div>
+
+                <p className="text-[12px] text-[#4B5563] leading-relaxed line-clamp-6">
+                  {productDescription || whatYouSell || "AI infrastructure solutions, including multi-agent systems, automated AI workflows, and custom AI agents."}
+                </p>
+
+                <button className="h-7 px-4 bg-[#1F57F5] text-white text-[11.5px] font-bold rounded-full hover:bg-[#1849D6] transition-colors flex items-center gap-1.5">
+                  <Zap size={11} /> Shop now
+                </button>
+              </div>
+
+              <p className="text-[11.5px] text-[#9CA3AF] leading-relaxed">
+                Growzzy only advertises on Google Ads and Meta Ads — this is how your ads will feel.
+              </p>
+            </div>
+
+            {/* Sources read Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] p-5 space-y-3 shadow-2xs">
+              <h3 className="text-[15px] font-bold text-[#111827]">Sources read</h3>
+              <div className="space-y-2">
+                {sourcesRead.map((source, i) => (
+                  <a
+                    key={i}
+                    href={source}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[12px] text-[#1F57F5] hover:underline flex items-center gap-1.5 truncate"
+                  >
+                    <ExternalLink size={12} className="shrink-0 text-[#9CA3AF]" />
+                    <span className="truncate">{source}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </Shell>
   )

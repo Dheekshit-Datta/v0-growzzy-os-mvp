@@ -6,21 +6,13 @@ import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { getRequestWorkspaceId } from "@/lib/workspace"
 import { invalidateBusinessContext } from "@/lib/business-context"
+import { normalizeUrl, fetchPageText, webSearch, pickInternalLinks } from "@/lib/deep-research"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
 const AnalyzeSchema = z.object({
-  websiteUrl: z.string().url("Invalid website URL"),
+  websiteUrl: z.string().min(3, "Invalid website URL"),
 })
-
-function extractTextFromHtml(html: string): string {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-}
 
 export async function POST(request: Request) {
   try {
@@ -31,62 +23,129 @@ export async function POST(request: Request) {
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, request as any)
     const body = await request.json()
-    const { websiteUrl } = AnalyzeSchema.parse(body)
+    const { websiteUrl: rawUrl } = AnalyzeSchema.parse(body)
 
-    let html = ""
+    const site = normalizeUrl(rawUrl)
+    if (!site) {
+      return NextResponse.json({ ok: false, error: { message: "Invalid website URL" } }, { status: 400 })
+    }
+
+    // 1. Fetch homepage HTML
+    let homepageHtml = ""
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000)
-      const res = await fetch(websiteUrl, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; GrowzzyOS/1.0)" },
+      const res = await fetch(site, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; GrowzzyOS/1.0)", Accept: "text/html" },
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
-      if (res.ok) html = await res.text()
+      if (res.ok) homepageHtml = await res.text()
     } catch (e) {
-      console.warn("Could not fetch website html directly:", e)
+      console.warn("Could not fetch homepage html directly:", e)
     }
 
-    const pageText = extractTextFromHtml(html).slice(0, 4000)
+    const homepageText = await fetchPageText(site, 8000)
+
+    // 2. Fetch internal pages (e.g. /pricing, /about, /services, /features)
+    const internalLinks = pickInternalLinks(homepageHtml, site, 3)
+    const internalTexts = await Promise.all(internalLinks.map((u) => fetchPageText(u, 4000)))
+
+    // 3. Search web for live brand reviews & competitors
+    let host = ""
+    try {
+      host = new URL(site).hostname.replace(/^www\./, "")
+    } catch {
+      host = site
+    }
+    const brandGuess = host.split(".")[0] || host
+
+    const [aboutSearchResults, competitorSearchResults] = await Promise.all([
+      webSearch(`${host} what they sell reviews features`, 4),
+      webSearch(`${brandGuess} competitors alternatives`, 5),
+    ])
+
+    const sourcesRead = [site, ...internalLinks, ...aboutSearchResults.slice(0, 2).map((r) => r.url)]
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ ok: false, error: { message: "OPENAI_API_KEY not configured" } }, { status: 503 })
     }
 
-    const systemPrompt = `You are a world-class brand strategist and creative director.
-Analyze the provided website URL and page text. Extract a comprehensive, structured Brand Memory definition.
-Return ONLY valid JSON matching this structure:
+    const systemPrompt = `You are a world-class brand strategist, direct-response creative director, and market researcher.
+Analyze the comprehensive multi-source live website crawl, internal pages, and live search research.
+Extract a deep, structured Brand Profile definition.
+Return ONLY valid JSON matching this exact structure:
 {
-  "brandName": "extracted brand or company name",
-  "tagline": "primary brand tagline or value statement",
-  "archetype": "The Creator | The Innovator | The Authority | The Rebel | The Caregiver | The Explorer",
-  "brandStory": "1-2 sentence core positioning narrative",
-  "toneOfVoice": "Primary tone (e.g. Professional & Confident)",
-  "voiceProfile": [
-    { "attribute": "Confident", "intensity": "High" },
-    { "attribute": "Technical", "intensity": "Moderate" },
-    { "attribute": "Authoritative", "intensity": "High" }
+  "brandName": "extracted brand name or company name",
+  "industry": "e.g. Artificial Intelligence / Business Software",
+  "businessModel": "e.g. B2B Software/Service or E-Commerce or Direct-To-Consumer",
+  "defaultLandingPage": "${site}",
+  "whatYouSell": "1-2 concise sentences summarizing the core products, services, and solutions",
+  "productDescription": "Comprehensive 2-4 sentence description explaining the technology/value propositions and how it transforms customer operations",
+  "positioning": "How the company positions itself as an essential provider vs competitors",
+  "idealCustomer": "Target demographic, job titles, and business types looking to buy",
+  "differentiators": [
+    "Key differentiator 1",
+    "Key differentiator 2",
+    "Key differentiator 3",
+    "Key differentiator 4"
   ],
-  "colorPalette": {
-    "primaryHex": "#0B0B0B",
-    "secondaryHex": "#1F57F5",
-    "accentHex": "#10B981",
-    "backgroundHex": "#F9FAFB",
-    "description": "Dark minimalist high-contrast theme"
-  },
-  "typography": {
-    "headingFont": "Inter, sans-serif",
-    "bodyFont": "Roboto, sans-serif"
-  },
-  "productDescription": "Comprehensive summary of product/service capabilities, target buyer, and key value propositions."
+  "audienceSegments": [
+    {
+      "title": "Operations-Heavy Businesses",
+      "painPoints": "Inefficient manual processes, high operational costs, bottlenecks in workflows, desire for scalability without proportional headcount increase."
+    },
+    {
+      "title": "Forward-Thinking Enterprises",
+      "painPoints": "Struggling to integrate advanced AI into existing systems, lack of internal expertise, desire to leverage AI for competitive differentiation."
+    },
+    {
+      "title": "Businesses with Complex Workflows",
+      "painPoints": "Difficulty coordinating multiple interdependent processes, challenges in automating nuanced decision-making, need for intelligent automation beyond simple RPA."
+    }
+  ],
+  "competitors": [
+    {
+      "name": "Market Competitor / Alternative",
+      "description": "How they compete and why our brand has the superior positioning/angle"
+    }
+  ],
+  "highIntentKeywords": [
+    "high intent keyword 1",
+    "high intent keyword 2",
+    "high intent keyword 3",
+    "high intent keyword 4",
+    "high intent keyword 5",
+    "high intent keyword 6"
+  ],
+  "creativeAngles": [
+    "Compelling high-converting direct response hook 1",
+    "Compelling high-converting direct response hook 2",
+    "Compelling high-converting direct response hook 3"
+  ],
+  "toneOfVoice": "Professional",
+  "colorTheme": "Growzzy",
+  "sourcesRead": ${JSON.stringify(sourcesRead.slice(0, 5))}
 }`
 
-    const userPrompt = `Website URL: ${websiteUrl}\nExtracted Page Text:\n${pageText || "Not available"}`
+    const userPrompt = `
+=== HOMEPAGE CONTENT (${site}) ===
+${homepageText || "Not available"}
+
+=== INTERNAL PAGES SCANNED ===
+${internalTexts.filter(Boolean).join("\n---\n") || "None"}
+
+=== WEB REPUTATION & PRODUCT SEARCH ===
+${aboutSearchResults.map((r) => `${r.title}: ${r.snippet}`).join("\n")}
+
+=== COMPETITOR / MARKET SEARCH ===
+${competitorSearchResults.map((r) => `${r.title}: ${r.snippet}`).join("\n")}
+`
 
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_BRAND_MODEL || "gpt-4o",
       response_format: { type: "json_object" },
-      temperature: 0.5,
+      temperature: 0.4,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -95,21 +154,16 @@ Return ONLY valid JSON matching this structure:
 
     const brandMemory = JSON.parse(completion.choices[0]?.message?.content || "{}")
 
-    // Update workspace with extracted brand parameters
+    // Update workspace record with extracted parameters
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
         name: brandMemory.brandName || undefined,
-        websiteUrl: websiteUrl,
+        websiteUrl: site,
         productDescription: brandMemory.productDescription || undefined,
+        industry: brandMemory.industry || undefined,
         toneOfVoice: brandMemory.toneOfVoice || undefined,
-      },
-      select: {
-        id: true,
-        name: true,
-        websiteUrl: true,
-        productDescription: true,
-        toneOfVoice: true,
+        defaultLandingPageUrl: brandMemory.defaultLandingPage || site,
       },
     })
 
@@ -123,7 +177,7 @@ Return ONLY valid JSON matching this structure:
       },
     })
   } catch (error: any) {
-    console.error("Brand analysis error:", error)
+    console.error("Brand deep analysis error:", error)
     return NextResponse.json(
       { ok: false, error: { message: error?.message || "Failed to analyze website brand" } },
       { status: 500 }
