@@ -29,8 +29,10 @@ export function PromptInput({
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!value.trim()) return;
-    onSubmit({ text: value, files: [] }, e);
+    const textarea = e.currentTarget.querySelector("textarea");
+    const text = textarea?.value || value || "";
+    if (!text.trim()) return;
+    onSubmit({ text, files: [] }, e);
     setValue("");
   };
 

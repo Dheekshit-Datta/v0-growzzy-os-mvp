@@ -698,7 +698,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   );
 
   return (
-    <div className="flex h-[calc(100vh-116px)] gap-4">
+    <div className="flex h-full min-h-0 w-full gap-4 p-4 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         {started && (
           <div className="flex items-center justify-end gap-2 px-1 pb-1">

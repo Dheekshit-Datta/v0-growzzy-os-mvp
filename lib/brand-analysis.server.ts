@@ -1,5 +1,5 @@
 /** Deep website + competitor analysis. Server-only. Shared by My Brand and the chat agent. */
-import OpenAI from "openai";
+import { generateText } from "ai";
 
 export interface AnalyzedBrand {
   businessName: string;
@@ -25,6 +25,7 @@ export async function analyzeSite(
   const { normalizeUrl, fetchPageText, webSearch, pickInternalLinks } = await import(
     "@/lib/research.server"
   );
+  const { createLovableAiGatewayProvider, CHAT_MODEL } = await import("@/lib/ai-gateway.server");
 
   const site = normalizeUrl(url);
   if (!site) throw new Error("That doesn't look like a valid website URL.");
@@ -69,28 +70,20 @@ export async function analyzeSite(
     .filter(Boolean)
     .join("\n\n");
 
-  const openai = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY || "" });
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_CHAT_MODEL || "gpt-4o",
-    temperature: 0.3,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a senior brand + performance-marketing analyst. You are given REAL scraped page content and REAL web search results. Analyse them deeply and return ONLY a JSON object with exactly these keys: businessName, industry, businessModel, whatTheySell, productDescription, positioning, differentiators (array of strings), audience, segments (array of {segment, pains, triggers}), competitors (array of {name, url, angle}), keywords (array of high-intent search keywords), creativeAngles (array of strings), tone (one of friendly, professional, playful, premium). Ground every field in the supplied material; never invent a company. Keep 3-5 differentiators, 3 segments, 3-5 competitors, 10-14 keywords, 4-6 creative angles.",
-      },
-      {
-        role: "user",
-        content: `Website: ${site}\n\n${corpus.slice(0, 60000)}`,
-      },
-    ],
+  const gateway = createLovableAiGatewayProvider(apiKey);
+  const { text } = await generateText({
+    model: gateway(CHAT_MODEL),
+    system:
+      "You are a senior brand + performance-marketing analyst. You are given REAL scraped page content and REAL web search results. Analyse them deeply and return ONLY a JSON object (no markdown fences) with exactly these keys: businessName, industry, businessModel, whatTheySell, productDescription, positioning, differentiators (array of strings), audience, segments (array of {segment, pains, triggers}), competitors (array of {name, url, angle}), keywords (array of high-intent search keywords), creativeAngles (array of strings), tone (one of friendly, professional, playful, premium). Ground every field in the supplied material; never invent a company. Keep 3-5 differentiators, 3 segments, 3-5 competitors, 10-14 keywords, 4-6 creative angles.",
+    prompt: `Website: ${site}\n\n${corpus.slice(0, 60000)}`,
   });
 
-  const rawJson = completion.choices[0]?.message?.content || "{}";
+  const json = text.replace(/^```(?:json)?|```$/gim, "").trim();
   let parsed: Partial<AnalyzedBrand>;
   try {
-    parsed = JSON.parse(rawJson) as Partial<AnalyzedBrand>;
+    parsed = JSON.parse(
+      json.slice(json.indexOf("{"), json.lastIndexOf("}") + 1),
+    ) as Partial<AnalyzedBrand>;
   } catch {
     throw new Error("Analysis came back unreadable — try again.");
   }
