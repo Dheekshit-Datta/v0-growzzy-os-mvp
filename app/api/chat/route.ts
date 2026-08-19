@@ -262,9 +262,20 @@ export async function POST(req: NextRequest) {
     ]
 
     for (const m of messages) {
+      let content = ""
+      if (typeof m.content === "string") {
+        content = m.content
+      } else if (Array.isArray((m as any).parts)) {
+        content = (m as any).parts
+          .map((p: any) => p.text || (p.input ? JSON.stringify(p.input) : ""))
+          .filter(Boolean)
+          .join("\n")
+      } else {
+        content = JSON.stringify(m.content || "")
+      }
       formattedMessages.push({
         role: m.role === "user" ? "user" : "assistant",
-        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        content: content || "...",
       })
     }
 
