@@ -1,45 +1,42 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createOpenAI } from "@ai-sdk/openai";
 
 export const CHAT_MODEL = "google/gemini-2.5-flash";
 export const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
 // Direct OpenAI model names (when using OPENAI_API_KEY directly)
 export const OPENAI_CHAT_MODEL = "gpt-4o";
-export const OPENAI_IMAGE_MODEL = "gpt-image-1";
+export const OPENAI_IMAGE_MODEL = "dall-e-3";
 
 /**
- * Creates the AI provider.
- * If LOVABLE_API_KEY or AI_GATEWAY_API_KEY is set, uses the Lovable gateway.
- * Otherwise falls back to OpenAI directly.
+ * Creates the AI provider using the official @ai-sdk/openai (v2 model spec).
+ * If LOVABLE_API_KEY or AI_GATEWAY_API_KEY is set, uses the Lovable gateway baseURL.
+ * Otherwise uses standard OpenAI.
  */
 export function createAIProvider(apiKey: string) {
-  // Check if this is a Lovable gateway key
   const isLovable = Boolean(
     process.env["LOVABLE_API_KEY"] || process.env["AI_GATEWAY_API_KEY"]
   );
 
   if (isLovable) {
+    const provider = createOpenAI({
+      apiKey,
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      headers: {
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+      },
+    });
     return {
-      provider: createOpenAICompatible({
-        name: "lovable-ai-gateway",
-        baseURL: "https://ai.gateway.lovable.dev/v1",
-        apiKey,
-        headers: {
-          "Lovable-API-Key": apiKey,
-          "X-Lovable-AIG-SDK": "vercel-ai-sdk",
-        },
-      }),
+      provider,
       chatModel: CHAT_MODEL,
     };
   }
 
-  // Fall back to OpenAI directly
+  const provider = createOpenAI({
+    apiKey,
+  });
   return {
-    provider: createOpenAICompatible({
-      name: "openai",
-      baseURL: "https://api.openai.com/v1",
-      apiKey,
-    }),
+    provider,
     chatModel: OPENAI_CHAT_MODEL,
   };
 }
@@ -96,7 +93,7 @@ export async function generateAdImage(
     return { url, error: url ? undefined : "No image returned" };
   }
 
-  // Fall back to OpenAI image generation
+  // Fall back to OpenAI DALL-E image generation
   try {
     const res = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
