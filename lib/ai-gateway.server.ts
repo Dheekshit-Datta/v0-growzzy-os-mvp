@@ -45,7 +45,7 @@ export function createLovableAiGatewayProvider(apiKey: string) {
   return createAIProvider(apiKey).provider;
 }
 
-/** Generates one ad creative image and returns it as a data URL. */
+/** Generates one ad creative image and returns it as a data URL or public URL. */
 export async function generateAdImage(
   apiKey: string,
   prompt: string,
@@ -54,6 +54,14 @@ export async function generateAdImage(
   const isLovable = Boolean(
     process.env["LOVABLE_API_KEY"] || process.env["AI_GATEWAY_API_KEY"]
   );
+
+  // Clean and sanitize prompt for image generation
+  const cleanPrompt = prompt
+    .replace(/^["']|["']$/g, "")
+    .replace(/[`*_#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 950);
 
   if (isLovable) {
     let res: Response;
@@ -67,7 +75,7 @@ export async function generateAdImage(
         },
         body: JSON.stringify({
           model: IMAGE_MODEL,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: cleanPrompt }],
           modalities: ["image", "text"],
         }),
         signal,
@@ -80,8 +88,8 @@ export async function generateAdImage(
     }
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      console.error("[growzzy] image generation failed", res.status, detail.slice(0, 300));
-      return { url: null, error: `Image service returned ${res.status}` };
+      console.error("[growzzy] lovable image generation failed", res.status, detail.slice(0, 300));
+      return { url: null, error: `Image service error (${res.status}): ${detail.slice(0, 150)}` };
     }
     const data = (await res.json()) as {
       choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[];
@@ -91,34 +99,46 @@ export async function generateAdImage(
     return { url, error: url ? undefined : "No image returned" };
   }
 
-  // Fall back to OpenAI DALL-E image generation
-  try {
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_IMAGE_MODEL,
-        prompt,
-        n: 1,
-        size: "1024x1024",
-      }),
-      signal,
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error("[growzzy] OpenAI image generation failed", res.status, detail.slice(0, 300));
-      return { url: null, error: `Image service returned ${res.status}` };
+  // OpenAI DALL-E image generation with DALL-E 3 -> DALL-E 2 fallback
+  const modelsToTry = ["dall-e-3", "dall-e-2"];
+  let lastError = "Image generation failed";
+
+  for (const model of modelsToTry) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          prompt: cleanPrompt,
+          n: 1,
+          size: "1024x1024",
+          response_format: "url",
+        }),
+        signal,
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { data?: { url?: string; b64_json?: string }[] };
+        const item = data.data?.[0];
+        const url = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
+        if (url) return { url };
+      } else {
+        const errJson = await res.json().catch(() => null);
+        const errMsg = errJson?.error?.message || `HTTP ${res.status}`;
+        console.warn(`[growzzy] OpenAI ${model} failed:`, errMsg);
+        lastError = errMsg;
+      }
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+        return { url: null, error: "Generation canceled" };
+      }
+      lastError = (error as Error).message || "Network error";
     }
-    const data = (await res.json()) as { data?: { url?: string }[] };
-    const url = data.data?.[0]?.url ?? null;
-    return { url, error: url ? undefined : "No image returned" };
-  } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-      return { url: null, error: "Generation canceled" };
-    }
-    throw error;
   }
+
+  return { url: null, error: `Image generation failed: ${lastError}` };
 }
