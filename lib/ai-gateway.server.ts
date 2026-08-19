@@ -3,14 +3,13 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 export const CHAT_MODEL = "google/gemini-2.5-flash";
 export const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
-// Direct OpenAI model names (when using OPENAI_API_KEY directly)
 export const OPENAI_CHAT_MODEL = "gpt-4o";
 export const OPENAI_IMAGE_MODEL = "dall-e-3";
 
 /**
- * Creates the AI provider.
- * If LOVABLE_API_KEY or AI_GATEWAY_API_KEY is set, uses the Lovable gateway.
- * Otherwise uses direct OpenAI endpoint.
+ * Creates the AI provider for AI SDK v7.
+ * If LOVABLE_API_KEY or AI_GATEWAY_API_KEY is set, routes through Lovable gateway.
+ * Otherwise uses OpenAI endpoint.
  */
 export function createAIProvider(apiKey: string) {
   const isLovable = Boolean(
@@ -42,7 +41,6 @@ export function createAIProvider(apiKey: string) {
   };
 }
 
-// Legacy export for backward compatibility
 export function createLovableAiGatewayProvider(apiKey: string) {
   return createAIProvider(apiKey).provider;
 }
@@ -58,7 +56,6 @@ export async function generateAdImage(
   );
 
   if (isLovable) {
-    // Use Lovable gateway for image generation
     let res: Response;
     try {
       res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
