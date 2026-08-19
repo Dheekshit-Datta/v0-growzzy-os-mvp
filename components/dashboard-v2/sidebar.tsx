@@ -24,7 +24,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { loadSavedChats, deleteSavedChat } from "@/lib/chat-store"
+import { loadSavedChats, deleteSavedChat, getDeletedChatIds } from "@/lib/chat-store"
 import { toast } from "sonner"
 
 interface NavItem {
@@ -125,12 +125,18 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   useEffect(() => {
     const loadPrompts = () => {
-      const local = loadSavedChats().map((c) => ({ id: c.id, campaignName: c.title }))
+      const deleted = new Set(getDeletedChatIds())
+      const local = loadSavedChats()
+        .filter((c) => !deleted.has(c.id))
+        .map((c) => ({ id: c.id, campaignName: c.title }))
+
       fetch("/api/ai/campaign-plans", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           const items = Array.isArray(json?.plans) ? json.plans : []
-          const apiPrompts = items.map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
+          const apiPrompts = items
+            .filter((item: { id: string }) => !deleted.has(item.id))
+            .map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
           const merged = [...local, ...apiPrompts]
           const unique = Array.from(new Map(merged.map((m) => [m.id, m])).values()).slice(0, 10)
           setRecentPrompts(unique)

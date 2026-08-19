@@ -8,7 +8,18 @@ export interface SavedChat {
 }
 
 const CHATS_STORAGE_KEY = "growzzy.recent_chats.v1";
+const DELETED_STORAGE_KEY = "growzzy.deleted_chat_ids.v1";
 const EVENT_NAME = "growzzy:chats-updated";
+
+export function getDeletedChatIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(DELETED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function loadSavedChats(): SavedChat[] {
   if (typeof window === "undefined") return [];
@@ -16,7 +27,8 @@ export function loadSavedChats(): SavedChat[] {
     const raw = window.localStorage.getItem(CHATS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const deleted = new Set(getDeletedChatIds());
+    return (Array.isArray(parsed) ? parsed : []).filter((c) => !deleted.has(c.id));
   } catch {
     return [];
   }
@@ -43,9 +55,26 @@ export function saveChatSession(chat: { id: string; title: string; lastMessage?:
 
 export function deleteSavedChat(id: string) {
   if (typeof window === "undefined") return;
+  // 1. Mark as deleted forever
+  const deleted = getDeletedChatIds();
+  if (!deleted.includes(id)) {
+    deleted.push(id);
+    window.localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(deleted));
+  }
+
+  // 2. Remove from local chats
   const existing = loadSavedChats();
   const updated = existing.filter((c) => c.id !== id);
   window.localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(updated));
+
+  // 3. Remove from session storage
+  try {
+    window.sessionStorage.removeItem("growzzy_sidebar_prompts");
+  } catch {}
+
+  // 4. Try deleting from backend if it exists there
+  fetch(`/api/ai/campaign-plans?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+
   window.dispatchEvent(new Event(EVENT_NAME));
   window.dispatchEvent(new Event("growzzy:prompt-history-updated"));
 }

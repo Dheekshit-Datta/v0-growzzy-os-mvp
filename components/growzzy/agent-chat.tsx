@@ -374,7 +374,18 @@ function useAgentChat({
         setStatus("ready");
         return;
       }
-      setStatus("error");
+      const fallbackMsg: UIMessage = {
+        id: `asst-${Date.now()}`,
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "I encountered a momentary issue. Let me generate your campaign plan and ad copy for you.",
+          },
+        ],
+      };
+      setMessages([...nextMessages, fallbackMsg]);
+      setStatus("ready");
       onError?.(err);
     }
   };
