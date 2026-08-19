@@ -1,113 +1,53 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic"
+
 import { NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/prisma"
-import { log } from "@/lib/logger"
-import { sendEmailVerification, sendWelcomeEmail } from "@/lib/email"
 import { rateLimit } from "@/lib/rate-limit"
-import crypto from "crypto"
 import { requestPassesSameOrigin } from "@/lib/request-origin"
 
 export async function POST(req: Request) {
-  if (!requestPassesSameOrigin(req)) return NextResponse.json({ ok: false, error: { code: "CROSS_ORIGIN_MUTATION", message: "Cross-origin mutation blocked." } }, { status: 403 })
-  try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
-    const limit = await rateLimit(`auth:register:${ip}`, 5, 60_000, { strict: true })
-    if (!limit.allowed) {
-      return NextResponse.json({ error: limit.unavailable ? "Signup protection is temporarily unavailable. Please try again shortly." : "Too many signup attempts. Please wait a moment." }, { status: limit.unavailable ? 503 : 429, headers: { "Retry-After": String(limit.retryAfter) } })
-    }
+  if (!requestPassesSameOrigin(req)) {
+    return NextResponse.json({ error: "Cross-origin mutation blocked." }, { status: 403 })
+  }
 
-    let body: any
-    try {
-      body = await req.json()
-    } catch {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
-    }
-    const { email, password, name } = body
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
+  const limit = await rateLimit(`auth:register:${ip}`, 5, 60_000, { strict: true })
+  if (!limit.allowed) {
+    return NextResponse.json({ error: "Too many signup attempts. Please wait a moment." }, { status: 429 })
+  }
+
+  try {
+    const { email, password, name } = await req.json()
     const normalizedEmail = String(email || "").toLowerCase().trim()
     const displayName = String(name || "").trim()
-
-    if (!normalizedEmail || !password || !displayName) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 })
     }
-
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
+    if (displayName.length < 2 || String(password || "").length < 8) {
+      return NextResponse.json({ error: "Enter your name and a password of at least 8 characters" }, { status: 400 })
     }
 
-    // Check if user already exists
-    let existingUser = null
-    try {
-      existingUser = await prisma.user.findUnique({
-        where: { email: normalizedEmail }
-      })
-    } catch (dbError: any) {
-      log("error", "auth/register", "Database connection error", { message: dbError.message })
-      if (dbError.message.includes("reaching") || dbError.message.includes("authentication") || dbError.message.includes("reach")) {
-        return NextResponse.json({
-          error: "Unable to reach the database. This usually means DATABASE_URL in the current environment is incorrect or the database is unavailable.",
-          details: dbError.message
-        }, { status: 503 })
-      }
-      throw dbError // Re-throw if it's an unexpected error
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Authentication service is not configured" }, { status: 503 })
     }
 
-    if (existingUser) {
-      return NextResponse.json({
-        error: "An account with this email already exists. Sign in instead?",
-        code: "EMAIL_EXISTS",
-      }, { status: 409 })
+    const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: supabaseKey },
+      body: JSON.stringify({ email: normalizedEmail, password, data: { name: displayName } }),
+      cache: "no-store",
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const message = data?.msg?.toLowerCase().includes("already") || data?.error_code === "user_already_exists"
+        ? "An account with this email already exists. Sign in instead?"
+        : "Unable to create your account. Please check your details and try again."
+      return NextResponse.json({ error: message }, { status: response.status === 422 ? 409 : response.status })
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
-    const verificationToken = crypto.randomBytes(32).toString("hex")
-
-    // Create user in database
-    try {
-      const user = await prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          password: hashedPassword,
-          name: displayName,
-          emailVerified: null,
-          emailVerificationToken: verificationToken,
-          emailVerificationExp: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          onboardingStep: 0,
-          onboardingCompleted: false,
-        }
-      })
-
-      sendWelcomeEmail({ email: user.email, name: user.name }).catch((emailError: any) => {
-        log("warn", "auth/register", "Welcome email skipped or failed", { message: emailError.message })
-      })
-      const origin = new URL(req.url).origin
-      sendEmailVerification({
-        email: user.email,
-        name: user.name,
-        verifyUrl: `${origin}/auth/verify-email?token=${verificationToken}`,
-      }).catch((emailError: any) => {
-        log("warn", "auth/register", "Verification email skipped or failed", { message: emailError.message })
-      })
-
-      return NextResponse.json({
-        success: true,
-        message: "Account created successfully",
-        userId: user.id,
-      })
-    } catch (createError: any) {
-      log("error", "auth/register", "Create user error", { message: createError.message })
-      return NextResponse.json({
-        error: "Failed to create user record. The database might be offline or using restricted credentials.",
-        details: createError.message
-      }, { status: 500 })
-    }
-  } catch (error: any) {
-    log("error", "auth/register", "Registration error", { message: error.message })
-    return NextResponse.json({ error: error.message || "Registration failed" }, { status: 500 })
+    return NextResponse.json({ success: true, userId: data?.user?.id || null, requiresEmailConfirmation: !data?.session })
+  } catch {
+    return NextResponse.json({ error: "Unable to create your account right now. Please try again." }, { status: 500 })
   }
 }

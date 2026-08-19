@@ -17,8 +17,14 @@ function sanitizeDbUrl(raw: string): string {
   return credentials + address
 }
 
-if (process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = sanitizeDbUrl(process.env.DATABASE_URL)
+const configuredDatabaseUrl =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_URL_NON_POOLING
+
+if (configuredDatabaseUrl) {
+  process.env.DATABASE_URL = sanitizeDbUrl(configuredDatabaseUrl)
 }
 if (process.env.DIRECT_URL) {
   process.env.DIRECT_URL = sanitizeDbUrl(process.env.DIRECT_URL)
@@ -29,7 +35,7 @@ const prismaClientSingleton = () => {
     console.error("[prisma] CRITICAL: database configuration is missing.")
   }
   return new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL } },
+    datasources: { db: { url: process.env.DATABASE_URL || "" } },
     log: ["error", "warn"],
   })
 }
@@ -64,7 +70,7 @@ export async function withDbTimeout<T>(
   timeoutMs: number = 8000
 ): Promise<T> {
   if (!process.env.DATABASE_URL) {
-    throw new Error("Database is not configured. Set DATABASE_URL in the current environment.")
+    throw new Error("Database is not configured. Connect the project database integration in the current environment.")
   }
 
   return Promise.race([

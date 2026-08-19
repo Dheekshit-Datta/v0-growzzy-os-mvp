@@ -1,9 +1,6 @@
 import NextAuth from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import bcrypt from "bcryptjs"
-import { prisma, withDbTimeout } from "./prisma"
 import { authConfig } from "../auth.config"
 import { log } from "./logger"
 import { rateLimit } from "./rate-limit"
@@ -25,7 +22,6 @@ const googleAuthProvider =
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
   providers: [
     ...(googleAuthProvider ? [googleAuthProvider] : []),
@@ -55,31 +51,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          const user = await withDbTimeout(
-            () =>
-              prisma.user.findUnique({
-                where: { email: inputEmail },
-              }),
-            5000
-          )
+          const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+          const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          if (!supabaseUrl || !supabaseKey) throw new Error("Authentication service is not configured")
 
-          if (!user) {
-            log("warn", "auth", "User not found", { email: inputEmail })
-            throw new Error("Invalid credentials")
-          }
-
-          const isPasswordValid = await bcrypt.compare(inputPassword, user.password)
-
-          if (!isPasswordValid) {
-            log("warn", "auth", "Invalid password", { email: inputEmail })
-            throw new Error("Invalid credentials")
+          const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: supabaseKey },
+            body: JSON.stringify({ email: inputEmail, password: inputPassword }),
+            cache: "no-store",
+          })
+          const data = await response.json().catch(() => null)
+          if (!response.ok || !data?.user?.id) {
+            log("warn", "auth", "Supabase credential sign-in failed", { email: inputEmail, status: response.status })
+            throw new Error(data?.error_code === "email_not_confirmed" ? "Please confirm your email before signing in." : "Invalid email or password.")
           }
 
           return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.name || data.user.email,
+            image: data.user.user_metadata?.avatar_url || null,
           }
         } catch (error: any) {
           log("error", "auth", "Authorize error", { message: error.message })
