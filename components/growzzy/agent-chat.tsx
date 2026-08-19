@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   loadBrand,
@@ -10,42 +10,13 @@ import {
   emptyBrand,
   type BrandProfile,
 } from "@/lib/brand-store";
-import { useUserProfile, firstName } from "@/lib/user-store";
-import {
-  resolveSubmission,
-  classifyChatError,
-  type Submission,
-  type ChatErrorKind,
-} from "@/lib/chat-routing";
-import { buildTranscript, downloadTranscript, type TranscriptMessage } from "@/lib/transcript";
-import { saveChatSession } from "@/lib/chat-store";
-
+import { useChat, type Message } from "@ai-sdk/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from "@/components/ai-elements/conversation";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputFooter,
-  PromptInputTools,
-  PromptInputSubmit,
-} from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
-import { StatusPill } from "@/components/growzzy/status-pill";
+import ReactMarkdown from "react-markdown";
 import {
   Check,
   ChevronDown,
@@ -63,35 +34,8 @@ import {
   Search,
   Target,
   Wand2,
+  Send,
 } from "lucide-react";
-
-/* ------------------------------- core UI types ------------------------------ */
-
-export type ToolUIPart = {
-  type: string;
-  toolName?: string;
-  toolCallId: string;
-  state: "input-available" | "output-available" | "output-error" | "input-streaming" | "approval-requested";
-  input?: any;
-  output?: any;
-  errorText?: string;
-};
-
-export type UIMessage = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  parts: Array<{ type: string; text?: string; [key: string]: any } | ToolUIPart>;
-};
-
-export function isToolUIPart(part: any): part is ToolUIPart {
-  return typeof part === "object" && part !== null && (part.type?.startsWith("tool-") || part.type === "dynamic-tool" || Boolean(part.toolCallId));
-}
-
-export function getToolName(part: ToolUIPart): string {
-  if (part.toolName) return part.toolName;
-  if (part.type.startsWith("tool-")) return part.type.slice(5);
-  return part.type;
-}
 
 /* ------------------------------- tool payloads ------------------------------ */
 
@@ -192,251 +136,12 @@ function buildSuggestions(brand: BrandProfile) {
   ];
 }
 
-type Artifacts = {
-  plan?: PlanInput;
-  planApproved?: boolean;
-  creative?: CreativeOutput;
-  campaign?: CampaignInput;
-  citations: { url: string; site: string; title: string }[];
-};
-
-function deriveArtifacts(messages: UIMessage[]): Artifacts {
-  const out: Artifacts = { citations: [] };
-  const seen = new Set<string>();
-  for (const m of messages) {
-    for (const part of m.parts) {
-      if (!isToolUIPart(part)) continue;
-      const name = getToolName(part as ToolUIPart);
-      const p = part as ToolUIPart;
-      if (name === "proposePlan" && p.input) {
-        out.plan = p.input as PlanInput;
-        out.planApproved = (p.output as { approved?: boolean } | undefined)?.approved;
-      }
-      if (name === "generateCreative" && p.output) out.creative = p.output as CreativeOutput;
-      if (name === "deliverCampaign" && p.input) out.campaign = p.input as CampaignInput;
-      if (name === "research") {
-        const cites = (p.output as { citations?: Artifacts["citations"] } | undefined)?.citations;
-        for (const c of cites ?? []) {
-          if (seen.has(c.url)) continue;
-          seen.add(c.url);
-          out.citations.push(c);
-        }
-      }
-    }
-  }
-  return out;
-}
-
-const modes = [
-  { value: "standard", label: "Standard" },
-  { value: "deep", label: "Deep research" },
-];
-
 export interface AgentChatProps {
   threadId?: string;
 }
 
-/* ------------------------------- native chat hook ------------------------------ */
-
-function useAgentChat({
-  id = "growzzy-agent",
-  onError,
-}: {
-  id?: string;
-  onError?: (err: any) => void;
-}) {
-  const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const sendMessage = async ({ text }: { text: string }) => {
-    if (!text.trim()) return;
-    const userMsg: UIMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      parts: [{ type: "text", text }],
-    };
-    const nextMessages = [...messages, userMsg];
-    setMessages(nextMessages);
-    setStatus("submitted");
-
-    try {
-      // Save to recent chats list safely
-      try {
-        saveChatSession({
-          id: id || `chat-${Date.now()}`,
-          title: text.length > 35 ? text.slice(0, 32) + "..." : text,
-          lastMessage: text,
-        });
-      } catch (err) {
-        console.warn("Could not save chat session:", err);
-      }
-
-      abortControllerRef.current = new AbortController();
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages,
-          brandContext: brandContextText(loadBrand()),
-          source: "nextjs-campaign",
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      const parts: any[] = [];
-
-      if (data.blocks && Array.isArray(data.blocks)) {
-        for (const b of data.blocks) {
-          if (b.type === "text" && b.content) {
-            parts.push({ type: "text", text: b.content });
-          } else if (b.type === "askBrandUrl") {
-            parts.push({
-              type: "tool-askBrandUrl",
-              toolName: "askBrandUrl",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "input-available",
-              input: { reason: b.reason },
-            });
-          } else if (b.type === "analyzeWebsite") {
-            parts.push({
-              type: "tool-analyzeWebsite",
-              toolName: "analyzeWebsite",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "output-available",
-              input: { url: b.site },
-              output: { site: b.site, profile: b.profile },
-            });
-          } else if (b.type === "questions" && b.questions) {
-            parts.push({
-              type: "tool-askUser",
-              toolName: "askUser",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "input-available",
-              input: { questions: b.questions },
-            });
-          } else if (b.type === "plan" && b.plan) {
-            parts.push({
-              type: "tool-proposePlan",
-              toolName: "proposePlan",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "input-available",
-              input: b.plan,
-            });
-          } else if (b.type === "research") {
-            parts.push({
-              type: "tool-research",
-              toolName: "research",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "output-available",
-              input: { focus: b.topic, topics: b.subQueries },
-              output: { citations: b.results, queries: b.subQueries },
-            });
-          } else if (b.type === "creative" && b.creative) {
-            parts.push({
-              type: "tool-generateCreative",
-              toolName: "generateCreative",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "output-available",
-              input: { prompt: b.creative.imagePrompt, caption: b.creative.primaryText },
-              output: b.creative,
-            });
-          } else if (b.type === "campaign" && b.campaign) {
-            parts.push({
-              type: "tool-deliverCampaign",
-              toolName: "deliverCampaign",
-              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              state: "output-available",
-              input: b.campaign,
-            });
-          }
-        }
-      } else if (data.text || data.message) {
-        parts.push({ type: "text", text: data.text || data.message });
-      }
-
-      if (parts.length === 0) {
-        parts.push({ type: "text", text: "I've processed your request. How else can I help?" });
-      }
-
-      const assistantMsg: UIMessage = {
-        id: `asst-${Date.now()}`,
-        role: "assistant",
-        parts,
-      };
-
-      setMessages([...nextMessages, assistantMsg]);
-      setStatus("ready");
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        setStatus("ready");
-        return;
-      }
-      const fallbackMsg: UIMessage = {
-        id: `asst-${Date.now()}`,
-        role: "assistant",
-        parts: [
-          {
-            type: "text",
-            text: "I encountered a momentary issue. Let me generate your campaign plan and ad copy for you.",
-          },
-        ],
-      };
-      setMessages([...nextMessages, fallbackMsg]);
-      setStatus("ready");
-      onError?.(err);
-    }
-  };
-
-  const addToolResult = ({ tool, toolCallId, output }: { tool: string; toolCallId: string; output: any }) => {
-    setMessages((prev) =>
-      prev.map((msg) => ({
-        ...msg,
-        parts: msg.parts.map((part) => {
-          if (isToolUIPart(part) && part.toolCallId === toolCallId) {
-            return {
-              ...part,
-              state: "output-available",
-              output,
-            };
-          }
-          return part;
-        }),
-      }))
-    );
-
-    // Follow up to AI after answering
-    setTimeout(() => {
-      const summaryText = output?.url
-        ? `My website is ${output.url}. Please analyze it.`
-        : output?.answers
-        ? `Answers provided: ${Object.entries(output.answers).map(([k, v]) => `${k}: ${v}`).join(", ")}`
-        : output?.approved !== undefined
-        ? output.approved ? "The execution plan was approved. Please generate the campaign deliverables and creative!" : "Changes requested on the execution plan."
-        : output?.freeform || "Done.";
-      void sendMessage({ text: summaryText });
-    }, 100);
-  };
-
-  const stop = () => {
-    abortControllerRef.current?.abort();
-    setStatus("ready");
-  };
-
-  return { messages, sendMessage, addToolResult, status, stop };
-}
-
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
-  const [input, setInput] = useState("");
-  const [mode, setMode] = useState("standard");
   const [brand, setBrand] = useState<BrandProfile>(emptyBrand);
-  const user = useUserProfile();
 
   useEffect(() => {
     const sync = () => setBrand(loadBrand());
@@ -447,179 +152,179 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 
   const brandReady = brandIsReady(brand);
   const suggestions = useMemo(() => buildSuggestions(brand), [brand]);
-  const greetingName = firstName(user) || brand.businessName || "there";
+  const greetingName = brand.businessName || "there";
 
-  const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
-  const lastSubmission = useRef<Submission | null>(null);
-
-  const { messages, sendMessage, addToolResult, status, stop } = useAgentChat({
+  const {
+    messages,
+    input,
+    setInput,
+    handleSubmit: chatHandleSubmit,
+    handleInputChange,
+    isLoading,
+    stop,
+    addToolResult,
+    error,
+    reload,
+  } = useChat({
     id: threadId,
+    api: "/api/chat",
+    body: {
+      brandContext: brandContextText(loadBrand()),
+    },
+    maxSteps: 50,
     onError: (e) => {
-      const info = classifyChatError(e);
-      setChatError(info);
-      const last = lastSubmission.current;
-      if (last?.kind === "send") setInput((cur) => cur || last.text);
-      if (last?.kind === "answer-question") setInput((cur) => cur || last.freeform);
-      toast.error(info.message);
+      toast.error(e.message || "Something went wrong");
+    },
+    onToolCall: async ({ toolCall }) => {
+      // Tools that need client-side confirmation return undefined to pause
+      // Tools with server execute functions are auto-handled
+      if (toolCall.toolName === "askBrandUrl" || toolCall.toolName === "askUser" || toolCall.toolName === "proposePlan") {
+        // These tools need user input — don't auto-resolve
+        return undefined;
+      }
     },
   });
 
   /* When the agent analyses a website in-chat, persist it as the brand context. */
-  const savedAnalysis = useRef<string | null>(null);
+  const savedAnalysis = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const m of messages) {
-      for (const part of m.parts) {
-        if (!isToolUIPart(part)) continue;
-        if (getToolName(part as ToolUIPart) !== "analyzeWebsite") continue;
-        const out = (part as ToolUIPart).output as
-          | { site?: string; profile?: Partial<BrandProfile> & { sources?: string[] } }
-          | undefined;
-        if (!out?.profile?.businessName) continue;
-        const key = (part as ToolUIPart).toolCallId;
-        if (savedAnalysis.current === key) continue;
-        savedAnalysis.current = key;
+      if (m.role !== "assistant" || !m.toolInvocations) continue;
+      for (const inv of m.toolInvocations) {
+        if (inv.toolName !== "analyzeWebsite" || inv.state !== "result") continue;
+        if (savedAnalysis.current.has(inv.toolCallId)) continue;
+        const result = inv.result as { site?: string; profile?: Partial<BrandProfile> } | undefined;
+        if (!result?.profile?.businessName) continue;
+        savedAnalysis.current.add(inv.toolCallId);
         const current = loadBrand();
         saveBrand({
           ...current,
-          ...out.profile,
-          website: out.site ?? current.website,
-          defaultLandingPage: current.defaultLandingPage || out.site || "",
+          ...result.profile,
+          website: result.site ?? current.website,
+          defaultLandingPage: current.defaultLandingPage || result.site || "",
           analyzedAt: new Date().toISOString(),
         } as BrandProfile);
-        toast.success(`Saved ${out.profile.businessName} to My Brand.`);
+        toast.success(`Saved ${result.profile.businessName} to My Brand.`);
       }
     }
   }, [messages]);
 
-  const busy = status === "submitted" || status === "streaming";
   const started = messages.length > 0;
-  const artifacts = useMemo(() => deriveArtifacts(messages), [messages]);
+
+  const submit = (text: string) => {
+    if (!text.trim()) return;
+    setInput(text);
+    // Use a micro-delay so the input state is set before submit
+    setTimeout(() => {
+      const fakeEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
+      chatHandleSubmit(fakeEvent);
+    }, 0);
+  };
+
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim() && !isLoading) return;
+    chatHandleSubmit(e);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim()) {
+        const form = e.currentTarget.closest("form");
+        if (form) form.requestSubmit();
+      }
+    }
+  };
+
+  /* ---- Derive artifacts for preview rail ---- */
+  const artifacts = useMemo(() => {
+    const out: {
+      plan?: PlanInput;
+      planApproved?: boolean;
+      creative?: CreativeOutput;
+      campaign?: CampaignInput;
+      citations: { url: string; site: string; title: string }[];
+    } = { citations: [] };
+    const seen = new Set<string>();
+    for (const m of messages) {
+      if (!m.toolInvocations) continue;
+      for (const inv of m.toolInvocations) {
+        if (inv.toolName === "proposePlan" && inv.args) {
+          out.plan = inv.args as PlanInput;
+          if (inv.state === "result") {
+            out.planApproved = (inv.result as { approved?: boolean })?.approved;
+          }
+        }
+        if (inv.toolName === "generateCreative" && inv.state === "result") {
+          out.creative = inv.result as CreativeOutput;
+        }
+        if (inv.toolName === "deliverCampaign" && inv.args) {
+          out.campaign = inv.args as CampaignInput;
+        }
+        if (inv.toolName === "research" && inv.state === "result") {
+          const cites = (inv.result as { citations?: { url: string; site: string; title: string }[] })?.citations;
+          for (const c of cites ?? []) {
+            if (seen.has(c.url)) continue;
+            seen.add(c.url);
+            out.citations.push(c);
+          }
+        }
+      }
+    }
+    return out;
+  }, [messages]);
+
   const hasPreview = Boolean(
     artifacts.plan || artifacts.campaign || artifacts.creative || artifacts.citations.length,
   );
 
-  const pendingQuestion = useMemo(() => {
-    for (let mi = messages.length - 1; mi >= 0; mi -= 1) {
-      const message = messages[mi];
-      if (!message) continue;
-      for (let pi = message.parts.length - 1; pi >= 0; pi -= 1) {
-        const part = message.parts[pi];
-        if (
-          isToolUIPart(part) &&
-          getToolName(part as ToolUIPart) === "askUser" &&
-          part.state !== "output-available"
-        ) {
-          return part as ToolUIPart;
-        }
-      }
-    }
-    return undefined;
-  }, [messages]);
-
-  const run = (submission: Submission) => {
-    if (submission.kind === "ignore") return;
-    lastSubmission.current = submission;
-    setChatError(null);
-    if (submission.kind === "answer-question") {
-      addToolResult({
-        tool: "askUser",
-        toolCallId: submission.toolCallId,
-        output: { answers: {}, freeform: submission.freeform },
-      });
-      return;
-    }
-    void sendMessage({ text: submission.text });
-  };
-
-  const submit = (text: string) => {
-    const submission = resolveSubmission({
-      text,
-      busy,
-      mode,
-      pending: pendingQuestion
-        ? {
-            toolName: "askUser",
-            toolCallId: pendingQuestion.toolCallId,
-            state: pendingQuestion.state,
-          }
-        : null,
-    });
-    if (submission.kind === "ignore") return;
-    setInput("");
-    run(submission);
-  };
-
-  const retry = () => {
-    const last = lastSubmission.current;
-    if (!last || last.kind === "ignore") return;
-    setInput("");
-    run(last);
-  };
-
-  /* Remembers when each turn appeared so the transcript can be timestamped. */
-  const turnTimes = useRef<Record<string, string>>({});
-  useEffect(() => {
-    messages.forEach((m) => {
-      turnTimes.current[m.id] ??= new Date().toISOString();
-    });
-  }, [messages]);
-
-  const transcript = () =>
-    downloadTranscript(
-      buildTranscript(
-        messages.map((m) => ({
-          role: m.role,
-          parts: m.parts as unknown as TranscriptMessage["parts"],
-          at: turnTimes.current[m.id],
-        })),
-        { title: `Growzzy transcript — ${brand.businessName || "workspace"}` },
-      ),
-      `growzzy-transcript-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.md`,
-    );
-
+  /* ---- Render ---- */
   const composer = (
     <div className={cn("w-full px-1 pb-2", hasPreview ? "" : "mx-auto max-w-3xl")}>
-      <PromptInput
-        className="rounded-[16px]"
-        onSubmit={(_msg, e) => {
-          e.preventDefault();
-          submit(input);
-        }}
+      <form
+        onSubmit={handleFormSubmit}
+        className="relative flex flex-col rounded-2xl border border-border bg-card shadow-xs transition-shadow focus-within:ring-1 focus-within:ring-primary/20"
       >
-        <PromptInputTextarea
+        <textarea
           value={input}
-          onChange={(e) => setInput(e.currentTarget.value)}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           autoFocus
           placeholder={started ? "Ask anything…" : "Ask anything, or describe what to launch…"}
+          rows={2}
+          className="min-h-[60px] w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-[13.5px] shadow-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground"
         />
-        <PromptInputFooter className="justify-between">
-          <PromptInputTools>
+        <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-1 border-t border-border/40">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => toast.info("Attachments are coming soon.")}
               aria-label="Attach a file"
-              className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
             >
               <Paperclip className="h-4 w-4" />
             </button>
+          </div>
+          {isLoading ? (
             <button
               type="button"
-              onClick={() => setMode((m) => (m === "standard" ? "deep" : "standard"))}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+              onClick={stop}
+              className="h-9 w-9 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center justify-center cursor-pointer transition-colors"
             >
-              <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-              {modes.find((m) => m.value === mode)?.label}
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              <CircleStop className="h-4 w-4" />
             </button>
-          </PromptInputTools>
-          <PromptInputSubmit
-            className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90"
-            status={status}
-            onStop={stop}
-            disabled={!input.trim() && !busy}
-          />
-        </PromptInputFooter>
-      </PromptInput>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90 flex items-center justify-center cursor-pointer transition-opacity disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </form>
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         Growzzy can make mistakes. Review every campaign before launching.
       </p>
@@ -627,26 +332,24 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   );
 
   const thread = started ? (
-    <Conversation className="flex-1">
-      <ConversationContent
-        className={cn("w-full px-1 pb-6", hasPreview ? "" : "mx-auto max-w-3xl")}
-      >
+    <div className="flex-1 overflow-y-auto">
+      <div className={cn("flex flex-col gap-6 p-4", hasPreview ? "w-full" : "mx-auto max-w-3xl")}>
         {messages.map((m) => (
-          <AgentMessage
+          <ChatMessage
             key={m.id}
             message={m}
             addToolResult={addToolResult}
             onStop={stop}
+            isLoading={isLoading}
           />
         ))}
-        {status === "submitted" && (
+        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex items-center gap-2 pl-1">
             <Shimmer className="text-[13.5px]">Growzzy is thinking…</Shimmer>
           </div>
         )}
-      </ConversationContent>
-      <ConversationScrollButton />
-    </Conversation>
+      </div>
+    </div>
   ) : (
     <div className="flex flex-1 flex-col items-center justify-center px-4">
       <div className="mb-5 h-11 w-11 rounded-xl bg-black text-white flex items-center justify-center font-black text-lg shadow-sm">
@@ -661,7 +364,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           : "Ask me anything about your ads and market. If I need your business, I'll ask for your website right here and analyse it live."}
       </p>
       {!brandReady && (
-        <div className="mt-5 flex w-full max-w-xl items-center justify-between gap-3 rounded-[12px] border border-border bg-amber-500/10 p-3.5">
+        <div className="mt-5 flex w-full max-w-xl items-center justify-between gap-3 rounded-[12px] border border-border bg-amber-50/50 dark:bg-amber-900/10 p-3.5">
           <span className="text-[12.5px] text-foreground">
             No brand context yet — I&apos;ll ask for your website in the chat when I need it, or set it
             up once in My Brand.
@@ -680,9 +383,9 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           <button
             key={s.title}
             onClick={() => submit(s.text)}
-            className="group flex items-start gap-3 rounded-[12px] border border-border bg-card p-3.5 text-left transition-colors hover:border-primary/30 hover:bg-[#EAF0FE]/40 cursor-pointer"
+            className="group flex items-start gap-3 rounded-[12px] border border-border bg-card p-3.5 text-left transition-colors hover:border-primary/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/10 cursor-pointer"
           >
-            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
               <s.icon className="h-4 w-4" />
             </span>
             <span>
@@ -702,40 +405,25 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         {started && (
           <div className="flex items-center justify-end gap-2 px-1 pb-1">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={transcript}>
+            <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer text-xs">
               <DownloadIcon className="h-3.5 w-3.5" /> Download transcript
             </Button>
           </div>
         )}
         {thread}
-        {chatError && (
-          <div
-            className={cn(
-              "mx-1 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border p-3",
-              hasPreview ? "" : "mx-auto w-full max-w-3xl",
-              chatError.kind === "credits" || chatError.kind === "blocked"
-                ? "border-amber-500/40 bg-amber-500/10"
-                : "border-border bg-muted/50",
-            )}
-          >
+        {error && (
+          <div className={cn(
+            "mx-1 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border p-3",
+            hasPreview ? "" : "mx-auto w-full max-w-3xl",
+            "border-red-500/30 bg-red-500/5",
+          )}>
             <div className="min-w-0">
-              <div className="text-[12.5px] font-medium text-foreground">
-                {chatError.kind === "credits"
-                  ? "AI credits exhausted"
-                  : chatError.kind === "blocked"
-                    ? "AI access blocked"
-                    : chatError.kind === "rate-limit"
-                      ? "Rate limited"
-                      : "Couldn't reach Growzzy"}
-              </div>
-              <p className="text-[12px] leading-snug text-muted-foreground">{chatError.message}</p>
+              <div className="text-[12.5px] font-medium text-foreground">Something went wrong</div>
+              <p className="text-[12px] leading-snug text-muted-foreground">{error.message}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button size="sm" onClick={retry} disabled={busy} className="gap-1.5">
+              <Button size="sm" onClick={() => reload()} disabled={isLoading} className="gap-1.5 cursor-pointer">
                 <RefreshCw className="h-3.5 w-3.5" /> Retry
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setChatError(null)}>
-                Dismiss
               </Button>
             </div>
           </div>
@@ -751,9 +439,17 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   );
 }
 
-/* --------------------------- live preview rail ----------------------------- */
+/* ===================== Preview Rail ===================== */
 
-function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
+function PreviewRail({ artifacts }: {
+  artifacts: {
+    plan?: PlanInput;
+    planApproved?: boolean;
+    creative?: CreativeOutput;
+    campaign?: CampaignInput;
+    citations: { url: string; site: string; title: string }[];
+  };
+}) {
   const { plan, planApproved, creative, campaign, citations } = artifacts;
   return (
     <div className="space-y-3">
@@ -762,23 +458,19 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
           Live campaign preview
         </span>
         {campaign ? (
-          <StatusPill variant="success">Ready</StatusPill>
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">Ready</span>
         ) : plan ? (
-          <StatusPill variant={planApproved ? "primary" : "warn"}>
+          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", planApproved ? "bg-blue-500/10 text-blue-600" : "bg-amber-500/10 text-amber-600")}>
             {planApproved ? "Building" : "Awaiting approval"}
-          </StatusPill>
+          </span>
         ) : (
-          <StatusPill variant="info">Researching</StatusPill>
+          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600">Researching</span>
         )}
       </div>
 
       {creative?.imageUrl && (
         <div className="overflow-hidden rounded-[12px] border border-border bg-card">
-          <img
-            src={creative.imageUrl}
-            alt={creative.caption ?? "Ad creative"}
-            className="aspect-square w-full object-cover"
-          />
+          <img src={creative.imageUrl} alt={creative.caption ?? "Ad creative"} className="aspect-square w-full object-cover" />
           <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{creative.caption}</div>
         </div>
       )}
@@ -786,29 +478,12 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
       {campaign ? (
         <div className="rounded-[12px] border border-border bg-card p-3">
           <div className="text-[13px] font-semibold text-foreground">{campaign.name}</div>
-          <div className="text-[11.5px] text-muted-foreground">
-            {campaign.platform} · {campaign.objective}
-          </div>
+          <div className="text-[11.5px] text-muted-foreground">{campaign.platform} · {campaign.objective}</div>
           <div className="mt-2 space-y-1">
-            <Field label="Daily budget" value={`${campaign.currency} ${campaign.budgetDaily}`} />
-            <Field label="Bidding" value={campaign.bidding} />
-            <Field label="Schedule" value={campaign.schedule} />
+            <PField label="Daily budget" value={`${campaign.currency} ${campaign.budgetDaily}`} />
+            <PField label="Bidding" value={campaign.bidding} />
+            <PField label="Schedule" value={campaign.schedule} />
           </div>
-          {campaign.headlines?.length > 0 && (
-            <div className="mt-3 border-t border-border pt-2">
-              <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                Ad copy
-              </div>
-              {campaign.headlines.slice(0, 3).map((h) => (
-                <div key={h} className="text-[12.5px] font-medium text-primary">
-                  {h}
-                </div>
-              ))}
-              <p className="mt-1 line-clamp-3 text-[12px] text-muted-foreground">
-                {campaign.primaryText || campaign.descriptions?.[0]}
-              </p>
-            </div>
-          )}
         </div>
       ) : plan ? (
         <div className="rounded-[12px] border border-border bg-card p-3">
@@ -816,9 +491,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
           <ol className="mt-2 space-y-1.5">
             {plan.steps.map((s, i) => (
               <li key={i} className="flex gap-2 text-[12px] text-muted-foreground">
-                <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px]">
-                  {i + 1}
-                </span>
+                <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px]">{i + 1}</span>
                 {s.title}
               </li>
             ))}
@@ -828,20 +501,11 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
 
       {citations.length > 0 && (
         <div className="rounded-[12px] border border-border bg-card p-3">
-          <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-            Sources read ({citations.length})
-          </div>
+          <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">Sources read ({citations.length})</div>
           <ul className="space-y-1">
             {citations.slice(0, 10).map((c) => (
               <li key={c.url} className="truncate text-[11.5px]">
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-primary hover:underline"
-                >
-                  {c.site}
-                </a>
+                <a href={c.url} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline">{c.site}</a>
                 <span className="text-muted-foreground"> — {c.title}</span>
               </li>
             ))}
@@ -852,165 +516,144 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
   );
 }
 
-/* ------------------------------- message ---------------------------------- */
+/* ===================== Chat Message ===================== */
 
-type AddToolResult = (args: { tool: string; toolCallId: string; output: any }) => void;
-
-function AgentMessage({
+function ChatMessage({
   message,
   addToolResult,
   onStop,
+  isLoading,
 }: {
-  message: UIMessage;
-  addToolResult: AddToolResult;
+  message: Message;
+  addToolResult: (args: { toolCallId: string; result: any }) => void;
   onStop: () => void;
+  isLoading: boolean;
 }) {
   if (message.role === "user") {
     return (
-      <Message from="user">
-        <MessageContent>
-          {message.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
-        </MessageContent>
-      </Message>
+      <div className="flex justify-end">
+        <div className="max-w-[80%] rounded-2xl bg-muted/60 px-4 py-3 text-[13.5px] text-foreground">
+          {message.content}
+        </div>
+      </div>
     );
   }
 
-  return (
-    <Message from="assistant" className="[&>div]:max-w-full">
-      <MessageContent className="w-full bg-transparent p-0 text-foreground">
-        <div className="space-y-4">
-          {message.parts.map((part, i) => {
-            if (part.type === "text") {
-              return part.text ? <MessageResponse key={i}>{part.text}</MessageResponse> : null;
-            }
-            if (!isToolUIPart(part)) return null;
-            const name = getToolName(part as ToolUIPart);
+  // Assistant message
+  const textContent = typeof message.content === "string" ? message.content : "";
+  const toolInvocations = message.toolInvocations ?? [];
 
-            if (name === "askUser") {
-              return (
-                <QuestionsCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
-              );
-            }
-            if (name === "proposePlan") {
-              return <PlanCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />;
-            }
-            if (name === "generateCreative") {
-              return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} />;
-            }
-            if (name === "deliverCampaign") {
-              return <CampaignCard key={i} part={part as ToolUIPart} />;
-            }
-            if (name === "askBrandUrl") {
-              return (
-                <BrandUrlCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
-              );
-            }
-            if (name === "analyzeWebsite") {
-              return <AnalyzeCard key={i} part={part as ToolUIPart} />;
-            }
-            return <ResearchCard key={i} part={part as ToolUIPart} />;
-          })}
+  return (
+    <div className="space-y-3">
+      {/* Text content */}
+      {textContent && (
+        <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed">
+          <ReactMarkdown>{textContent}</ReactMarkdown>
         </div>
-      </MessageContent>
-    </Message>
+      )}
+
+      {/* Tool invocations */}
+      {toolInvocations.map((inv) => {
+        if (inv.toolName === "askBrandUrl") {
+          return <BrandUrlCard key={inv.toolCallId} inv={inv} addToolResult={addToolResult} />;
+        }
+        if (inv.toolName === "analyzeWebsite") {
+          return <AnalyzeCard key={inv.toolCallId} inv={inv} />;
+        }
+        if (inv.toolName === "research") {
+          return <ResearchCard key={inv.toolCallId} inv={inv} />;
+        }
+        if (inv.toolName === "askUser") {
+          return <QuestionsCard key={inv.toolCallId} inv={inv} addToolResult={addToolResult} />;
+        }
+        if (inv.toolName === "proposePlan") {
+          return <PlanCard key={inv.toolCallId} inv={inv} addToolResult={addToolResult} />;
+        }
+        if (inv.toolName === "generateCreative") {
+          return <CreativeCard key={inv.toolCallId} inv={inv} onStop={onStop} />;
+        }
+        if (inv.toolName === "deliverCampaign") {
+          return <CampaignCard key={inv.toolCallId} inv={inv} />;
+        }
+        return null;
+      })}
+    </div>
   );
 }
 
-function BrandUrlCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: AddToolResult }) {
-  const input = part.input as { reason?: string } | undefined;
-  const done = part.state === "output-available";
-  const sent = (part.output as { url?: string } | undefined)?.url;
+/* ===================== Tool Cards ===================== */
+
+type ToolInv = NonNullable<Message["toolInvocations"]>[number];
+
+function BrandUrlCard({ inv, addToolResult }: { inv: ToolInv; addToolResult: (a: { toolCallId: string; result: any }) => void }) {
+  const args = inv.args as { reason?: string } | undefined;
+  const done = inv.state === "result";
+  const sent = done ? (inv.result as { url?: string })?.url : undefined;
   const [url, setUrl] = useState("");
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <Globe className="h-3.5 w-3.5" />
         </span>
         <span className="text-[13px] font-medium text-foreground">What&apos;s your website?</span>
       </div>
       <p className="mt-1.5 text-[12.5px] text-muted-foreground">
-        {input?.reason ??
-          "Drop your website URL and I'll analyse your business live — offer, audience, competitors, keywords — before asking anything else."}
+        {args?.reason ?? "Drop your website URL and I'll analyse your business live — offer, audience, competitors, keywords — before asking anything else."}
       </p>
       {done ? (
         <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-emerald-600">
           <Check className="h-3.5 w-3.5" /> {sent}
         </div>
       ) : (
-        <form
-          className="mt-3 flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const value = url.trim();
-            if (!value) return;
-            addToolResult({
-              tool: "askBrandUrl",
-              toolCallId: part.toolCallId,
-              output: { url: value },
-            });
-          }}
-        >
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.currentTarget.value)}
-            placeholder="yourbrand.com"
-            className="h-9 text-[13px]"
-          />
-          <Button type="submit" disabled={!url.trim()} className="h-9 shrink-0">
-            Analyse
-          </Button>
+        <form className="mt-3 flex gap-2" onSubmit={(e) => {
+          e.preventDefault();
+          const value = url.trim();
+          if (!value) return;
+          addToolResult({ toolCallId: inv.toolCallId, result: { url: value } });
+        }}>
+          <Input value={url} onChange={(e) => setUrl(e.currentTarget.value)} placeholder="yourbrand.com" className="h-9 text-[13px]" />
+          <Button type="submit" disabled={!url.trim()} className="h-9 shrink-0 cursor-pointer">Analyse</Button>
         </form>
       )}
       <p className="mt-2 text-[11px] text-muted-foreground">
-        Or set it up once in{" "}
-        <Link href="/dashboard/brand" className="text-primary hover:underline">
-          My Brand
-        </Link>
-        .
+        Or set it up once in <Link href="/dashboard/brand" className="text-primary hover:underline">My Brand</Link>.
       </p>
     </div>
   );
 }
 
-function AnalyzeCard({ part }: { part: ToolUIPart }) {
-  const input = part.input as { url?: string } | undefined;
-  const output = part.output as
-    | { site?: string; error?: string; profile?: BrandProfile }
-    | undefined;
-  const running = part.state !== "output-available" && part.state !== "output-error";
-  const p = output?.profile;
+function AnalyzeCard({ inv }: { inv: ToolInv }) {
+  const args = inv.args as { url?: string } | undefined;
+  const running = inv.state !== "result";
+  const result = !running ? (inv.result as { site?: string; error?: string; profile?: any } | undefined) : undefined;
+  const p = result?.profile;
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <Globe className="h-3.5 w-3.5" />
         </span>
         {running ? (
-          <Shimmer className="text-[13px] font-medium">{`Analysing ${input?.url ?? "your website"} — reading pages, finding competitors…`}</Shimmer>
+          <Shimmer className="text-[13px] font-medium">{`Analysing ${args?.url ?? "your website"} — reading pages, finding competitors…`}</Shimmer>
         ) : (
           <span className="text-[13px] font-medium text-foreground">
             {p ? `Analysed ${p.businessName}` : "Analysis failed"}
           </span>
         )}
       </div>
-      {output?.error && <p className="mt-2 text-[12.5px] text-destructive">{output.error}</p>}
+      {result?.error && <p className="mt-2 text-[12.5px] text-red-500">{result.error}</p>}
       {p && (
         <div className="mt-3 space-y-1.5">
-          <Field label="Industry" value={p.industry} />
-          <Field label="Model" value={p.businessModel} />
-          <Field label="Sells" value={p.whatTheySell} />
-          <Field label="Audience" value={p.audience} />
+          <PField label="Industry" value={p.industry} />
+          <PField label="Model" value={p.businessModel} />
+          <PField label="Sells" value={p.whatTheySell} />
+          <PField label="Audience" value={p.audience} />
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {(p.competitors ?? []).slice(0, 5).map((c) => (
-              <span
-                key={c.name}
-                className="rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-muted-foreground"
-              >
-                {c.name}
-              </span>
+            {(p.competitors ?? []).slice(0, 5).map((c: any) => (
+              <span key={c.name} className="rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-muted-foreground">{c.name}</span>
             ))}
           </div>
           <p className="pt-1 text-[11px] text-muted-foreground">Saved to My Brand.</p>
@@ -1020,124 +663,80 @@ function AnalyzeCard({ part }: { part: ToolUIPart }) {
   );
 }
 
-/* ------------------------------- tool cards -------------------------------- */
-
-function ResearchCard({ part }: { part: ToolUIPart }) {
-  const input = part.input as { focus?: string; topics?: string[] } | undefined;
-  const output = part.output as
-    | {
-        notes?: string;
-        queries?: string[];
-        citations?: { url: string; site: string; title: string }[];
-      }
-    | undefined;
-  const running = part.state !== "output-available" && part.state !== "output-error";
+function ResearchCard({ inv }: { inv: ToolInv }) {
+  const args = inv.args as { focus?: string; topics?: string[] } | undefined;
+  const running = inv.state !== "result";
+  const result = !running ? (inv.result as { notes?: string; queries?: string[]; citations?: { url: string; site: string; title: string }[] } | undefined) : undefined;
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <Search className="h-3.5 w-3.5" />
         </span>
         {running ? (
-          <Shimmer className="text-[13px] font-medium">{`Researching ${input?.focus ?? "your market"}…`}</Shimmer>
+          <Shimmer className="text-[13px] font-medium">{`Researching ${args?.focus ?? "your market"}…`}</Shimmer>
         ) : (
-          <span className="text-[13px] font-medium text-foreground">
-            Research complete — {input?.focus ?? "market analysis"}
-          </span>
+          <span className="text-[13px] font-medium text-foreground">Research complete — {args?.focus ?? "market analysis"}</span>
         )}
       </div>
-      {input?.topics && (
+      {args?.topics && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {input.topics.map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-muted-foreground"
-            >
-              {!running && <Check className="h-3 w-3 text-emerald-600" />}
+          {args.topics.map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-muted-foreground">
+              {!running && <Check className="h-3 w-3 text-emerald-500" />}
               {t}
             </span>
           ))}
         </div>
       )}
-      {output?.citations && output.citations.length > 0 && (
+      {result?.citations && result.citations.length > 0 && (
         <div className="mt-3 rounded-[10px] border border-border bg-background p-3">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Sources read live ({output.citations.length})
-          </div>
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sources read live ({result.citations.length})</div>
           <ul className="space-y-1">
-            {output.citations.map((c) => (
+            {result.citations.map((c) => (
               <li key={c.url} className="text-[11.5px] leading-snug">
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="font-medium text-primary hover:underline"
-                >
-                  {c.site}
-                </a>
+                <a href={c.url} target="_blank" rel="noreferrer noopener" className="font-medium text-primary hover:underline">{c.site}</a>
                 <span className="text-muted-foreground"> — {c.title}</span>
               </li>
             ))}
           </ul>
-          {output.queries && output.queries.length > 0 && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Searched: {output.queries.join(" · ")}
-            </p>
+          {result.queries && result.queries.length > 0 && (
+            <p className="mt-2 text-[11px] text-muted-foreground">Searched: {result.queries.join(" · ")}</p>
           )}
         </div>
-      )}
-      {output?.notes && (
-        <Tool defaultOpen={false} className="mt-3 border-0 bg-transparent">
-          <ToolHeader type={`tool-${getToolName(part)}` as ToolUIPart["type"]} state={part.state} />
-          <ToolContent>
-            <div className="px-4 pb-3 text-[12.5px]">
-              <MessageResponse>{output.notes}</MessageResponse>
-            </div>
-          </ToolContent>
-        </Tool>
       )}
     </div>
   );
 }
 
-function QuestionsCard({
-  part,
-  addToolResult,
-}: {
-  part: ToolUIPart;
-  addToolResult: AddToolResult;
-}) {
-  const input = part.input as AskUserInput | undefined;
-  const answered = part.state === "output-available";
-  const submitted = (part.output as { answers?: Record<string, string> } | undefined)?.answers;
+function QuestionsCard({ inv, addToolResult }: { inv: ToolInv; addToolResult: (a: { toolCallId: string; result: any }) => void }) {
+  const args = inv.args as AskUserInput | undefined;
+  const answered = inv.state === "result";
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  if (!input?.questions?.length) return null;
-  const total = input.questions.length;
-  const complete = input.questions.every((q) => answers[q.id]);
+  if (!args?.questions?.length) return null;
+  const total = args.questions.length;
+  const complete = args.questions.every((q) => answers[q.id]);
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <MessageCircleQuestion className="h-3.5 w-3.5" />
         </span>
         <span className="text-[13px] font-medium text-foreground">A few things before I build</span>
-        <StatusPill variant="primary">{total} questions</StatusPill>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{total} questions</span>
       </div>
-
       <div className="mt-4 space-y-4">
-        {input.questions.map((q, qi) => (
+        {args.questions.map((q, qi) => (
           <div key={q.id} className="rounded-[10px] border border-border bg-background p-3.5">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {qi + 1} / {total}
-            </div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{qi + 1} / {total}</div>
             <div className="mt-1 text-[13.5px] font-medium text-foreground">{q.question}</div>
             <p className="mt-0.5 text-[12px] text-muted-foreground">{q.why}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {q.options.map((o) => {
-                const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
+                const selected = answers[q.id] === o.label;
                 return (
                   <button
                     key={o.label}
@@ -1145,23 +744,17 @@ function QuestionsCard({
                     onClick={() => setAnswers((a) => ({ ...a, [q.id]: o.label }))}
                     className={cn(
                       "rounded-[10px] border p-2.5 text-left transition-colors cursor-pointer",
-                      selected
-                        ? "border-primary bg-[#EAF0FE]"
-                        : "border-border bg-card hover:border-primary/30",
+                      selected ? "border-primary bg-blue-50/50 dark:bg-blue-900/20" : "border-border bg-card hover:border-primary/30",
                       answered && !selected && "opacity-60",
                     )}
                   >
                     <span className="flex items-center gap-1.5">
                       <span className="text-[12.5px] font-medium text-foreground">{o.label}</span>
                       {o.recommended && (
-                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                          Recommended
-                        </span>
+                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">Recommended</span>
                       )}
                     </span>
-                    <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
-                      {o.description}
-                    </span>
+                    <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{o.description}</span>
                   </button>
                 );
               })}
@@ -1169,9 +762,7 @@ function QuestionsCard({
             {!answered && (
               <Input
                 value={answers[q.id] ?? ""}
-                onChange={(event) =>
-                  setAnswers((current) => ({ ...current, [q.id]: event.currentTarget.value }))
-                }
+                onChange={(e) => setAnswers((cur) => ({ ...cur, [q.id]: e.currentTarget.value }))}
                 placeholder="Or type your own answer…"
                 className="mt-2 h-9 text-[12.5px]"
               />
@@ -1179,18 +770,11 @@ function QuestionsCard({
           </div>
         ))}
       </div>
-
       {!answered && (
         <Button
           className="mt-4 w-full cursor-pointer"
           disabled={!complete}
-          onClick={() =>
-            addToolResult({
-              tool: "askUser",
-              toolCallId: part.toolCallId,
-              output: { answers },
-            })
-          }
+          onClick={() => addToolResult({ toolCallId: inv.toolCallId, result: { answers } })}
         >
           Send answers
         </Button>
@@ -1204,80 +788,48 @@ function QuestionsCard({
   );
 }
 
-function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: AddToolResult }) {
-  const input = part.input as PlanInput | undefined;
-  const output = part.output as { approved?: boolean } | undefined;
-  if (!input?.steps?.length) return null;
-  const decided = part.state === "output-available";
+function PlanCard({ inv, addToolResult }: { inv: ToolInv; addToolResult: (a: { toolCallId: string; result: any }) => void }) {
+  const args = inv.args as PlanInput | undefined;
+  const decided = inv.state === "result";
+  const output = decided ? (inv.result as { approved?: boolean }) : undefined;
+  if (!args?.steps?.length) return null;
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <ListChecks className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-medium text-foreground">
-          {input.title || "Execution plan"}
-        </span>
+        <span className="text-[13px] font-medium text-foreground">{args.title || "Execution plan"}</span>
         {decided && (
-          <StatusPill variant={output?.approved ? "success" : "warn"}>
+          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", output?.approved ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>
             {output?.approved ? "Approved" : "Changes requested"}
-          </StatusPill>
+          </span>
         )}
       </div>
-      {input.summary && (
-        <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{input.summary}</p>
-      )}
+      {args.summary && <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{args.summary}</p>}
       <ol className="mt-4 space-y-3">
-        {input.steps.map((s, i) => (
+        {args.steps.map((s, i) => (
           <li key={i} className="flex gap-3">
-            <span
-              className={cn(
-                "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-medium",
-                decided && output?.approved
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
+            <span className={cn(
+              "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-medium",
+              decided && output?.approved ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground",
+            )}>
               {decided && output?.approved ? <Check className="h-3 w-3" /> : i + 1}
             </span>
             <span>
               <span className="block text-[13px] font-medium text-foreground">{s.title}</span>
-              <span className="block text-[12px] leading-snug text-muted-foreground">
-                {s.detail}
-              </span>
+              <span className="block text-[12px] leading-snug text-muted-foreground">{s.detail}</span>
             </span>
           </li>
         ))}
       </ol>
       {!decided && (
         <div className="mt-4 flex gap-2">
-          <Button
-            className="flex-1 gap-1.5 cursor-pointer"
-            onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: { approved: true },
-              })
-            }
-          >
+          <Button className="flex-1 gap-1.5 cursor-pointer" onClick={() => addToolResult({ toolCallId: inv.toolCallId, result: { approved: true } })}>
             <Rocket className="h-4 w-4" /> Approve plan
           </Button>
-          <Button
-            variant="outline"
-            className="flex-1 cursor-pointer"
-            onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: {
-                  approved: false,
-                  feedback: "The user wants changes — ask what to adjust before building.",
-                },
-              })
-            }
-          >
+          <Button variant="outline" className="flex-1 cursor-pointer" onClick={() => addToolResult({ toolCallId: inv.toolCallId, result: { approved: false, feedback: "The user wants changes — ask what to adjust before building." } })}>
             Decline
           </Button>
         </div>
@@ -1286,167 +838,119 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
   );
 }
 
-function CreativeCard({ part, onStop }: { part: ToolUIPart; onStop: () => void }) {
-  const input = part.input as { caption?: string; prompt?: string } | undefined;
-  const output = part.output as CreativeOutput | undefined;
-  const running = part.state !== "output-available" && part.state !== "output-error";
+function CreativeCard({ inv, onStop }: { inv: ToolInv; onStop: () => void }) {
+  const args = inv.args as { caption?: string; prompt?: string } | undefined;
+  const running = inv.state !== "result";
+  const result = !running ? (inv.result as CreativeOutput | undefined) : undefined;
   const elapsed = useElapsed(running);
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
           <ImageIcon className="h-3.5 w-3.5" />
         </span>
         {running ? (
           <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-            <Shimmer className="truncate text-[13px] font-medium">
-              {`Rendering your ad creative… ${elapsed}s (usually 60–120s)`}
-            </Shimmer>
-            <Button type="button" variant="outline" size="sm" onClick={onStop} className="shrink-0 gap-1.5">
+            <Shimmer className="truncate text-[13px] font-medium">{`Rendering your ad creative… ${elapsed}s (usually 60–120s)`}</Shimmer>
+            <Button type="button" variant="outline" size="sm" onClick={onStop} className="shrink-0 gap-1.5 cursor-pointer">
               <CircleStop className="h-3.5 w-3.5" /> Cancel
             </Button>
           </div>
         ) : (
-          <span className="text-[13px] font-medium text-foreground">
-            {output?.caption ?? input?.caption ?? "Ad creative"}
-          </span>
+          <span className="text-[13px] font-medium text-foreground">{result?.caption ?? args?.caption ?? "Ad creative"}</span>
         )}
       </div>
       <div className="mt-3 overflow-hidden rounded-[10px] border border-border bg-muted">
-        {output?.imageUrl ? (
-          <img
-            src={output.imageUrl}
-            alt={output.caption ?? "Generated ad creative"}
-            className="aspect-square w-full max-w-sm object-cover"
-          />
+        {result?.imageUrl ? (
+          <img src={result.imageUrl} alt={result.caption ?? "Generated ad creative"} className="aspect-square w-full max-w-sm object-cover" />
         ) : (
           <div className="grid aspect-square w-full max-w-sm place-items-center text-[12px] text-muted-foreground">
-            {output?.error ??
-              (running
-                ? `Rendering… ${elapsed}s elapsed`
-                : "No creative returned — ask me to retry.")}
+            {result?.error ?? (running ? `Rendering… ${elapsed}s elapsed` : "No creative returned — ask me to retry.")}
           </div>
         )}
       </div>
-      {input?.prompt && (
-        <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{input.prompt}</p>
-      )}
     </div>
   );
 }
 
-function CampaignCard({ part }: { part: ToolUIPart }) {
-  const c = part.input as CampaignInput | undefined;
+function CampaignCard({ inv }: { inv: ToolInv }) {
+  const c = inv.args as CampaignInput | undefined;
   if (!c?.name) return null;
   return (
     <div className="rounded-[12px] border border-border bg-card">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EAF0FE] text-primary">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
             <Megaphone className="h-3.5 w-3.5" />
           </span>
           <div>
             <div className="text-[13.5px] font-semibold text-foreground">{c.name}</div>
-            <div className="text-[11.5px] text-muted-foreground">
-              {c.platform} · {c.objective}
-            </div>
+            <div className="text-[11.5px] text-muted-foreground">{c.platform} · {c.objective}</div>
           </div>
         </div>
-        <StatusPill variant="success">Launch ready</StatusPill>
+        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">Launch ready</span>
       </header>
-
       <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2">
-        <Field label="Daily budget" value={`${c.currency} ${c.budgetDaily}`} />
-        <Field label="Bidding" value={c.bidding} />
-        <Field label="Schedule" value={c.schedule} />
-        <Field label="Landing page" value={c.landingPage} />
+        <PField label="Daily budget" value={`${c.currency} ${c.budgetDaily}`} />
+        <PField label="Bidding" value={c.bidding} />
+        <PField label="Schedule" value={c.schedule} />
+        <PField label="Landing page" value={c.landingPage} />
       </div>
-
       {c.targeting?.length > 0 && (
-        <Block title="Targeting">
+        <CBlock title="Targeting">
           <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.targeting.map((t) => (
-              <Field key={t.setting} label={t.setting} value={t.value} />
-            ))}
+            {c.targeting.map((t) => <PField key={t.setting} label={t.setting} value={t.value} />)}
           </div>
-        </Block>
+        </CBlock>
       )}
-
       {c.keywords?.length > 0 && (
-        <Block title="Keywords">
+        <CBlock title="Keywords">
           <div className="flex flex-wrap gap-1.5">
             {c.keywords.map((k) => (
-              <span
-                key={k}
-                className="inline-flex items-center gap-1 rounded-full bg-[#EAF0FE] px-2 py-0.5 text-[11.5px] text-primary"
-              >
-                <Search className="h-3 w-3" />
-                {k}
+              <span key={k} className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 text-[11.5px] text-primary">
+                <Search className="h-3 w-3" />{k}
               </span>
             ))}
           </div>
-        </Block>
+        </CBlock>
       )}
-
-      <Block title="Ad copy">
+      <CBlock title="Ad copy">
         <div className="space-y-1.5">
-          {c.headlines?.map((h) => (
-            <div key={h} className="text-[13px] font-medium text-primary">
-              {h}
-            </div>
-          ))}
-          {c.descriptions?.map((d) => (
-            <div key={d} className="text-[12.5px] text-foreground/80">
-              {d}
-            </div>
-          ))}
-          {c.primaryText && (
-            <p className="pt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-              {c.primaryText}
-            </p>
-          )}
+          {c.headlines?.map((h) => <div key={h} className="text-[13px] font-medium text-primary">{h}</div>)}
+          {c.descriptions?.map((d) => <div key={d} className="text-[12.5px] text-foreground/80">{d}</div>)}
+          {c.primaryText && <p className="pt-1 text-[12.5px] leading-relaxed text-muted-foreground">{c.primaryText}</p>}
           {c.cta && (
             <div className="pt-1">
-              <span className="rounded-md bg-primary px-2.5 py-1 text-[11.5px] font-medium text-primary-foreground">
-                {c.cta}
-              </span>
+              <span className="rounded-md bg-primary px-2.5 py-1 text-[11.5px] font-medium text-primary-foreground">{c.cta}</span>
             </div>
           )}
         </div>
-      </Block>
-
+      </CBlock>
       {c.kpis?.length > 0 && (
-        <Block title="Targets">
+        <CBlock title="Targets">
           <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.kpis.map((k) => (
-              <Field key={k.metric} label={k.metric} value={k.target} />
-            ))}
+            {c.kpis.map((k) => <PField key={k.metric} label={k.metric} value={k.target} />)}
           </div>
-        </Block>
+        </CBlock>
       )}
-
       {c.risks?.length > 0 && (
-        <Block title="Watch-outs">
+        <CBlock title="Watch-outs">
           <ul className="space-y-1">
-            {c.risks.map((r) => (
-              <li key={r} className="text-[12.5px] text-muted-foreground">
-                • {r}
-              </li>
-            ))}
+            {c.risks.map((r) => <li key={r} className="text-[12.5px] text-muted-foreground">• {r}</li>)}
           </ul>
-        </Block>
+        </CBlock>
       )}
     </div>
   );
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+/* ===================== Helpers ===================== */
+
+function CBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-t border-border px-4 py-3">
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </div>
+      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
       {children}
     </div>
   );
@@ -1463,7 +967,7 @@ function useElapsed(active: boolean) {
   return seconds;
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function PField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-[12.5px] text-muted-foreground">{label}</span>
@@ -1471,5 +975,3 @@ function Field({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-export { ToolInput, ToolOutput };

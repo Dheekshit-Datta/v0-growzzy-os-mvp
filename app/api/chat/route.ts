@@ -1,16 +1,13 @@
 import {
-  convertToModelMessages,
   streamText,
-  stepCountIs,
   tool,
   generateText,
-  type UIMessage,
+  type CoreMessage,
 } from "ai";
 import { z } from "zod";
 import {
-  createLovableAiGatewayProvider,
+  createAIProvider,
   generateAdImage,
-  CHAT_MODEL,
 } from "@/lib/ai-gateway.server";
 
 export const maxDuration = 120;
@@ -33,50 +30,18 @@ CAMPAIGN BUILD workflow — strictly one tool at a time:
 4. Call proposePlan with a 4-7 step execution plan and STOP. Wait for its explicit tool result. A normal user message is not approval.
 5. Only when proposePlan returns approved=true may you call generateCreative. If it returns approved=false, ask what to change and propose a revised plan. Never generate a creative before explicit approval.
 6. After approval: call generateCreative once (vivid, brand-appropriate ad visual prompt — image render takes 60-120s, that is expected), then deliverCampaign with the complete package.
-6. Finish with a short markdown summary (tables for ad copy) and 2-3 next steps.
+7. Finish with a short markdown summary (tables for ad copy) and 2-3 next steps.
 
 Rules:
 - Be concise and concrete. No filler, no restating the brief.
 - Frame benchmarks as estimates and cite the sources research returns.
 - All money figures use the user's currency if stated, otherwise USD.`;
 
-const questionSchema = z.object({
-  questions: z
-    .array(
-      z.object({
-        id: z.string().describe("short slug, e.g. 'budget'"),
-        question: z.string(),
-        why: z.string().describe("one line on why this matters"),
-        options: z.array(
-          z.object({
-            label: z.string(),
-            description: z.string(),
-            recommended: z.boolean(),
-          }),
-        ),
-      }),
-    )
-    .describe("2-4 clarifying doubts"),
-});
-
-/** Replaces base64 creative data URLs in history with a short placeholder. */
-function stripCreativeImages(messages: UIMessage[]): UIMessage[] {
-  return messages.map((m) => ({
-    ...m,
-    parts: m.parts.map((p) => {
-      const part = p as { type?: string; output?: { imageUrl?: string | null } };
-      if (part.type === "tool-generateCreative" && part.output?.imageUrl) {
-        return { ...p, output: { ...part.output, imageUrl: "[image shown to the user]" } };
-      }
-      return p;
-    }),
-  })) as UIMessage[];
-}
-
 export async function POST(req: Request) {
   try {
-    const { messages, brandContext } = (await req.json()) as {
-      messages?: UIMessage[];
+    const body = await req.json();
+    const { messages, brandContext } = body as {
+      messages?: CoreMessage[];
       brandContext?: string;
     };
     if (!Array.isArray(messages)) return new Response("Messages are required", { status: 400 });
@@ -90,8 +55,8 @@ export async function POST(req: Request) {
 
     const { webSearch, fetchPageText } = await import("@/lib/research.server");
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
-    const model = gateway(CHAT_MODEL);
+    const gateway = createAIProvider(apiKey);
+    const model = gateway.provider(gateway.chatModel);
 
     const brandBlock = brandContext?.trim()
       ? `\n\n=== BRAND CONTEXT (from the user's My Brand profile — treat as known facts, never ask about it) ===\n${brandContext.trim()}`
@@ -100,14 +65,14 @@ export async function POST(req: Request) {
     const result = streamText({
       model,
       system: SYSTEM + brandBlock,
-      messages: await convertToModelMessages(stripCreativeImages(messages)),
+      messages,
       abortSignal: req.signal,
-      stopWhen: stepCountIs(50),
+      maxSteps: 50,
       tools: {
         research: tool({
           description:
             "Run REAL live web research: performs web searches, reads the actual result pages, and returns analysed notes with sources.",
-          inputSchema: z.object({
+          parameters: z.object({
             focus: z.string().describe("what is being researched, shown to the user"),
             topics: z.array(z.string()).describe("3-6 research topics"),
             queries: z
@@ -163,14 +128,14 @@ export async function POST(req: Request) {
         askBrandUrl: tool({
           description:
             "Use ONLY when the brand context is empty: asks the user for their website URL inside the chat. The user replies with the URL; then call analyzeWebsite with it.",
-          inputSchema: z.object({
+          parameters: z.object({
             reason: z.string().describe("one short line on why you need their website"),
           }),
         }),
         analyzeWebsite: tool({
           description:
             "Deeply analyse a website with REAL live page reads + web search: returns the business model, ICP segments, competitors, keywords and creative angles. Call this right after the user gives their URL.",
-          inputSchema: z.object({
+          parameters: z.object({
             url: z.string().describe("the website URL the user gave"),
           }),
           execute: async ({ url }) => {
@@ -187,13 +152,30 @@ export async function POST(req: Request) {
         askUser: tool({
           description:
             "Ask the user your clarifying doubts before planning. Questions must be specific to their business; platform options may only be Google Ads or Meta Ads. Never ask what the business is.",
-          inputSchema: questionSchema,
+          parameters: z.object({
+            questions: z
+              .array(
+                z.object({
+                  id: z.string().describe("short slug, e.g. 'budget'"),
+                  question: z.string(),
+                  why: z.string().describe("one line on why this matters"),
+                  options: z.array(
+                    z.object({
+                      label: z.string(),
+                      description: z.string(),
+                      recommended: z.boolean(),
+                    }),
+                  ),
+                }),
+              )
+              .describe("2-4 clarifying doubts"),
+          }),
         }),
 
         proposePlan: tool({
           description:
             "Show the execution plan and wait for the user to approve it or request changes.",
-          inputSchema: z.object({
+          parameters: z.object({
             title: z.string(),
             summary: z.string(),
             steps: z.array(
@@ -206,15 +188,9 @@ export async function POST(req: Request) {
         }),
         generateCreative: tool({
           description: "Generate the ad creative image that will be used in the campaign.",
-          inputSchema: z.object({
+          parameters: z.object({
             prompt: z.string().describe("detailed art-direction prompt for the ad visual"),
             caption: z.string().describe("short label for the creative"),
-          }),
-          toModelOutput: (output) => ({
-            type: "text" as const,
-            value: (output as { imageUrl?: string | null }).imageUrl
-              ? "Ad creative generated and shown to the user."
-              : "Creative generation failed.",
           }),
           execute: async ({ prompt, caption }) => {
             const { url, error } = await generateAdImage(
@@ -233,7 +209,7 @@ export async function POST(req: Request) {
         }),
         deliverCampaign: tool({
           description: "Deliver the complete, launch-ready campaign package.",
-          inputSchema: z.object({
+          parameters: z.object({
             name: z.string(),
             platform: z.string(),
             objective: z.string(),
@@ -256,20 +232,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      onError: (error) => {
-        const err = error as { statusCode?: number; message?: string; responseBody?: string };
-        const status = err?.statusCode;
-        if (status === 402)
-          return "402 — your workspace is out of AI credits. Add credits and retry.";
-        if (status === 403)
-          return "403 — AI access is blocked by a workspace limit or policy.";
-        if (status === 429) return "429 — rate limited, retry in a few seconds.";
-        console.error("[growzzy] chat error", status, err?.message);
-        return err?.message ?? "Growzzy hit an unexpected error.";
-      },
-    });
+    return result.toDataStreamResponse();
   } catch (error: any) {
     console.error("Agent chat route error:", error);
     return new Response(error?.message || "Failed to process chat", { status: 500 });

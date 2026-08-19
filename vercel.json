@@ -17,6 +17,9 @@
     },
     "app/api/auth/meta/callback/route.ts": {
       "maxDuration": 30
+    },
+    "app/api/chat/route.ts": {
+      "maxDuration": 120
     }
   }
 }
