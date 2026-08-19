@@ -260,14 +260,18 @@ function useAgentChat({
     setMessages(nextMessages);
     setStatus("submitted");
 
-    // Save to recent chats list
-    saveChatSession({
-      id: threadId,
-      title: text.length > 35 ? text.slice(0, 32) + "..." : text,
-      lastMessage: text,
-    });
-
     try {
+      // Save to recent chats list safely
+      try {
+        saveChatSession({
+          id: id || `chat-${Date.now()}`,
+          title: text.length > 35 ? text.slice(0, 32) + "..." : text,
+          lastMessage: text,
+        });
+      } catch (err) {
+        console.warn("Could not save chat session:", err);
+      }
+
       abortControllerRef.current = new AbortController();
       const res = await fetch("/api/chat", {
         method: "POST",
