@@ -282,7 +282,10 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const started = messages.length > 0;
   const artifacts = useMemo(() => deriveArtifacts(messages), [messages]);
   const hasPreview = Boolean(
-    artifacts.plan || artifacts.campaign || artifacts.creative || artifacts.citations.length,
+    artifacts.campaign ||
+      artifacts.plan ||
+      artifacts.creative?.imageUrl ||
+      artifacts.citations.length > 0,
   );
 
   const pendingQuestion = useMemo(() => {
@@ -554,9 +557,11 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
           <StatusPill variant={planApproved ? "primary" : "warn"}>
             {planApproved ? "Building" : "Awaiting approval"}
           </StatusPill>
-        ) : (
+        ) : creative?.imageUrl ? (
+          <StatusPill variant="success">Creative ready</StatusPill>
+        ) : citations.length > 0 ? (
           <StatusPill variant="info">Researching</StatusPill>
-        )}
+        ) : null}
       </div>
 
       {creative?.imageUrl && (

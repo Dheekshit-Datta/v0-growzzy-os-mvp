@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import type { CampaignStatus } from "@/lib/types";
 import type { ReactNode } from "react";
 
 type Variant =
@@ -14,16 +15,24 @@ type Variant =
   | "primary";
 
 const styles: Record<Variant, string> = {
-  live: "bg-success-bg text-success",
-  success: "bg-success-bg text-success",
-  paused: "bg-warn-bg text-warn",
-  warn: "bg-warn-bg text-warn",
-  learning: "bg-info-bg text-info",
-  info: "bg-info-bg text-info",
-  rejected: "bg-danger-bg text-danger",
-  danger: "bg-danger-bg text-danger",
+  live: "bg-emerald-500/10 text-emerald-600",
+  success: "bg-emerald-500/10 text-emerald-600",
+  paused: "bg-amber-500/10 text-amber-600",
+  warn: "bg-amber-500/10 text-amber-600",
+  learning: "bg-blue-500/10 text-blue-600",
+  info: "bg-blue-500/10 text-blue-600",
+  rejected: "bg-red-500/10 text-red-600",
+  danger: "bg-red-500/10 text-red-600",
   draft: "bg-muted text-muted-foreground",
-  primary: "bg-primary-tint text-primary",
+  primary: "bg-primary/10 text-primary",
+};
+
+const labels: Record<CampaignStatus, string> = {
+  live: "Live",
+  paused: "Paused",
+  learning: "Learning",
+  rejected: "Rejected",
+  draft: "Draft",
 };
 
 export function StatusPill({
@@ -47,4 +56,8 @@ export function StatusPill({
       {children}
     </span>
   );
+}
+
+export function CampaignStatusPill({ status }: { status: CampaignStatus }) {
+  return <StatusPill variant={status}>{labels[status]}</StatusPill>;
 }

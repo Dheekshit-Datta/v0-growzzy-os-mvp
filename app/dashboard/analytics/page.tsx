@@ -1,7 +1,19 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Shell } from "@/components/dashboard-v2/shell"
+import { useEffect, useState } from "react";
+import { Shell } from "@/components/dashboard-v2/shell";
+import { PageHeader, SectionCard, EmptyState } from "@/components/growzzy/primitives";
+import { KpiCard } from "@/components/growzzy/kpi-card";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Sparkles, LineChart as LineChartIcon, Loader2, DollarSign, MousePointer, Target, TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -10,216 +22,243 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from "recharts"
-import { ChevronDown, BarChart2, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+} from "recharts";
 
 type Overview = {
   kpis: {
-    totalSpend: number
-    totalClicks: number
-    ctr: number
-    roas: number
-    connectedPlatforms: number
-  }
-  chartData: { date: string; spend: number; revenue: number }[]
-  topCampaigns: { id: string; name: string; platform: string; status: string; spend: number; revenue: number; roas: number }[]
-  platformBreakdown: { name: string; spend: number; revenue: number; roas: number; campaigns: number; percentOfSpend: number }[]
-}
-
-const DAY_OPTIONS = [
-  { label: "Last 7 days", value: 7 },
-  { label: "Last 30 days", value: 30 },
-  { label: "Last 90 days", value: 90 },
-]
+    totalSpend: number;
+    totalClicks: number;
+    ctr: number;
+    roas: number;
+    connectedPlatforms: number;
+  };
+  chartData: { date: string; spend: number; revenue: number }[];
+  topCampaigns: {
+    id: string;
+    name: string;
+    platform: string;
+    status: string;
+    spend: number;
+    revenue: number;
+    roas: number;
+  }[];
+  platformBreakdown: {
+    name: string;
+    spend: number;
+    revenue: number;
+    roas: number;
+    campaigns: number;
+    percentOfSpend: number;
+  }[];
+};
 
 function money(n: number) {
-  return "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-
-function Dropdown({
-  label, options, value, onChange,
-}: { label: string; options: { label: string; value: string }[]; value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 h-8 px-3 bg-white border border-[#E9EBEF] rounded-[8px] text-[12.5px] font-medium text-[#374151] hover:border-[#D1D5DB] transition-colors"
-      >
-        {label} <ChevronDown size={13} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 w-[180px] bg-white border border-[#E9EBEF] rounded-[8px] shadow-lg z-20 overflow-hidden">
-            {options.map((o) => (
-              <button
-                key={o.value}
-                onClick={() => { onChange(o.value); setOpen(false) }}
-                className={cn(
-                  "w-full text-left px-3 py-2 text-[12.5px] hover:bg-[#F6F7F9] transition-colors",
-                  o.value === value ? "text-[#1F57F5] font-semibold" : "text-[#374151]"
-                )}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
+  return "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 export default function AnalyticsPage() {
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<Overview | null>(null)
-  const [tab, setTab] = useState<"campaign" | "keyword" | "device">("campaign")
-  const [days, setDays] = useState(30)
-  const [platform, setPlatform] = useState("all")
-  const [metric, setMetric] = useState<"spend" | "revenue">("spend")
+  const [metric, setMetric] = useState("spend");
+  const [range, setRange] = useState("30d");
+  const [platform, setPlatform] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Overview | null>(null);
 
   useEffect(() => {
-    setLoading(true)
+    setLoading(true);
+    const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
     fetch(`/api/analytics/overview?days=${days}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => setData(json?.data ?? null))
-      .finally(() => setLoading(false))
-  }, [days])
+      .finally(() => setLoading(false));
+  }, [range]);
 
-  const kpis = data?.kpis
-  const hasData = !!data && data.kpis.connectedPlatforms > 0
-
-  const platformOptions = [
-    { label: "All platforms", value: "all" },
-    ...(data?.platformBreakdown ?? []).map((p) => ({ label: p.name, value: p.name })),
-  ]
-  const filteredCampaigns = (data?.topCampaigns ?? []).filter((c) => platform === "all" || c.platform === platform)
-
-  const kpiCards = [
-    { label: "Total Spend", value: kpis ? money(kpis.totalSpend) : "$0" },
-    { label: "Clicks", value: kpis ? String(kpis.totalClicks) : "0" },
-    { label: "CTR", value: kpis && kpis.totalClicks > 0 ? kpis.ctr.toFixed(2) + "%" : "—" },
-    { label: "ROAS", value: kpis && kpis.totalSpend > 0 ? kpis.roas.toFixed(2) + "x" : "—" },
-  ]
+  const hasData = (data?.kpis?.connectedPlatforms ?? 0) > 0 && (data?.chartData?.length ?? 0) > 0;
 
   return (
-    <Shell title="Analytics">
-      <div className="p-6 space-y-5">
-        {/* Filters */}
-        <div className="flex items-center gap-2">
-          <Dropdown
-            label={DAY_OPTIONS.find((d) => d.value === days)?.label || "Last 30 days"}
-            options={DAY_OPTIONS.map((d) => ({ label: d.label, value: String(d.value) }))}
-            value={String(days)}
-            onChange={(v) => setDays(Number(v))}
+    <Shell>
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <PageHeader
+          title="Analytics"
+          subtitle="Deep dive into every campaign, keyword and audience."
+          actions={
+            <Button variant="outline" className="gap-1.5 cursor-pointer">
+              <Sparkles className="h-4 w-4" />
+              AI insights
+            </Button>
+          }
+        />
+
+        <SectionCard className="mb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Time range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select defaultValue="all">
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All campaigns" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All campaigns</SelectItem>
+                {(data?.topCampaigns ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={platform} onValueChange={setPlatform}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="All platforms" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All platforms</SelectItem>
+                <SelectItem value="google">Google Ads</SelectItem>
+                <SelectItem value="meta">Meta Ads</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </SectionCard>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <KpiCard
+            label="Spend"
+            value={data?.kpis ? money(data.kpis.totalSpend) : "$0"}
+            caption={hasData ? undefined : "No data yet"}
+            icon={<DollarSign className="h-4 w-4" />}
           />
-          <Dropdown
-            label={platform === "all" ? "All platforms" : platform}
-            options={platformOptions}
-            value={platform}
-            onChange={setPlatform}
+          <KpiCard
+            label="Clicks"
+            value={data?.kpis ? data.kpis.totalClicks.toLocaleString() : "0"}
+            caption={hasData ? undefined : "No data yet"}
+            icon={<MousePointer className="h-4 w-4" />}
+          />
+          <KpiCard
+            label="CTR"
+            value={data?.kpis ? `${(data.kpis.ctr * 100).toFixed(2)}%` : "0%"}
+            caption={hasData ? undefined : "No data yet"}
+            icon={<Target className="h-4 w-4" />}
+          />
+          <KpiCard
+            label="ROAS"
+            value={data?.kpis?.roas ? `${data.kpis.roas.toFixed(2)}x` : "—"}
+            caption={hasData ? undefined : "No data yet"}
+            icon={<TrendingUp className="h-4 w-4" />}
           />
         </div>
 
-        {loading ? (
-          <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-16 flex items-center justify-center text-[#9CA3AF]">
-            <Loader2 className="animate-spin" size={20} />
-          </div>
-        ) : (
-          <>
-            {/* KPI row */}
-            <div className="grid grid-cols-4 gap-4">
-              {kpiCards.map((kpi) => (
-                <div key={kpi.label} className="bg-white rounded-[14px] border border-[#E9EBEF] p-4">
-                  <p className="text-[12px] font-medium text-[#6B7280] mb-2">{kpi.label}</p>
-                  <p className="text-[26px] font-bold text-[#111827] tabular leading-none">{kpi.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Chart */}
-            <div className="bg-white rounded-[14px] border border-[#E9EBEF] p-5">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[14px] font-semibold text-[#111827]">Performance over time</p>
-                <div className="flex items-center gap-2">
-                  <Dropdown
-                    label={metric === "spend" ? "Spend" : "Revenue"}
-                    options={[{ label: "Spend", value: "spend" }, { label: "Revenue", value: "revenue" }]}
-                    value={metric}
-                    onChange={(v) => setMetric(v as "spend" | "revenue")}
-                  />
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <SectionCard
+            className="lg:col-span-3"
+            title="Performance over time"
+            action={
+              <Select value={metric} onValueChange={setMetric}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="spend">Spend</SelectItem>
+                  <SelectItem value="clicks">Clicks</SelectItem>
+                  <SelectItem value="ctr">CTR</SelectItem>
+                  <SelectItem value="conversions">Conversions</SelectItem>
+                  <SelectItem value="roas">ROAS</SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          >
+            {loading ? (
+              <div className="h-64 grid place-items-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-              <div className="h-[240px]">
+            ) : hasData ? (
+              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data?.chartData ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: "white", border: "1px solid #E9EBEF", borderRadius: 10, fontSize: 12 }} />
-                    <Line type="monotone" dataKey={metric} stroke="#1F57F5" strokeWidth={2} dot={false} name={metric === "spend" ? "Spend ($)" : "Revenue ($)"} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9EBEF" />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12, fill: "#5A6577" }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12, fill: "#5A6577" }}
+                      tickFormatter={(v) => (metric === "spend" ? `$${v}` : v)}
+                    />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 10, border: "1px solid #E9EBEF" }}
+                      formatter={(v: any) => (metric === "spend" ? [`$${v}`, "Spend"] : [v, metric])}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={metric === "spend" ? "spend" : "revenue"}
+                      stroke="#1F57F5"
+                      strokeWidth={2}
+                      dot={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-
-            {/* Breakdown tabs */}
-            <div className="bg-white rounded-[14px] border border-[#E9EBEF] overflow-hidden">
-              <div className="border-b border-[#E9EBEF] px-5">
-                <div className="flex gap-1">
-                  {([
-                    { id: "campaign", label: "By campaign" },
-                    { id: "keyword", label: "By keyword" },
-                    { id: "device", label: "By device" },
-                  ] as const).map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setTab(t.id)}
-                      className={cn(
-                        "h-10 px-4 text-[13px] font-medium border-b-2 transition-colors",
-                        tab === t.id ? "border-[#1F57F5] text-[#1F57F5]" : "border-transparent text-[#6B7280] hover:text-[#374151]"
-                      )}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+            ) : (
+              <div className="h-64 grid place-items-center">
+                <EmptyState
+                  icon={<LineChartIcon className="h-6 w-6" />}
+                  title="No data to chart"
+                  description="Connect Google Ads or Meta Ads and launch a campaign to see performance here."
+                />
               </div>
+            )}
 
-              {tab === "campaign" && hasData && filteredCampaigns.length > 0 ? (
-                <div className="divide-y divide-[#F0F2F5]">
-                  {filteredCampaigns.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between px-5 py-3">
-                      <div>
-                        <p className="text-[13px] font-medium text-[#111827]">{c.name}</p>
-                        <p className="text-[11.5px] text-[#9CA3AF]">{c.platform}</p>
-                      </div>
-                      <div className="flex items-center gap-6 text-[12.5px] text-[#374151] tabular">
-                        <span>{money(c.spend)}</span>
-                        <span>{c.roas ? c.roas.toFixed(2) + "x" : "—"}</span>
-                      </div>
+            <div className="mt-6 border-t border-border pt-4">
+              <Tabs defaultValue="campaign">
+                <TabsList>
+                  <TabsTrigger value="campaign">By campaign</TabsTrigger>
+                  <TabsTrigger value="keyword">By keyword</TabsTrigger>
+                  <TabsTrigger value="device">By device / geo</TabsTrigger>
+                </TabsList>
+                <TabsContent value="campaign">
+                  {(data?.topCampaigns ?? []).length > 0 ? (
+                    <div className="divide-y divide-border mt-3">
+                      {data!.topCampaigns.map((c) => (
+                        <div key={c.id} className="py-2.5 flex items-center justify-between text-sm">
+                          <span className="font-medium">{c.name}</span>
+                          <span className="text-muted-foreground">{money(c.spend)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-10 h-10 bg-[#F6F7F9] rounded-full flex items-center justify-center mb-3">
-                    <BarChart2 size={18} className="text-[#D1D5DB]" />
-                  </div>
-                  <p className="text-[13px] font-medium text-[#374151]">No data yet</p>
-                  <p className="text-[12px] text-[#9CA3AF] mt-1">
-                    {tab === "campaign"
-                      ? "Connect your Google Ads account to see campaign breakdowns."
-                      : `${tab === "keyword" ? "Keyword" : "Device"} breakdowns aren't available yet.`}
-                  </p>
-                </div>
-              )}
+                  ) : (
+                    <EmptyState title="No campaigns yet" className="py-6" />
+                  )}
+                </TabsContent>
+                <TabsContent value="keyword">
+                  <EmptyState title="No keyword data yet" className="py-6" />
+                </TabsContent>
+                <TabsContent value="device">
+                  <EmptyState title="No device data yet" className="py-6" />
+                </TabsContent>
+              </Tabs>
             </div>
-          </>
-        )}
+          </SectionCard>
+
+          <SectionCard title="AI insights">
+            <EmptyState
+              icon={<Sparkles className="h-5 w-5" />}
+              title="Insights appear here"
+              description="Once your campaigns have data, Growzzy explains what's working and what to change — with the numbers to back it up."
+            />
+          </SectionCard>
+        </div>
       </div>
     </Shell>
-  )
+  );
 }
