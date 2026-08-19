@@ -7,7 +7,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -17,7 +16,6 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { isValidElement } from "react";
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -28,21 +26,42 @@ export const Tool = ({ className, ...props }: ToolProps) => (
   />
 );
 
+export type ToolPartState = "approval-requested" | "approval-responded" | "input-available" | "input-streaming" | "output-available" | "output-denied" | "output-error";
+
+export type ToolUIPart = {
+  type: string;
+  state: ToolPartState;
+  input?: any;
+  output?: any;
+  errorText?: string;
+  toolCallId?: string;
+};
+
+export type DynamicToolUIPart = {
+  type: "dynamic-tool";
+  state: ToolPartState;
+  toolName: string;
+  input?: any;
+  output?: any;
+  errorText?: string;
+  toolCallId?: string;
+};
+
 export type ToolPart = ToolUIPart | DynamicToolUIPart;
 
 export type ToolHeaderProps = {
   title?: string;
   className?: string;
 } & (
-  | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
+  | { type: string; state: ToolPartState; toolName?: never }
   | {
-      type: DynamicToolUIPart["type"];
-      state: DynamicToolUIPart["state"];
+      type: "dynamic-tool";
+      state: ToolPartState;
       toolName: string;
     }
 );
 
-const statusLabels: Record<ToolPart["state"], string> = {
+const statusLabels: Record<ToolPartState, string> = {
   "approval-requested": "Awaiting Approval",
   "approval-responded": "Responded",
   "input-available": "Running",
@@ -52,20 +71,20 @@ const statusLabels: Record<ToolPart["state"], string> = {
   "output-error": "Error",
 };
 
-const statusIcons: Record<ToolPart["state"], ReactNode> = {
-  "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
+const statusIcons: Record<ToolPartState, ReactNode> = {
+  "approval-requested": <ClockIcon className="size-4 text-amber-600" />,
   "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
-  "input-available": <ClockIcon className="size-4 animate-pulse" />,
+  "input-available": <ClockIcon className="size-4 animate-pulse text-primary" />,
   "input-streaming": <CircleIcon className="size-4" />,
-  "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
+  "output-available": <CheckCircleIcon className="size-4 text-emerald-600" />,
   "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
-  "output-error": <XCircleIcon className="size-4 text-red-600" />,
+  "output-error": <XCircleIcon className="size-4 text-destructive" />,
 };
 
-export const getStatusBadge = (status: ToolPart["state"]) => (
+export const getStatusBadge = (status: ToolPartState) => (
   <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
-    {statusIcons[status]}
-    {statusLabels[status]}
+    {statusIcons[status] || <CircleIcon className="size-4" />}
+    {statusLabels[status] || "Pending"}
   </Badge>
 );
 
@@ -83,7 +102,7 @@ export const ToolHeader = ({
   return (
     <CollapsibleTrigger
       className={cn(
-        "flex w-full items-center justify-between gap-4 p-3",
+        "flex w-full items-center justify-between gap-4 p-3 cursor-pointer",
         className
       )}
       {...props}
@@ -111,7 +130,7 @@ export const ToolContent = ({ className, ...props }: ToolContentProps) => (
 );
 
 export type ToolInputProps = ComponentProps<"div"> & {
-  input: ToolPart["input"];
+  input: any;
 };
 
 export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
@@ -126,8 +145,8 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
 );
 
 export type ToolOutputProps = ComponentProps<"div"> & {
-  output: ToolPart["output"];
-  errorText: ToolPart["errorText"];
+  output: any;
+  errorText?: string;
 };
 
 export const ToolOutput = ({

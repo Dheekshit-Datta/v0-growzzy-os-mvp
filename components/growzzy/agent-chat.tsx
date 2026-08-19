@@ -19,15 +19,6 @@ import {
 } from "@/lib/chat-routing";
 import { buildTranscript, downloadTranscript, type TranscriptMessage } from "@/lib/transcript";
 
-import { useChat } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithToolCalls,
-  getToolName,
-  isToolUIPart,
-  type ToolUIPart,
-  type UIMessage,
-} from "ai";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -72,6 +63,34 @@ import {
   Target,
   Wand2,
 } from "lucide-react";
+
+/* ------------------------------- core UI types ------------------------------ */
+
+export type ToolUIPart = {
+  type: string;
+  toolName?: string;
+  toolCallId: string;
+  state: "input-available" | "output-available" | "output-error" | "input-streaming" | "approval-requested";
+  input?: any;
+  output?: any;
+  errorText?: string;
+};
+
+export type UIMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  parts: Array<{ type: string; text?: string; [key: string]: any } | ToolUIPart>;
+};
+
+export function isToolUIPart(part: any): part is ToolUIPart {
+  return typeof part === "object" && part !== null && (part.type?.startsWith("tool-") || part.type === "dynamic-tool" || Boolean(part.toolCallId));
+}
+
+export function getToolName(part: ToolUIPart): string {
+  if (part.toolName) return part.toolName;
+  if (part.type.startsWith("tool-")) return part.type.slice(5);
+  return part.type;
+}
 
 /* ------------------------------- tool payloads ------------------------------ */
 
@@ -216,6 +235,161 @@ export interface AgentChatProps {
   threadId?: string;
 }
 
+/* ------------------------------- native chat hook ------------------------------ */
+
+function useAgentChat({
+  id = "growzzy-agent",
+  onError,
+}: {
+  id?: string;
+  onError?: (err: any) => void;
+}) {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const sendMessage = async ({ text }: { text: string }) => {
+    if (!text.trim()) return;
+    const userMsg: UIMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      parts: [{ type: "text", text }],
+    };
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
+    setStatus("submitted");
+
+    try {
+      abortControllerRef.current = new AbortController();
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+          brandContext: brandContextText(loadBrand()),
+          source: "nextjs-campaign",
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const parts: any[] = [];
+
+      if (data.blocks && Array.isArray(data.blocks)) {
+        for (const b of data.blocks) {
+          if (b.type === "text" && b.content) {
+            parts.push({ type: "text", text: b.content });
+          } else if (b.type === "questions" && b.questions) {
+            parts.push({
+              type: "tool-askUser",
+              toolName: "askUser",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "input-available",
+              input: { questions: b.questions },
+            });
+          } else if (b.type === "plan" && b.plan) {
+            parts.push({
+              type: "tool-proposePlan",
+              toolName: "proposePlan",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "input-available",
+              input: b.plan,
+            });
+          } else if (b.type === "research") {
+            parts.push({
+              type: "tool-research",
+              toolName: "research",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "output-available",
+              input: { focus: b.topic, topics: b.subQueries },
+              output: { citations: b.results, queries: b.subQueries },
+            });
+          } else if (b.type === "creative" && b.creative) {
+            parts.push({
+              type: "tool-generateCreative",
+              toolName: "generateCreative",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "output-available",
+              input: { prompt: b.creative.imagePrompt, caption: b.creative.primaryText },
+              output: b.creative,
+            });
+          } else if (b.type === "campaign" && b.campaign) {
+            parts.push({
+              type: "tool-deliverCampaign",
+              toolName: "deliverCampaign",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "output-available",
+              input: b.campaign,
+            });
+          }
+        }
+      } else if (data.text || data.message) {
+        parts.push({ type: "text", text: data.text || data.message });
+      }
+
+      if (parts.length === 0) {
+        parts.push({ type: "text", text: "I've processed your request. How else can I help?" });
+      }
+
+      const assistantMsg: UIMessage = {
+        id: `asst-${Date.now()}`,
+        role: "assistant",
+        parts,
+      };
+
+      setMessages([...nextMessages, assistantMsg]);
+      setStatus("ready");
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        setStatus("ready");
+        return;
+      }
+      setStatus("error");
+      onError?.(err);
+    }
+  };
+
+  const addToolResult = ({ tool, toolCallId, output }: { tool: string; toolCallId: string; output: any }) => {
+    setMessages((prev) =>
+      prev.map((msg) => ({
+        ...msg,
+        parts: msg.parts.map((part) => {
+          if (isToolUIPart(part) && part.toolCallId === toolCallId) {
+            return {
+              ...part,
+              state: "output-available",
+              output,
+            };
+          }
+          return part;
+        }),
+      }))
+    );
+
+    // Follow up to AI after answering
+    setTimeout(() => {
+      const summaryText = output?.answers
+        ? `Answers provided: ${Object.entries(output.answers).map(([k, v]) => `${k}: ${v}`).join(", ")}`
+        : output?.approved !== undefined
+        ? output.approved ? "The execution plan was approved. Please generate the campaign deliverables and creative!" : "Changes requested on the execution plan."
+        : output?.freeform || "Done.";
+      void sendMessage({ text: summaryText });
+    }, 100);
+  };
+
+  const stop = () => {
+    abortControllerRef.current?.abort();
+    setStatus("ready");
+  };
+
+  return { messages, sendMessage, addToolResult, status, stop };
+}
+
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("standard");
@@ -236,13 +410,8 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
   const lastSubmission = useRef<Submission | null>(null);
 
-  const { messages, sendMessage, addToolResult, status, stop } = useChat({
+  const { messages, sendMessage, addToolResult, status, stop } = useAgentChat({
     id: threadId,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign" }),
-    }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onError: (e) => {
       const info = classifyChatError(e);
       setChatError(info);
@@ -643,7 +812,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
 
 /* ------------------------------- message ---------------------------------- */
 
-type AddToolResult = ReturnType<typeof useChat>["addToolResult"];
+type AddToolResult = (args: { tool: string; toolCallId: string; output: any }) => void;
 
 function AgentMessage({
   message,

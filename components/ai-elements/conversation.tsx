@@ -4,7 +4,11 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
-import type { UIMessage } from "ai";
+export type UIMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  parts: Array<{ type: string; text?: string; [key: string]: any }>;
+};
 
 const StickContext = createContext<{
   isAtBottom: boolean;
