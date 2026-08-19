@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
+import { signOut } from "next-auth/react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2, UserRound, Upload } from "lucide-react"
+import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2, UserRound, Upload, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CURATED_AVATARS } from "@/lib/profile-avatars"
 
@@ -70,6 +71,7 @@ function ProfileTab() {
   if (loading) return <SectionCard title="Profile picture" description="Choose how you appear in Growzzy."><div className="flex justify-center py-10 text-[#9CA3AF]"><Loader2 className="animate-spin" size={20} /></div></SectionCard>
 
   return (
+    <>
     <SectionCard title="Profile picture" description="Upload your own photo or choose a Growzzy avatar.">
       <div className="flex items-center gap-4 mb-5">
         <div className="w-16 h-16 overflow-hidden rounded-full bg-[#EAF0FE] flex items-center justify-center text-[#1F57F5] text-lg font-bold ring-2 ring-white shadow-[0_1px_4px_rgba(0,0,0,0.14)]">
@@ -97,6 +99,23 @@ function ProfileTab() {
       {error && <p className="text-[11.5px] text-[#D3564C] mt-3">{error}</p>}
       <div className="flex justify-end mt-5"><SaveButton label="Save profile picture" onSave={save} saving={saving} /></div>
     </SectionCard>
+
+    <SectionCard title="Account session" description="Manage your current signed-in session.">
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-[13.5px] font-semibold text-[#111827]">Sign out of Growzzy</p>
+          <p className="text-[12px] text-[#6B7280] mt-0.5">End your active session on this device.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="inline-flex items-center gap-2 px-4 py-2 text-[12.5px] font-semibold text-[#D3564C] bg-[#FDF2F2] hover:bg-[#FDE8E8] border border-[#F8B4B4] rounded-[8px] transition-colors cursor-pointer"
+        >
+          <LogOut size={14} /> Log out
+        </button>
+      </div>
+    </SectionCard>
+    </>
   )
 }
 

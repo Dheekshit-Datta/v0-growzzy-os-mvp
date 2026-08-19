@@ -21,8 +21,11 @@ import {
   Palette,
   Settings,
   FileText,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { loadSavedChats, deleteSavedChat } from "@/lib/chat-store"
+import { toast } from "sonner"
 
 interface NavItem {
   href: string
@@ -33,7 +36,7 @@ interface NavItem {
 const CREATE_NAV: NavItem[] = [
   { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
   { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
-  { href: "/dashboard/prompts",       label: "Recent Prompts", icon: History },
+  { href: "/dashboard/prompts",       label: "Recent Chats",   icon: History },
 ]
 
 const MANAGE_NAV: NavItem[] = [
@@ -77,9 +80,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const [profile, setProfile] = useState<{ name: string; email: string; image: string | null } | null>(() =>
     readSessionValue("growzzy_sidebar_profile", null)
   )
-  const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>(() =>
-    readSessionValue("growzzy_sidebar_prompts", [])
-  )
+  const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>(() => {
+    const local = typeof window !== "undefined" ? loadSavedChats().map((c) => ({ id: c.id, campaignName: c.title })) : []
+    return local.length ? local : readSessionValue("growzzy_sidebar_prompts", [])
+  })
 
   useEffect(() => {
     const loadProgress = () => {
@@ -121,19 +125,30 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   useEffect(() => {
     const loadPrompts = () => {
+      const local = loadSavedChats().map((c) => ({ id: c.id, campaignName: c.title }))
       fetch("/api/ai/campaign-plans", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           const items = Array.isArray(json?.plans) ? json.plans : []
-          const prompts = items.slice(0, 3).map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
-          setRecentPrompts(prompts)
-          writeSessionValue("growzzy_sidebar_prompts", prompts)
+          const apiPrompts = items.map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
+          const merged = [...local, ...apiPrompts]
+          const unique = Array.from(new Map(merged.map((m) => [m.id, m])).values()).slice(0, 10)
+          setRecentPrompts(unique)
+          writeSessionValue("growzzy_sidebar_prompts", unique)
         })
-        .catch(() => {})
+        .catch(() => {
+          if (local.length) {
+            setRecentPrompts(local.slice(0, 10))
+          }
+        })
     }
     loadPrompts()
     window.addEventListener("growzzy:prompt-history-updated", loadPrompts)
-    return () => window.removeEventListener("growzzy:prompt-history-updated", loadPrompts)
+    window.addEventListener("growzzy:chats-updated", loadPrompts)
+    return () => {
+      window.removeEventListener("growzzy:prompt-history-updated", loadPrompts)
+      window.removeEventListener("growzzy:chats-updated", loadPrompts)
+    }
   }, [])
 
   useEffect(() => {
@@ -259,17 +274,18 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                     <>
                       <button
                         onClick={() => setPromptsExpanded(!promptsExpanded)}
-                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#374151] transition-colors"
-                        aria-label={promptsExpanded ? "Collapse prompts" : "Expand prompts"}
+                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#374151] transition-colors cursor-pointer"
+                        aria-label={promptsExpanded ? "Collapse chats" : "Expand chats"}
                       >
                         {promptsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       </button>
-                      <button
-                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#1F57F5] transition-colors"
-                        aria-label="New prompt"
+                      <Link
+                        href="/dashboard/campaigns/new"
+                        className="p-1.5 rounded text-[#9CA3AF] hover:text-[#1F57F5] transition-colors cursor-pointer inline-flex"
+                        aria-label="New chat"
                       >
                         <Plus size={12} />
-                      </button>
+                      </Link>
                     </>
                   )}
                 </div>
@@ -278,18 +294,37 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                     {recentPrompts.length ? (
                       <div className="space-y-0.5">
                         {recentPrompts.map((prompt) => (
-                          <Link
+                          <div
                             key={prompt.id}
-                            href={{ pathname: "/dashboard/campaigns/new", query: { reuse: prompt.id } }}
-                            className="block px-2 py-1.5 rounded-[8px] text-[11px] text-[#6B7280] hover:bg-white/60 hover:text-[#111827] truncate"
-                            title={prompt.campaignName}
+                            className="group flex items-center justify-between gap-1 px-2 py-1.5 rounded-[8px] hover:bg-white/70 text-[#6B7280] hover:text-[#111827] transition-colors"
                           >
-                            {prompt.campaignName}
-                          </Link>
+                            <Link
+                              href={{ pathname: "/dashboard/campaigns/new", query: { threadId: prompt.id, reuse: prompt.id } }}
+                              className="flex-1 text-[11.5px] truncate leading-tight font-medium"
+                              title={prompt.campaignName}
+                            >
+                              {prompt.campaignName}
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                deleteSavedChat(prompt.id);
+                                setRecentPrompts((cur) => cur.filter((p) => p.id !== prompt.id));
+                                toast.success("Chat deleted");
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-[#9CA3AF] hover:text-[#D3564C] transition-opacity rounded hover:bg-black/5 cursor-pointer shrink-0"
+                              title="Delete chat"
+                              aria-label="Delete chat"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-[#9CA3AF] px-2 py-1.5 italic">No saved prompts yet</p>
+                      <p className="text-[11px] text-[#9CA3AF] px-2 py-1.5 italic">No saved chats yet</p>
                     )}
                   </div>
                 )}

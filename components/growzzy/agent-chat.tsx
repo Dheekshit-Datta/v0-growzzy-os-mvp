@@ -18,6 +18,7 @@ import {
   type ChatErrorKind,
 } from "@/lib/chat-routing";
 import { buildTranscript, downloadTranscript, type TranscriptMessage } from "@/lib/transcript";
+import { saveChatSession } from "@/lib/chat-store";
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -259,6 +260,13 @@ function useAgentChat({
     setMessages(nextMessages);
     setStatus("submitted");
 
+    // Save to recent chats list
+    saveChatSession({
+      id: threadId,
+      title: text.length > 35 ? text.slice(0, 32) + "..." : text,
+      lastMessage: text,
+    });
+
     try {
       abortControllerRef.current = new AbortController();
       const res = await fetch("/api/chat", {
@@ -284,6 +292,23 @@ function useAgentChat({
         for (const b of data.blocks) {
           if (b.type === "text" && b.content) {
             parts.push({ type: "text", text: b.content });
+          } else if (b.type === "askBrandUrl") {
+            parts.push({
+              type: "tool-askBrandUrl",
+              toolName: "askBrandUrl",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "input-available",
+              input: { reason: b.reason },
+            });
+          } else if (b.type === "analyzeWebsite") {
+            parts.push({
+              type: "tool-analyzeWebsite",
+              toolName: "analyzeWebsite",
+              toolCallId: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              state: "output-available",
+              input: { url: b.site },
+              output: { site: b.site, profile: b.profile },
+            });
           } else if (b.type === "questions" && b.questions) {
             parts.push({
               type: "tool-askUser",
@@ -373,7 +398,9 @@ function useAgentChat({
 
     // Follow up to AI after answering
     setTimeout(() => {
-      const summaryText = output?.answers
+      const summaryText = output?.url
+        ? `My website is ${output.url}. Please analyze it.`
+        : output?.answers
         ? `Answers provided: ${Object.entries(output.answers).map(([k, v]) => `${k}: ${v}`).join(", ")}`
         : output?.approved !== undefined
         ? output.approved ? "The execution plan was approved. Please generate the campaign deliverables and creative!" : "Changes requested on the execution plan."
