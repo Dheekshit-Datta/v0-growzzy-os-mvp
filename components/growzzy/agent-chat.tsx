@@ -610,7 +610,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
         <div className="rounded-[12px] border border-border bg-card p-3">
           <div className="text-[13px] font-semibold text-foreground">{plan.title}</div>
           <ol className="mt-2 space-y-1.5">
-            {plan.steps.map((s, i) => (
+            {plan.steps?.map((s, i) => (
               <li key={i} className="flex gap-2 text-[12px] text-muted-foreground">
                 <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px]">
                   {i + 1}
@@ -622,7 +622,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
         </div>
       ) : null}
 
-      {citations.length > 0 && (
+      {citations?.length > 0 && (
         <div className="rounded-[12px] border border-border bg-card p-3">
           <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             Sources read ({citations.length})
@@ -848,7 +848,7 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
       </div>
       {input?.topics && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {input.topics.map((t) => (
+          {input.topics?.map((t) => (
             <span
               key={t}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11.5px] text-muted-foreground"
@@ -865,7 +865,7 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
             Sources read live ({output.citations.length})
           </div>
           <ul className="space-y-1">
-            {output.citations.map((c) => (
+            {output.citations?.map((c) => (
               <li key={c.url} className="text-[11.5px] leading-snug">
                 <a
                   href={c.url}
@@ -927,7 +927,7 @@ function QuestionsCard({
       </div>
 
       <div className="mt-4 space-y-4">
-        {input.questions.map((q, qi) => (
+        {input.questions?.map((q, qi) => (
           <div key={q.id} className="rounded-[10px] border border-border bg-background p-3.5">
             <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {qi + 1} / {total}
@@ -935,7 +935,7 @@ function QuestionsCard({
             <div className="mt-1 text-[13.5px] font-medium text-foreground">{q.question}</div>
             <p className="mt-0.5 text-[12px] text-muted-foreground">{q.why}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {q.options.map((o) => {
+              {q.options?.map((o) => {
                 const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
                 return (
                   <button
@@ -1028,7 +1028,7 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
         <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{input.summary}</p>
       )}
       <ol className="mt-4 space-y-3">
-        {input.steps.map((s, i) => (
+        {input.steps?.map((s, i) => (
           <li key={i} className="flex gap-3">
             <span
               className={cn(
@@ -1162,20 +1162,20 @@ function CampaignCard({ part }: { part: ToolUIPart }) {
         <Field label="Landing page" value={c.landingPage} />
       </div>
 
-      {c.targeting?.length > 0 && (
+      {c.targeting && c.targeting.length > 0 && (
         <Block title="Targeting">
           <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.targeting.map((t) => (
+            {c.targeting?.map((t) => (
               <Field key={t.setting} label={t.setting} value={t.value} />
             ))}
           </div>
         </Block>
       )}
 
-      {c.keywords?.length > 0 && (
+      {c.keywords && c.keywords.length > 0 && (
         <Block title="Keywords">
           <div className="flex flex-wrap gap-1.5">
-            {c.keywords.map((k) => (
+            {c.keywords?.map((k) => (
               <span
                 key={k}
                 className="inline-flex items-center gap-1 rounded-full bg-primary-tint px-2 py-0.5 text-[11.5px] text-primary"
@@ -1215,20 +1215,20 @@ function CampaignCard({ part }: { part: ToolUIPart }) {
         </div>
       </Block>
 
-      {c.kpis?.length > 0 && (
+      {c.kpis && c.kpis.length > 0 && (
         <Block title="Targets">
           <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.kpis.map((k) => (
+            {c.kpis?.map((k) => (
               <Field key={k.metric} label={k.metric} value={k.target} />
             ))}
           </div>
         </Block>
       )}
 
-      {c.risks?.length > 0 && (
+      {c.risks && c.risks.length > 0 && (
         <Block title="Watch-outs">
           <ul className="space-y-1">
-            {c.risks.map((r) => (
+            {c.risks?.map((r) => (
               <li key={r} className="text-[12.5px] text-muted-foreground">
                 • {r}
               </li>
