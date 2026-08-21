@@ -58,7 +58,16 @@ export function loadBrand(): BrandProfile {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return emptyBrand;
-    return { ...emptyBrand, ...(JSON.parse(raw) as Partial<BrandProfile>) };
+    const parsed = JSON.parse(raw) as Partial<BrandProfile>;
+    return {
+      ...emptyBrand,
+      ...parsed,
+      differentiators: Array.isArray(parsed.differentiators) ? parsed.differentiators : [],
+      segments: Array.isArray(parsed.segments) ? parsed.segments : [],
+      competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+      creativeAngles: Array.isArray(parsed.creativeAngles) ? parsed.creativeAngles : [],
+    };
   } catch {
     return emptyBrand;
   }
@@ -71,30 +80,32 @@ export function saveBrand(profile: BrandProfile) {
 }
 
 export function brandIsReady(p: BrandProfile): boolean {
-  return Boolean(p.businessName && (p.whatTheySell || p.productDescription));
+  return Boolean(p?.businessName && (p?.whatTheySell || p?.productDescription));
 }
 
 /** Compact, model-readable brand brief. Empty string when nothing is known. */
 export function brandContextText(p: BrandProfile): string {
-  if (!brandIsReady(p)) return "";
+  if (!p || !brandIsReady(p)) return "";
   const lines = [
-    `Business: ${p.businessName}`,
+    p.businessName && `Business: ${p.businessName}`,
     p.website && `Website: ${p.website}`,
     p.industry && `Industry: ${p.industry}`,
     p.businessModel && `Business model: ${p.businessModel}`,
     p.whatTheySell && `What they sell: ${p.whatTheySell}`,
     p.productDescription && `Product detail: ${p.productDescription}`,
     p.positioning && `Positioning: ${p.positioning}`,
-    p.differentiators.length && `Differentiators: ${p.differentiators.join("; ")}`,
+    p.differentiators?.length ? `Differentiators: ${p.differentiators.join("; ")}` : null,
     p.audience && `Ideal customer: ${p.audience}`,
-    p.segments.length &&
-      `Audience segments:\n${p.segments
-        .map((s) => `- ${s.segment} — pains: ${s.pains} | triggers: ${s.triggers}`)
-        .join("\n")}`,
-    p.competitors.length &&
-      `Competitors:\n${p.competitors.map((c) => `- ${c.name} (${c.url}) — ${c.angle}`).join("\n")}`,
-    p.keywords.length && `Known high-intent keywords: ${p.keywords.join(", ")}`,
-    p.creativeAngles.length && `Creative angles that fit: ${p.creativeAngles.join("; ")}`,
+    p.segments?.length
+      ? `Audience segments:\n${p.segments
+          .map((s) => `- ${s.segment} — pains: ${s.pains} | triggers: ${s.triggers}`)
+          .join("\n")}`
+      : null,
+    p.competitors?.length
+      ? `Competitors:\n${p.competitors.map((c) => `- ${c.name} (${c.url}) — ${c.angle}`).join("\n")}`
+      : null,
+    p.keywords?.length ? `Known high-intent keywords: ${p.keywords.join(", ")}` : null,
+    p.creativeAngles?.length ? `Creative angles that fit: ${p.creativeAngles.join("; ")}` : null,
     p.tone && `Tone of voice: ${p.tone}`,
     p.defaultLandingPage && `Default landing page: ${p.defaultLandingPage}`,
   ].filter(Boolean);

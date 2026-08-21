@@ -139,10 +139,10 @@ function buildSuggestions(brand: BrandProfile) {
     ];
   }
 
-  const offer = (brand.whatTheySell || brand.productDescription).trim();
-  const segment = brand.segments[0]?.segment ?? brand.audience;
-  const competitor = brand.competitors[0]?.name;
-  const keyword = brand.keywords[0];
+  const offer = ((brand.whatTheySell || brand.productDescription) ?? "").trim();
+  const segment = brand.segments?.[0]?.segment ?? brand.audience ?? "";
+  const competitor = brand.competitors?.[0]?.name;
+  const keyword = brand.keywords?.[0];
 
   return [
     {
@@ -183,9 +183,10 @@ type Artifacts = {
 function deriveArtifacts(messages: UIMessage[]): Artifacts {
   const out: Artifacts = { citations: [] };
   const seen = new Set<string>();
-  for (const m of messages) {
+  for (const m of messages ?? []) {
+    if (!m?.parts || !Array.isArray(m.parts)) continue;
     for (const part of m.parts) {
-      if (!isToolUIPart(part)) continue;
+      if (!part || !isToolUIPart(part)) continue;
       const name = getToolName(part as ToolUIPart);
       const p = part as ToolUIPart;
       if (name === "proposePlan" && p.input) {
@@ -256,9 +257,10 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   /* When the agent analyses a website in-chat, persist it as the brand context. */
   const savedAnalysis = useRef<string | null>(null);
   useEffect(() => {
-    for (const m of messages) {
+    for (const m of messages ?? []) {
+      if (!m?.parts || !Array.isArray(m.parts)) continue;
       for (const part of m.parts) {
-        if (!isToolUIPart(part)) continue;
+        if (!part || !isToolUIPart(part)) continue;
         if (getToolName(part as ToolUIPart) !== "analyzeWebsite") continue;
         const out = (part as ToolUIPart).output as
           | { site?: string; profile?: Partial<BrandProfile> & { sources?: string[] } }
@@ -659,11 +661,13 @@ function AgentMessage({
   addToolResult: AddToolResult;
   onStop: () => void;
 }) {
+  if (!message?.parts || !Array.isArray(message.parts)) return null;
+
   if (message.role === "user") {
     return (
       <Message from="user">
         <MessageContent>
-          {message.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+          {message.parts.map((p, i) => (p?.type === "text" ? <span key={i}>{p.text}</span> : null))}
         </MessageContent>
       </Message>
     );
