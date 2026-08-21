@@ -106,9 +106,12 @@ export default function CampaignDetailPage() {
       .finally(() => setLoading(false))
   }, [params?.id])
 
-  const totalClicks = campaign?.metricsDaily.reduce((sum, m) => sum + (m.clicks || 0), 0) ?? 0
-  const totalConversions = campaign?.metricsDaily.reduce((sum, m) => sum + (m.conversions || 0), 0) ?? 0
-  const totalSpend = campaign?.totalSpend || campaign?.metricsDaily.reduce((sum, m) => sum + (m.spend || 0), 0) || 0
+  const metricsDaily = campaign?.metricsDaily ?? []
+  const adGroups = campaign?.adGroups ?? []
+
+  const totalClicks = metricsDaily.reduce((sum, m) => sum + (m.clicks || 0), 0)
+  const totalConversions = metricsDaily.reduce((sum, m) => sum + (m.conversions || 0), 0)
+  const totalSpend = campaign?.totalSpend || metricsDaily.reduce((sum, m) => sum + (m.spend || 0), 0)
   const cpa = totalConversions > 0 ? totalSpend / totalConversions : null
   const roas = totalSpend > 0 ? (campaign?.totalRevenue || 0) / totalSpend : null
 
@@ -117,7 +120,7 @@ export default function CampaignDetailPage() {
       <div className="p-5 space-y-4 max-w-[960px]">
         <button
           onClick={() => router.push("/dashboard/ads")}
-          className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] hover:text-[#374151] transition-colors"
+          className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] hover:text-[#374151] transition-colors cursor-pointer"
         >
           <ArrowLeft size={14} />
           Back to Ads Manager
@@ -169,8 +172,8 @@ export default function CampaignDetailPage() {
               </div>
 
               <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[#F0F2F5] text-[12.5px] text-[#6B7280]">
-                <span>Daily budget: <strong className="text-[#374151]">{money(campaign.dailyBudget)}</strong></span>
-                {campaign.metricsDaily.length === 0 && (
+                <span>Daily budget: <strong className="text-[#374151]">{money(campaign.dailyBudget || 0)}</strong></span>
+                {metricsDaily.length === 0 && (
                   <span className="text-[#9CA3AF]">No performance data synced yet — this appears after the next sync.</span>
                 )}
               </div>
@@ -179,15 +182,17 @@ export default function CampaignDetailPage() {
 
             <Card>
               <h2 className="text-[13.5px] font-semibold text-[#111827] mb-4">
-                Ad groups ({campaign.adGroups.length})
+                Ad groups ({adGroups.length})
               </h2>
-              {campaign.adGroups.length === 0 ? (
+              {adGroups.length === 0 ? (
                 <p className="text-[12.5px] text-[#9CA3AF]">No ad groups on this campaign.</p>
               ) : (
                 <div className="space-y-4">
-                  {campaign.adGroups.map((g) => {
-                    const positives = g.keywords.filter((k) => !k.isNegative)
-                    const negatives = g.keywords.filter((k) => k.isNegative)
+                  {adGroups.map((g) => {
+                    const keywords = g.keywords ?? []
+                    const ads = g.ads ?? []
+                    const positives = keywords.filter((k) => !k.isNegative)
+                    const negatives = keywords.filter((k) => k.isNegative)
                     return (
                       <div key={g.id} className="rounded-[10px] border border-[#F0F2F5] p-4">
                         <div className="flex items-center justify-between">
@@ -196,9 +201,9 @@ export default function CampaignDetailPage() {
                             {statusPill(g.status).label}
                           </span>
                         </div>
-                        {g.ads.length > 0 && (
+                        {ads.length > 0 && (
                           <div className="mt-3 space-y-2">
-                            {g.ads.map((ad) => (
+                            {ads.map((ad) => (
                               <div key={ad.id} className="p-3 rounded-[8px] bg-[#F6F7F9]">
                                 <div className="flex items-center gap-1.5 mb-1">
                                   {ad.creativeTest?.isWinner && (
@@ -206,7 +211,7 @@ export default function CampaignDetailPage() {
                                       Winning variant
                                     </span>
                                   )}
-                                  {ad.creativeTest?.fatigue.isFatiguing && (
+                                  {ad.creativeTest?.fatigue?.isFatiguing && (
                                     <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-[#FBF0DA] text-[#B8892B]">
                                       Fatiguing — CTR down {Math.abs(Math.round(ad.creativeTest.fatigue.ctrChangePct || 0))}%
                                     </span>
