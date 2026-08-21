@@ -68,7 +68,7 @@ export function ResearchBlock({
 
       {subQueries && subQueries.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
-          {subQueries.map((q, i) => (
+          {subQueries?.map((q, i) => (
             <span
               key={i}
               className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-[11.5px] text-muted-foreground"
@@ -81,7 +81,7 @@ export function ResearchBlock({
 
       {open && results && results.length > 0 && (
         <div className="mt-2 space-y-2 border-t border-border pt-3">
-          {results.map((r, i) => (
+          {results?.map((r, i) => (
             <div key={i} className="rounded-lg border border-border bg-muted/20 p-2.5 text-[12px]">
               <a
                 href={r.url}
@@ -203,7 +203,7 @@ export function QuestionsCard({
         {/* Options grid */}
         {q.options && q.options.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-            {q.options.map((opt) => (
+            {q.options?.map((opt) => (
               <button
                 key={opt.label}
                 type="button"
@@ -293,7 +293,7 @@ export function PlanCard({
       </div>
 
       <div className="p-4 space-y-3.5">
-        {plan.steps.map((step) => (
+        {plan.steps?.map((step) => (
           <div key={step.stepNumber} className="flex items-start gap-3">
             <div
               className={cn(

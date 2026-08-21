@@ -47,16 +47,17 @@ export function buildTranscript(
     "",
   ].filter(Boolean);
 
-  messages.forEach((m) => {
-    const text = m.parts
-      .filter((p) => p.type === "text" && p.text?.trim())
+  (messages ?? []).forEach((m) => {
+    const parts = m?.parts ?? [];
+    const text = parts
+      .filter((p) => p?.type === "text" && p?.text?.trim())
       .map((p) => p.text!.trim())
       .join("\n\n");
 
     if (m.role === "user" && text) lines.push(`## You${stamp(m.at)}`, "", text, "");
     else if (m.role === "assistant" && text) lines.push(`## Growzzy${stamp(m.at)}`, "", text, "");
 
-    m.parts.forEach((p) => {
+    parts.forEach((p) => {
       const name = toolName(p.type);
       if (!name) return;
       const input = (p.input ?? {}) as Record<string, unknown>;

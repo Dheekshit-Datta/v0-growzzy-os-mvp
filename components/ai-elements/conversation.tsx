@@ -94,9 +94,9 @@ export function ConversationScrollButton({
 }
 
 const getMessageText = (message: UIMessage): string =>
-  message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => (part as { type: "text"; text: string }).text)
+  (message?.parts ?? [])
+    .filter((part) => part?.type === "text")
+    .map((part) => (part as { type: "text"; text: string }).text || "")
     .join("");
 
 export function ConversationDownload({
@@ -107,8 +107,8 @@ export function ConversationDownload({
   ...props
 }: ComponentProps<typeof Button> & { messages: UIMessage[]; filename?: string }) {
   const handleDownload = useCallback(() => {
-    const text = messages
-      .map((m) => `**${m.role.toUpperCase()}:** ${getMessageText(m)}`)
+    const text = (messages ?? [])
+      .map((m) => `**${(m?.role || "user").toUpperCase()}:** ${getMessageText(m)}`)
       .join("\n\n");
     const blob = new Blob([text], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
