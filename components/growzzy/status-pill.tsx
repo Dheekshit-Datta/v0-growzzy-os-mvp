@@ -1,3 +1,5 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import type { CampaignStatus } from "@/lib/types";
 import type { ReactNode } from "react";
