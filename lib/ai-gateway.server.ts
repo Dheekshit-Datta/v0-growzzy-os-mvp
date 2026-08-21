@@ -116,7 +116,6 @@ export async function generateAdImage(
           prompt: cleanPrompt,
           n: 1,
           size: "1024x1024",
-          response_format: "url",
         }),
         signal,
       });
