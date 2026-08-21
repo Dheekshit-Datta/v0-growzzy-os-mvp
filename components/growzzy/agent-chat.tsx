@@ -53,10 +53,17 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
-import { StatusPill } from "@/components/growzzy/status-pill";
+import {
+  ArtifactPill,
+  ArtifactModal,
+  type ArtifactData,
+} from "@/components/growzzy/artifact-modal";
+import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers";
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download as DownloadIcon,
   RefreshCw,
   CircleStop,
@@ -71,6 +78,10 @@ import {
   Search,
   Target,
   Wand2,
+  Briefcase,
+  Smartphone,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 /* ------------------------------- tool payloads ------------------------------ */
@@ -101,14 +112,22 @@ type CampaignInput = {
   bidding: string;
   schedule: string;
   landingPage: string;
-  targeting: { setting: string; value: string }[];
-  keywords: string[];
-  headlines: string[];
-  descriptions: string[];
-  primaryText: string;
-  cta: string;
-  kpis: { metric: string; target: string }[];
-  risks: string[];
+  offer?: string;
+  targetAudience?: string;
+  headlines?: string[];
+  headlineStrategy?: string;
+  primaryText?: string;
+  cta?: string;
+  ctaAlternative?: string;
+  targeting?: { setting: string; value: string }[];
+  exclusions?: string[];
+  keyCaveat?: string;
+  creativeNotes?: string;
+  variantOptions?: string[];
+  keywords?: string[];
+  descriptions?: string[];
+  kpis?: { metric: string; target: string }[];
+  risks?: string[];
 };
 
 /** Suggestions are built from the user's own brand profile — never generic demo copy. */
@@ -221,6 +240,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("standard");
   const [brand, setBrand] = useState<BrandProfile>(emptyBrand);
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const user = useUserProfile();
 
   useEffect(() => {
@@ -384,7 +404,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           value={input}
           onChange={(e) => setInput(e.currentTarget.value)}
           autoFocus
-          placeholder={started ? "Ask anything…" : "Ask anything, or describe what to launch…"}
+          placeholder={started ? "Type / for skills or ask anything…" : "Ask anything, or describe what to launch…"}
         />
         <PromptInputFooter className="justify-between">
           <PromptInputTools>
@@ -431,11 +451,12 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
             message={m}
             addToolResult={addToolResult}
             onStop={stop}
+            onOpenArtifact={setActiveArtifact}
           />
         ))}
         {status === "submitted" && (
           <div className="flex items-center gap-2 pl-1">
-            <Shimmer className="text-[13.5px]">Growzzy is thinking…</Shimmer>
+            <Shimmer className="text-[13.5px]">Analyzing client requirements to determine approach…</Shimmer>
           </div>
         )}
       </ConversationContent>
@@ -541,6 +562,11 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           <PreviewRail artifacts={artifacts} />
         </aside>
       )}
+      <ArtifactModal
+        data={activeArtifact}
+        open={Boolean(activeArtifact)}
+        onClose={() => setActiveArtifact(null)}
+      />
     </div>
   );
 }
@@ -656,10 +682,12 @@ function AgentMessage({
   message,
   addToolResult,
   onStop,
+  onOpenArtifact,
 }: {
   message: UIMessage;
   addToolResult: AddToolResult;
   onStop: () => void;
+  onOpenArtifact?: (data: ArtifactData) => void;
 }) {
   if (!message?.parts || !Array.isArray(message.parts)) return null;
 
@@ -696,7 +724,13 @@ function AgentMessage({
               return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} />;
             }
             if (name === "deliverCampaign") {
-              return <CampaignCard key={i} part={part as ToolUIPart} />;
+              return (
+                <CampaignCard
+                  key={i}
+                  part={part as ToolUIPart}
+                  onOpenArtifact={onOpenArtifact}
+                />
+              );
             }
             if (name === "askBrandUrl") {
               return (
@@ -911,94 +945,176 @@ function QuestionsCard({
   const answered = part.state === "output-available";
   const submitted = (part.output as { answers?: Record<string, string> } | undefined)?.answers;
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [customText, setCustomText] = useState("");
 
   if (!input?.questions?.length) return null;
   const total = input.questions.length;
-  const complete = input.questions.every((q) => answers[q.id]);
+  const q = input.questions[currentIndex] || input.questions[0];
+
+  const handleSelectOption = (optionLabel: string) => {
+    if (answered) return;
+    const newAnswers = { ...answers, [q.id]: optionLabel };
+    setAnswers(newAnswers);
+    setCustomText("");
+
+    if (currentIndex < total - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      addToolResult({
+        tool: "askUser",
+        toolCallId: part.toolCallId,
+        output: { answers: newAnswers },
+      });
+    }
+  };
+
+  const handleCustomSubmit = () => {
+    if (answered || !customText.trim()) return;
+    const newAnswers = { ...answers, [q.id]: customText.trim() };
+    setAnswers(newAnswers);
+    setCustomText("");
+
+    if (currentIndex < total - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      addToolResult({
+        tool: "askUser",
+        toolCallId: part.toolCallId,
+        output: { answers: newAnswers },
+      });
+    }
+  };
+
+  const getOptionIcon = (label: string) => {
+    const l = label.toLowerCase();
+    if (l.includes("linkedin")) return <Briefcase className="h-4 w-4" />;
+    if (l.includes("meta") || l.includes("facebook") || l.includes("instagram"))
+      return <Smartphone className="h-4 w-4" />;
+    if (l.includes("google") || l.includes("search")) return <Search className="h-4 w-4" />;
+    if (l.includes("multiple") || l.includes("multi")) return <Globe className="h-4 w-4" />;
+    return <Sparkles className="h-4 w-4" />;
+  };
 
   return (
-    <div className="rounded-[12px] border border-border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
-          <MessageCircleQuestion className="h-3.5 w-3.5" />
-        </span>
-        <span className="text-[13px] font-medium text-foreground">A few things before I build</span>
-        <StatusPill variant="primary">{total} questions</StatusPill>
-      </div>
-
-      <div className="mt-4 space-y-4">
-        {input.questions?.map((q, qi) => (
-          <div key={q.id} className="rounded-[10px] border border-border bg-background p-3.5">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {qi + 1} / {total}
-            </div>
-            <div className="mt-1 text-[13.5px] font-medium text-foreground">{q.question}</div>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">{q.why}</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {q.options?.map((o) => {
-                const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
-                return (
-                  <button
-                    key={o.label}
-                    disabled={answered}
-                    onClick={() => setAnswers((a) => ({ ...a, [q.id]: o.label }))}
-                    className={cn(
-                      "rounded-[10px] border p-2.5 text-left transition-colors cursor-pointer",
-                      selected
-                        ? "border-primary bg-primary-tint"
-                        : "border-border bg-card hover:border-primary/30",
-                      answered && !selected && "opacity-60",
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span className="text-[12.5px] font-medium text-foreground">{o.label}</span>
-                      {o.recommended && (
-                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                          Recommended
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
-                      {o.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {!answered && (
-              <Input
-                value={answers[q.id] ?? ""}
-                onChange={(event) =>
-                  setAnswers((current) => ({ ...current, [q.id]: event.currentTarget.value }))
-                }
-                placeholder="Or type your own answer…"
-                className="mt-2 h-9 text-[12.5px]"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
+    <div className="space-y-2">
+      {/* Waiting for input status indicator */}
       {!answered && (
-        <Button
-          className="mt-4 w-full cursor-pointer"
-          disabled={!complete}
-          onClick={() =>
-            addToolResult({
-              tool: "askUser",
-              toolCallId: part.toolCallId,
-              output: { answers },
-            })
-          }
-        >
-          Send answers
-        </Button>
-      )}
-      {answered && (
-        <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-emerald-600">
-          <Check className="h-3.5 w-3.5" /> Answers sent
+        <div className="flex items-center gap-2 text-[12.5px] text-amber-500 pl-1 font-medium animate-pulse">
+          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          <span>Waiting for user to give input..</span>
         </div>
       )}
+
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        {/* Header with 1/N pagination and controls */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
+          <span className="text-[13.5px] font-semibold text-foreground truncate pr-2">
+            {currentIndex + 1}. {q.question}
+          </span>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11.5px] font-mono font-medium text-muted-foreground">
+              &lt; {currentIndex + 1}/{total} &gt;
+            </span>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                disabled={currentIndex === 0}
+                onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={currentIndex === total - 1}
+                onClick={() => setCurrentIndex(Math.min(total - 1, currentIndex + 1))}
+                className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Question body */}
+        <div className="p-4 space-y-3">
+          {q.why && <p className="text-[12px] text-muted-foreground">{q.why}</p>}
+
+          {/* Options list */}
+          <div className="space-y-2 pt-1">
+            {q.options?.map((o) => {
+              const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
+              return (
+                <button
+                  key={o.label}
+                  disabled={answered}
+                  onClick={() => handleSelectOption(o.label)}
+                  className={cn(
+                    "w-full rounded-[12px] border p-3 text-left transition-all cursor-pointer flex items-start gap-3",
+                    selected
+                      ? "border-primary bg-primary-tint"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-muted/30",
+                    answered && !selected && "opacity-50"
+                  )}
+                >
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-foreground shrink-0 mt-0.5">
+                    {getOptionIcon(o.label)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-foreground">{o.label}</span>
+                      {o.recommended && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9.5px] font-bold tracking-wider text-muted-foreground uppercase">
+                          RECOMMENDED
+                        </span>
+                      )}
+                    </div>
+                    {o.description && (
+                      <p className="mt-0.5 text-[12px] text-muted-foreground leading-snug">
+                        {o.description}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Free text custom answer */}
+          {!answered && (
+            <div className="relative pt-1">
+              <Input
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCustomSubmit();
+                  }
+                }}
+                placeholder="Or type your own answer..."
+                className="h-10 rounded-[10px] text-[12.5px] pr-10"
+              />
+              <button
+                type="button"
+                onClick={handleCustomSubmit}
+                disabled={!customText.trim()}
+                className="absolute right-2 top-2.5 h-7 w-7 rounded-md bg-foreground text-background flex items-center justify-center disabled:opacity-30 cursor-pointer"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {answered && (
+            <div className="pt-2 text-[12px] text-emerald-600 font-medium flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5" /> Answers sent
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1010,75 +1126,75 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
   const decided = part.state === "output-available";
 
   return (
-    <div className="rounded-[12px] border border-border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
-          <ListChecks className="h-3.5 w-3.5" />
-        </span>
-        <span className="text-[13px] font-medium text-foreground">
-          {input.title || "Execution plan"}
-        </span>
-        {decided && (
-          <StatusPill variant={output?.approved ? "success" : "warn"}>
-            {output?.approved ? "Approved" : "Changes requested"}
-          </StatusPill>
-        )}
+    <div className="space-y-2">
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        {/* Header: ≡ Execution Plan and 0/N Steps */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="grid h-6 w-6 place-items-center rounded bg-primary-tint text-primary text-sm font-bold">
+              ≡
+            </span>
+            <span className="text-[13px] font-semibold text-foreground">
+              {input.title || "Execution Plan"}
+            </span>
+          </div>
+          <span className="text-[12px] font-mono font-medium text-muted-foreground">
+            {decided && output?.approved
+              ? `${input.steps.length}/${input.steps.length} Steps`
+              : `0/${input.steps.length} Steps`}
+          </span>
+        </div>
+
+        {/* Steps list with circle bullets and parallel tagging */}
+        <div className="p-4 space-y-3.5">
+          {input.steps?.map((s, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 text-[10px]",
+                  decided && output?.approved
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : "border-muted-foreground/60 text-transparent"
+                )}
+              >
+                {decided && output?.approved && <Check className="h-2.5 w-2.5" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-foreground">
+                  {s.title}
+                </div>
+                {s.detail && (
+                  <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
+                    {s.detail}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-      {input.summary && (
-        <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{input.summary}</p>
-      )}
-      <ol className="mt-4 space-y-3">
-        {input.steps?.map((s, i) => (
-          <li key={i} className="flex gap-3">
-            <span
-              className={cn(
-                "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-medium",
-                decided && output?.approved
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              {decided && output?.approved ? <Check className="h-3 w-3" /> : i + 1}
-            </span>
-            <span>
-              <span className="block text-[13px] font-medium text-foreground">{s.title}</span>
-              <span className="block text-[12px] leading-snug text-muted-foreground">
-                {s.detail}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ol>
+
+      {/* Confirmation note & Proceed with plan action button */}
       {!decided && (
-        <div className="mt-4 flex gap-2">
-          <Button
-            className="flex-1 gap-1.5 cursor-pointer"
-            onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: { approved: true },
-              })
-            }
-          >
-            <Rocket className="h-4 w-4" /> Approve plan
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 cursor-pointer"
-            onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: {
-                  approved: false,
-                  feedback: "The user wants changes — ask what to adjust before building.",
-                },
-              })
-            }
-          >
-            Decline
-          </Button>
+        <div className="space-y-3 pt-1">
+          <p className="text-[12.5px] text-muted-foreground pl-1 leading-relaxed">
+            Does this look right? Steps 1 and 2 run simultaneously so this moves fast. Proceeding in 10 seconds unless you want to adjust.
+          </p>
+
+          <div className="flex justify-end pr-1">
+            <Button
+              className="gap-1.5 bg-foreground text-background hover:bg-foreground/90 rounded-full px-5 text-[13px] cursor-pointer"
+              onClick={() =>
+                addToolResult({
+                  tool: "proposePlan",
+                  toolCallId: part.toolCallId,
+                  output: { approved: true },
+                })
+              }
+            >
+              Proceed with plan
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -1092,150 +1208,236 @@ function CreativeCard({ part, onStop }: { part: ToolUIPart; onStop: () => void }
   const elapsed = useElapsed(running);
 
   return (
-    <div className="rounded-[12px] border border-border bg-card p-4">
-      <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
-          <ImageIcon className="h-3.5 w-3.5" />
-        </span>
-        {running ? (
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-            <Shimmer className="truncate text-[13px] font-medium">
-              {`Rendering your ad creative… ${elapsed}s (usually 60–120s)`}
-            </Shimmer>
-            <Button type="button" variant="outline" size="sm" onClick={onStop} className="shrink-0 gap-1.5 cursor-pointer">
-              <CircleStop className="h-3.5 w-3.5" /> Cancel
-            </Button>
-          </div>
-        ) : (
-          <span className="text-[13px] font-medium text-foreground">
-            {output?.caption ?? input?.caption ?? "Ad creative"}
+    <div className="space-y-3">
+      {/* Parallel specialists worker card */}
+      <ParallelWorkersCard
+        completedCount={running ? 0 : 2}
+        totalCount={2}
+        elapsedSeconds={elapsed}
+        isComplete={!running}
+      />
+
+      <div className="rounded-[16px] border border-border bg-card p-4 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
+            <ImageIcon className="h-3.5 w-3.5" />
           </span>
+          {running ? (
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+              <Shimmer className="truncate text-[13px] font-medium">
+                {`Rendering ad creative & copy… ${elapsed}s`}
+              </Shimmer>
+              <Button type="button" variant="outline" size="sm" onClick={onStop} className="shrink-0 gap-1.5 cursor-pointer">
+                <CircleStop className="h-3.5 w-3.5" /> Cancel
+              </Button>
+            </div>
+          ) : (
+            <span className="text-[13px] font-medium text-foreground">
+              {output?.caption ?? input?.caption ?? "Ad creative"}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-[10px] border border-border bg-muted">
+          {output?.imageUrl ? (
+            <img
+              src={output.imageUrl}
+              alt={output.caption ?? "Generated ad creative"}
+              className="aspect-square w-full max-w-sm object-cover"
+            />
+          ) : (
+            <div className="grid aspect-square w-full max-w-sm place-items-center text-[12px] text-muted-foreground">
+              {output?.error ??
+                (running
+                  ? `Rendering visual… ${elapsed}s elapsed`
+                  : "Creative generation complete.")}
+            </div>
+          )}
+        </div>
+        {input?.prompt && (
+          <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{input.prompt}</p>
         )}
       </div>
-      <div className="mt-3 overflow-hidden rounded-[10px] border border-border bg-muted">
-        {output?.imageUrl ? (
-          <img
-            src={output.imageUrl}
-            alt={output.caption ?? "Generated ad creative"}
-            className="aspect-square w-full max-w-sm object-cover"
-          />
-        ) : (
-          <div className="grid aspect-square w-full max-w-sm place-items-center text-[12px] text-muted-foreground">
-            {output?.error ??
-              (running
-                ? `Rendering… ${elapsed}s elapsed`
-                : "No creative returned — ask me to retry.")}
-          </div>
-        )}
-      </div>
-      {input?.prompt && (
-        <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{input.prompt}</p>
-      )}
     </div>
   );
 }
 
-function CampaignCard({ part }: { part: ToolUIPart }) {
+function CampaignCard({
+  part,
+  onOpenArtifact,
+}: {
+  part: ToolUIPart;
+  onOpenArtifact?: (data: ArtifactData) => void;
+}) {
   const c = part.input as CampaignInput | undefined;
   if (!c?.name) return null;
+
+  const artifactData: ArtifactData = {
+    title: c.name,
+    brandName: c.name.split("—")[0]?.trim() || "MARKITX",
+    offer: c.offer || "Free AI audit / consultation",
+    targetAudience: c.targetAudience || "CTOs / VPs of Engineering",
+    platform: c.platform || "Meta feed (Facebook + Instagram)",
+    headlines: c.headlines || [
+      "Your AI stack has a performance leak.",
+      "Most AI builds fail ops. Audit yours.",
+      "Free AI audit for engineering leaders",
+    ],
+    headlineStrategy: c.headlineStrategy || "A for cold audiences (provokes immediate self-audit). B as variant if A fatigues. C as a direct-offer fallback for retargeting.",
+    primaryText: c.primaryText || "Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\nMARKITX runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks.",
+    cta: c.cta || "Book Free Audit",
+    ctaAlternative: c.ctaAlternative || "Get My Audit",
+    targeting: c.targeting || [
+      { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
+      { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
+      { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },
+      { setting: "Interests layer", value: "Cloud infrastructure, DevOps, Machine learning, AWS/GCP/Azure" },
+      { setting: "Exclusions", value: "Job titles: intern, student, junior, freelancer" },
+      { setting: "Placement", value: "Facebook + Instagram Feed only — no Audience Network" },
+      { setting: "Bid strategy", value: "Cost Cap (set at your target CPL) or Lowest Cost to gather early signal" },
+    ],
+    keyCaveat: c.keyCaveat || "Meta job title data is self-reported — expect 20–30% title bleed. The company size filter compensates for most of it.",
+    creativeNotes: c.creativeNotes,
+    variantOptions: c.variantOptions,
+  };
+
   return (
-    <div className="rounded-[12px] border border-border bg-card">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
-            <Megaphone className="h-3.5 w-3.5" />
-          </span>
-          <div>
-            <div className="text-[13.5px] font-semibold text-foreground">{c.name}</div>
-            <div className="text-[11.5px] text-muted-foreground">
-              {c.platform} · {c.objective}
+    <div className="space-y-3">
+      {/* Top message */}
+      <p className="text-[13px] text-muted-foreground pl-1">
+        Both are done. Here&apos;s your full {c.platform || "campaign"} package.
+      </p>
+
+      {/* Artifact document pill linking to the modal */}
+      <ArtifactPill
+        data={artifactData}
+        onOpen={() => onOpenArtifact?.(artifactData)}
+      />
+
+      {/* Campaign card container */}
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        <header className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
+              <Megaphone className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <div className="text-[13.5px] font-semibold text-foreground">{c.name}</div>
+              <div className="text-[11.5px] text-muted-foreground">
+                {c.platform} · {c.objective}
+              </div>
             </div>
           </div>
-        </div>
-        <StatusPill variant="success">Launch ready</StatusPill>
-      </header>
+          <StatusPill variant="success">Launch ready</StatusPill>
+        </header>
 
-      <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2">
-        <Field label="Daily budget" value={`${c.currency} ${c.budgetDaily}`} />
-        <Field label="Bidding" value={c.bidding} />
-        <Field label="Schedule" value={c.schedule} />
-        <Field label="Landing page" value={c.landingPage} />
+        <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2 text-[12.5px]">
+          <Field label="Daily budget" value={`${c.currency} ${c.budgetDaily}`} />
+          <Field label="Bidding" value={c.bidding} />
+          <Field label="Schedule" value={c.schedule} />
+          <Field label="Landing page" value={c.landingPage} />
+        </div>
+
+        {/* Ad Copy Section with monospace code headlines and blockquote */}
+        <Block title="Ad copy">
+          <div className="space-y-2.5">
+            <div className="space-y-1.5">
+              {(c.headlines || [
+                "Your AI stack has a performance leak.",
+                "Most AI builds fail ops. Audit yours.",
+                "Free AI audit. No pitch. Just data.",
+              ]).map((h, i) => (
+                <div key={i} className="text-[13px] text-foreground">
+                  <span className="font-medium text-muted-foreground">
+                    Headline {String.fromCharCode(65 + i)} —{" "}
+                  </span>
+                  <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] text-foreground">
+                    &ldquo;{h}&rdquo;
+                  </code>
+                </div>
+              ))}
+            </div>
+
+            {c.primaryText && (
+              <div className="pt-1">
+                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Primary text:
+                </span>
+                <blockquote className="rounded-lg border-l-2 border-primary/60 bg-muted/30 p-3 italic text-[12.5px] text-foreground leading-relaxed space-y-2">
+                  {c.primaryText.split("\n\n").map((para, pi) => (
+                    <p key={pi}>{para}</p>
+                  ))}
+                </blockquote>
+              </div>
+            )}
+
+            {c.cta && (
+              <div className="pt-1 text-[12.5px]">
+                <span className="text-muted-foreground">CTA button: </span>
+                <code className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">
+                  {c.cta}
+                </code>
+                {c.ctaAlternative && (
+                  <span className="text-muted-foreground">
+                    {" "}— (alternatively <code className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">{c.ctaAlternative}</code>)
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </Block>
+
+        {/* Deep 7-row Targeting setup */}
+        {c.targeting && c.targeting.length > 0 && (
+          <Block title="Targeting setup">
+            <div className="overflow-x-auto rounded-lg border border-border/60">
+              <table className="w-full text-left text-[12px]">
+                <thead className="bg-muted/40 text-muted-foreground border-b border-border/60">
+                  <tr>
+                    <th className="py-2 px-3 font-semibold w-1/3">Setting</th>
+                    <th className="py-2 px-3 font-semibold">Recommendation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {c.targeting.map((t, i) => (
+                    <tr key={i} className="hover:bg-muted/20">
+                      <td className="py-2 px-3 font-medium text-foreground">{t.setting}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{t.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {c.keyCaveat && (
+              <p className="mt-2 text-[11.5px] text-muted-foreground leading-snug">
+                <strong className="text-foreground">Key caveat:</strong> {c.keyCaveat}
+              </p>
+            )}
+          </Block>
+        )}
+
+        {c.kpis && c.kpis.length > 0 && (
+          <Block title="Targets">
+            <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+              {c.kpis?.map((k) => (
+                <Field key={k.metric} label={k.metric} value={k.target} />
+              ))}
+            </div>
+          </Block>
+        )}
+
+        {c.risks && c.risks.length > 0 && (
+          <Block title="Watch-outs">
+            <ul className="space-y-1">
+              {c.risks?.map((r) => (
+                <li key={r} className="text-[12px] text-muted-foreground">
+                  • {r}
+                </li>
+              ))}
+            </ul>
+          </Block>
+        )}
       </div>
-
-      {c.targeting && c.targeting.length > 0 && (
-        <Block title="Targeting">
-          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.targeting?.map((t) => (
-              <Field key={t.setting} label={t.setting} value={t.value} />
-            ))}
-          </div>
-        </Block>
-      )}
-
-      {c.keywords && c.keywords.length > 0 && (
-        <Block title="Keywords">
-          <div className="flex flex-wrap gap-1.5">
-            {c.keywords?.map((k) => (
-              <span
-                key={k}
-                className="inline-flex items-center gap-1 rounded-full bg-primary-tint px-2 py-0.5 text-[11.5px] text-primary"
-              >
-                <Search className="h-3 w-3" />
-                {k}
-              </span>
-            ))}
-          </div>
-        </Block>
-      )}
-
-      <Block title="Ad copy">
-        <div className="space-y-1.5">
-          {c.headlines?.map((h) => (
-            <div key={h} className="text-[13px] font-medium text-primary">
-              {h}
-            </div>
-          ))}
-          {c.descriptions?.map((d) => (
-            <div key={d} className="text-[12.5px] text-foreground/80">
-              {d}
-            </div>
-          ))}
-          {c.primaryText && (
-            <p className="pt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-              {c.primaryText}
-            </p>
-          )}
-          {c.cta && (
-            <div className="pt-1">
-              <span className="rounded-md bg-primary px-2.5 py-1 text-[11.5px] font-medium text-primary-foreground">
-                {c.cta}
-              </span>
-            </div>
-          )}
-        </div>
-      </Block>
-
-      {c.kpis && c.kpis.length > 0 && (
-        <Block title="Targets">
-          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.kpis?.map((k) => (
-              <Field key={k.metric} label={k.metric} value={k.target} />
-            ))}
-          </div>
-        </Block>
-      )}
-
-      {c.risks && c.risks.length > 0 && (
-        <Block title="Watch-outs">
-          <ul className="space-y-1">
-            {c.risks?.map((r) => (
-              <li key={r} className="text-[12.5px] text-muted-foreground">
-                • {r}
-              </li>
-            ))}
-          </ul>
-        </Block>
-      )}
     </div>
   );
 }

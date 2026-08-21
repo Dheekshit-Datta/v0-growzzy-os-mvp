@@ -99,45 +99,41 @@ export async function generateAdImage(
     return { url, error: url ? undefined : "No image returned" };
   }
 
-  // OpenAI DALL-E image generation with DALL-E 3 -> DALL-E 2 fallback
-  const modelsToTry = ["dall-e-3", "dall-e-2"];
-  let lastError = "Image generation failed";
+  // OpenAI DALL-E image generation using DALL-E 3
+  try {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt: cleanPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      }),
+      signal,
+    });
 
-  for (const model of modelsToTry) {
-    try {
-      const res = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          prompt: cleanPrompt,
-          n: 1,
-          size: "1024x1024",
-        }),
-        signal,
-      });
-
-      if (res.ok) {
-        const data = (await res.json()) as { data?: { url?: string; b64_json?: string }[] };
-        const item = data.data?.[0];
-        const url = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
-        if (url) return { url };
-      } else {
-        const errJson = await res.json().catch(() => null);
-        const errMsg = errJson?.error?.message || `HTTP ${res.status}`;
-        console.warn(`[growzzy] OpenAI ${model} failed:`, errMsg);
-        lastError = errMsg;
-      }
-    } catch (error) {
-      if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-        return { url: null, error: "Generation canceled" };
-      }
-      lastError = (error as Error).message || "Network error";
+    if (res.ok) {
+      const data = (await res.json()) as { data?: { url?: string; b64_json?: string }[] };
+      const item = data.data?.[0];
+      const url = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
+      if (url) return { url };
+    } else {
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error?.message || `HTTP ${res.status}`;
+      console.warn(`[growzzy] OpenAI dall-e-3 failed:`, errMsg);
+      return { url: null, error: errMsg };
     }
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+      return { url: null, error: "Generation canceled" };
+    }
+    return { url: null, error: (error as Error).message || "Network error" };
   }
 
-  return { url: null, error: `Image generation failed: ${lastError}` };
+  return { url: null, error: "Image generation failed" };
 }

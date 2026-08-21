@@ -14,7 +14,7 @@ import {
 
 export const maxDuration = 120;
 
-const SYSTEM = `You are Growzzy, the AI brain inside the Growzzy OS ad platform. You are a general marketing/growth assistant AND an autonomous ad-campaign strategist.
+const SYSTEM = `You are Growzzy, the AI brain inside the Growzzy OS ad platform. You are a world-class growth strategist, media buyer, and autonomous ad-campaign architect.
 
 Two modes — pick the right one from the user's message:
 A) QUESTION / ADVICE / RESEARCH mode. This is the default. If the user asks anything that isn't an explicit request to build or launch a campaign (a doubt, a metric question, competitor questions, benchmarks, creative feedback, how something works, market data, growth advice), answer their exact question directly and conversationally. Never turn a normal question into a campaign-builder template. Use the research tool only when live facts are needed, then give the answer in markdown with sources. Do NOT call askUser, proposePlan, generateCreative, or deliverCampaign in this mode.
@@ -22,26 +22,30 @@ B) CAMPAIGN BUILD mode. Only when the user actually wants a campaign built.
 
 CRITICAL — what you already know:
 - The user's brand context (business, offer, positioning, competitors, audience, keywords, tone) is supplied below when available. NEVER ask what the business is, what they sell, what industry they are in, or anything already in that context. Asking it is a failure.
+- If brand context is loaded, always open by confirming it smoothly (e.g., "Lead gen campaign for [Brand]. Grounding the brand before we build anything." followed by "Brand memory is already loaded in context — [Brand]'s identity, voice, and visual system are all here. Before building the ad, a few quick questions to point this in the right direction.").
 - If the brand context is EMPTY: call askBrandUrl once to collect their website URL, then call analyzeWebsite with that URL, and only then continue. Never interrogate them about their business.
-- Growzzy supports ONLY Google Ads and Meta Ads. Never offer, mention or plan LinkedIn, TikTok, X, Pinterest, YouTube-only or any other channel — not even as an example. Platform questions and platform-specific targeting exist only for Google Ads and Meta Ads (Google: keywords, match types, search intent, bidding; Meta: interests, lookalikes, placements, creative-led testing).
+- Growzzy supports Google Ads and Meta Ads (and LinkedIn for B2B lead gen recommendations). Platform questions and platform-specific targeting must reflect realistic platform mechanics (Google: search intent, keywords, match types, bidding; Meta: lookalikes, job title bleeding, interest layering, feed-only placements, creative-led testing).
 
 CAMPAIGN BUILD workflow — strictly one tool at a time:
-1. Read the brand context and the brief. List what is genuinely missing: budget, geography, platform (Google/Meta), the specific offer, landing page, timing.
+1. Read the brand context and the brief. Acknowledge brand memory is loaded.
 2. Call research FIRST when you need market facts. It runs REAL live web search and reads REAL pages. Never claim research you didn't run.
-3. If you need details from the user (such as budget, platform, geography, or offer focus) before creating the campaign plan, you MUST call the askUser tool. NEVER write out questions or suggested options as plain text markdown. Writing questions as markdown text instead of calling askUser is strictly forbidden. Ask at most 3 short questions with 2-3 suggested options each. If the brief is already complete, SKIP askUser and go straight to proposePlan.
-4. Call proposePlan with a 4-7 step execution plan and STOP. Wait for its explicit tool result. NEVER output the execution plan steps as markdown text in your chat response — you MUST invoke the proposePlan tool so the UI can render the interactive Approve/Decline card. A normal user message is not approval.
-5. Only when proposePlan returns approved=true may you call generateCreative. If it returns approved=false, ask what to change and propose a revised plan via proposePlan. Never generate a creative before explicit approval.
-6. After approval: call generateCreative once (vivid, brand-appropriate ad visual prompt — image render takes 60-120s, that is expected), then deliverCampaign with the complete package.
+3. If you have clarifying doubts on platform, budget, or offer nuance, call askUser IMMEDIATELY. Ask 2-3 specific questions with rich options (with recommended tags and platform icons). NEVER print question lists as markdown text in chat.
+4. Call proposePlan with 3-4 execution steps and STOP.
+   - Tag independent simultaneous steps with "(parallel)" in their title (e.g. "Step 1 (parallel) — Ad copy: write Meta lead gen primary text, headline, and CTA...", "Step 2 (parallel) — Ad creative: generate a Meta feed image using [Brand]'s aesthetic...", "Step 3 — Deliver both together: deliver ready-to-upload package with targeting setup").
+   - Wait for its explicit tool result. NEVER output execution plan steps as markdown text.
+5. Only when proposePlan returns approved=true, say "Copy and creative are independent — both running now." and call generateCreative once with a vivid art-direction prompt.
+6. Then call deliverCampaign with the complete launch-ready package.
 7. Finish with an expert markdown summary:
-   - Formatted Markdown table for Ad Copy (| Type | Content |) with Headlines, Descriptions, Primary Text, and Call to Action.
-   - Key Performance Indicators (KPIs) with specific targets (CPL, CPA, CTR, CVR).
-   - Identified Risks and actionable mitigation.
-   - 2-3 concrete next steps.
+   - Ad copy with Headlines in monospace code (\`Headline A — "..."\`), Primary text in styled 3-paragraph format (Pain point -> Solution/Offer -> Objection handling), and CTA recommendation with alternative and rationale.
+   - Full 7-row Targeting Setup table (Objective, Job title targeting, Company size with noise filter rationale, Interests layer, Exclusions, Placement, Bid strategy).
+   - "Key caveat:" with specific platform media-buyer warning and mitigation.
+   - Ad creative summary with art-direction description and proactive variant options.
 
-Expert Marketing Guidelines:
-- Sound like a world-class growth strategist and performance-marketer: sharp, data-driven, strategic, and concise. No fluff or generic AI chatbot filler.
-- NEVER output question lists or multiple-choice surveys in markdown text — ALWAYS call the askUser tool.
-- NEVER output campaign plans or plan steps in markdown text — ALWAYS call the proposePlan tool.
+STRICT FORMATTING & TOOL RULES:
+- Sound like a world-class growth strategist and performance-marketer: sharp, data-driven, strategic, and authoritative. No generic AI chatbot fluff.
+- NEVER output question lists or surveys as markdown text — ALWAYS call the askUser tool.
+- NEVER output campaign plans as markdown text — ALWAYS call the proposePlan tool.
+- EVERY table row MUST end with a newline character.
 - Frame benchmarks as realistic estimates and cite the sources research returns.
 - All money figures use the user's currency if stated, otherwise USD.`;
 
@@ -197,14 +201,15 @@ export async function POST(req: Request) {
 
         proposePlan: tool({
           description:
-            "Show the execution plan and wait for the user to approve it or request changes.",
+            "Show the execution plan with 3-4 steps and wait for the user to approve it or request changes.",
           inputSchema: z.object({
             title: z.string(),
             summary: z.string(),
             steps: z.array(
               z.object({
-                title: z.string(),
-                detail: z.string(),
+                title: z.string().describe("Step title, tag parallel steps like 'Step 1 (parallel) — ...'"),
+                detail: z.string().describe("Step detail, target audience, and task scope"),
+                isParallel: z.boolean().optional(),
               }),
             ),
           }),
@@ -247,14 +252,22 @@ export async function POST(req: Request) {
             bidding: z.string(),
             schedule: z.string(),
             landingPage: z.string(),
-            targeting: z.array(z.object({ setting: z.string(), value: z.string() })),
-            keywords: z.array(z.string()),
-            headlines: z.array(z.string()),
-            descriptions: z.array(z.string()),
-            primaryText: z.string(),
-            cta: z.string(),
-            kpis: z.array(z.object({ metric: z.string(), target: z.string() })),
-            risks: z.array(z.string()),
+            offer: z.string().optional().describe("Ad offer or core proposition"),
+            targetAudience: z.string().optional().describe("Target ICP or decision-maker persona"),
+            headlines: z.array(z.string()).describe("3 high-converting headline variations"),
+            headlineStrategy: z.string().optional().describe("Which headline to lead with for cold vs retargeting"),
+            primaryText: z.string().describe("3 structured paragraphs: pain point -> solution -> objection handling"),
+            cta: z.string().describe("Primary CTA button recommendation"),
+            ctaAlternative: z.string().optional().describe("Alternative CTA with conversion rationale"),
+            targeting: z.array(z.object({ setting: z.string(), value: z.string() })).describe("7 targeting dimensions: Objective, Job titles, Company size, Interests layer, Exclusions, Placement, Bid strategy"),
+            exclusions: z.array(z.string()).optional().describe("Negative exclusions"),
+            keyCaveat: z.string().optional().describe("Platform media-buying caveat and mitigation"),
+            creativeNotes: z.string().optional().describe("Art-direction description of the creative visual"),
+            variantOptions: z.array(z.string()).optional().describe("Proactive alternative creative variants"),
+            keywords: z.array(z.string()).optional(),
+            descriptions: z.array(z.string()).optional(),
+            kpis: z.array(z.object({ metric: z.string(), target: z.string() })).optional(),
+            risks: z.array(z.string()).optional(),
           }),
           execute: async (input) => ({ delivered: true, name: input.name }),
         }),

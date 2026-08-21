@@ -19,8 +19,17 @@ import {
   Send,
   Sparkles,
   CircleStop,
-  ArrowDown,
+  ArrowRight,
+  Briefcase,
+  Smartphone,
+  Globe,
 } from "lucide-react"
+import {
+  ArtifactPill,
+  ArtifactModal,
+  type ArtifactData,
+} from "@/components/growzzy/artifact-modal"
+import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers"
 import type {
   AgentResponseBlock,
   AgentQuestion,
@@ -145,6 +154,16 @@ export function QuestionsCard({
     }
   }
 
+  const getOptionIcon = (label: string) => {
+    const l = label.toLowerCase()
+    if (l.includes("linkedin")) return <Briefcase className="h-4 w-4" />
+    if (l.includes("meta") || l.includes("facebook") || l.includes("instagram"))
+      return <Smartphone className="h-4 w-4" />
+    if (l.includes("google") || l.includes("search")) return <Search className="h-4 w-4" />
+    if (l.includes("multiple") || l.includes("multi")) return <Globe className="h-4 w-4" />
+    return <Sparkles className="h-4 w-4" />
+  }
+
   if (submitted) {
     return (
       <div className="flex items-center gap-2 text-[12.5px] font-medium text-emerald-600 dark:text-emerald-400 py-1 px-1">
@@ -155,108 +174,109 @@ export function QuestionsCard({
   }
 
   return (
-    <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/20">
-        <div className="h-6 w-6 rounded-full bg-[#EAF0FE] text-[#1F57F5] flex items-center justify-center shrink-0">
-          <HelpCircle className="h-3.5 w-3.5" />
-        </div>
-        <span className="text-[13px] font-medium text-foreground">
-          {title || "A few things before I build"}
-        </span>
-        <span className="text-[12px] text-muted-foreground ml-1">
-          • {questions.length} questions
-        </span>
+    <div className="space-y-2">
+      {/* Waiting for input status indicator */}
+      <div className="flex items-center gap-2 text-[12.5px] text-amber-500 pl-1 font-medium animate-pulse">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span>Waiting for user to give input..</span>
       </div>
 
-      {/* Question Body */}
-      <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11.5px] font-medium text-muted-foreground">
-            {current + 1}/{questions.length}
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20">
+          <span className="text-[13.5px] font-semibold text-foreground truncate pr-2">
+            {current + 1}. {q.question}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setCurrent(Math.max(0, current - 1))}
-              disabled={current === 0}
-              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrent(Math.min(questions.length - 1, current + 1))}
-              disabled={current === questions.length - 1}
-              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11.5px] font-mono font-medium text-muted-foreground">
+              &lt; {current + 1}/{questions.length} &gt;
+            </span>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setCurrent(Math.max(0, current - 1))}
+                disabled={current === 0}
+                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrent(Math.min(questions.length - 1, current + 1))}
+                disabled={current === questions.length - 1}
+                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div>
-          <h4 className="text-[14px] font-semibold text-foreground">{q.question}</h4>
-          {q.why && <p className="mt-0.5 text-[12px] text-muted-foreground">{q.why}</p>}
-        </div>
+        {/* Question Body */}
+        <div className="p-4 space-y-3">
+          {q.why && <p className="text-[12px] text-muted-foreground">{q.why}</p>}
 
-        {/* Options grid */}
-        {q.options && q.options.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-            {q.options?.map((opt) => (
-              <button
-                key={opt.label}
-                type="button"
-                onClick={() => handleSelectOption(opt.label)}
-                className={cn(
-                  "p-3 rounded-[12px] border text-left transition-all cursor-pointer flex flex-col justify-between",
-                  answers[q.id] === opt.label
-                    ? "border-[#1F57F5] bg-[#EAF0FE]/40"
-                    : "border-border hover:border-[#1F57F5]/40 hover:bg-muted/30"
-                )}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-foreground">{opt.label}</span>
-                    {opt.recommended && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9.5px] font-bold uppercase tracking-wider">
-                        Recommended
-                      </span>
+          {/* Options list */}
+          {q.options && q.options.length > 0 && (
+            <div className="space-y-2 pt-1">
+              {q.options?.map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => handleSelectOption(opt.label)}
+                  className={cn(
+                    "w-full p-3 rounded-[12px] border text-left transition-all cursor-pointer flex items-start gap-3",
+                    answers[q.id] === opt.label
+                      ? "border-[#1F57F5] bg-[#EAF0FE]/40"
+                      : "border-border hover:border-[#1F57F5]/40 hover:bg-muted/30"
+                  )}
+                >
+                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-foreground shrink-0 mt-0.5">
+                    {getOptionIcon(opt.label)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-foreground">{opt.label}</span>
+                      {opt.recommended && (
+                        <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-mono text-[9.5px] font-bold uppercase tracking-wider">
+                          RECOMMENDED
+                        </span>
+                      )}
+                    </div>
+                    {opt.description && (
+                      <p className="mt-0.5 text-[12px] text-muted-foreground leading-snug">
+                        {opt.description}
+                      </p>
                     )}
                   </div>
-                  {opt.description && (
-                    <p className="mt-1 text-[11.5px] text-muted-foreground leading-snug">
-                      {opt.description}
-                    </p>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Free text custom answer input */}
-        <div className="relative pt-1">
-          <Input
-            value={freeText}
-            onChange={(e) => setFreeText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                handleFreeTextSubmit()
-              }
-            }}
-            placeholder="Or type your own answer..."
-            className="h-10 text-[13px] pr-10 rounded-[10px]"
-          />
-          <button
-            type="button"
-            onClick={handleFreeTextSubmit}
-            disabled={!freeText.trim()}
-            className="absolute right-2 top-2.5 h-7 w-7 rounded-md bg-foreground text-background flex items-center justify-center disabled:opacity-30 cursor-pointer"
-          >
-            <ArrowDown className="h-3.5 w-3.5" />
-          </button>
+          {/* Free text custom answer input */}
+          <div className="relative pt-1">
+            <Input
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  handleFreeTextSubmit()
+                }
+              }}
+              placeholder="Or type your own answer..."
+              className="h-10 text-[12.5px] pr-10 rounded-[10px]"
+            />
+            <button
+              type="button"
+              onClick={handleFreeTextSubmit}
+              disabled={!freeText.trim()}
+              className="absolute right-2 top-2.5 h-7 w-7 rounded-md bg-foreground text-background flex items-center justify-center disabled:opacity-30 cursor-pointer"
+            >
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -277,57 +297,66 @@ export function PlanCard({
   approved?: boolean
 }) {
   return (
-    <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
-      <div className="p-4 border-b border-border bg-muted/20 flex items-start gap-3">
-        <div className="h-8 w-8 rounded-lg bg-[#EAF0FE] text-[#1F57F5] flex items-center justify-center shrink-0 mt-0.5">
-          <ListOrdered className="h-4 w-4" />
-        </div>
-        <div>
-          <h4 className="text-[14px] font-semibold text-foreground">{plan.title}</h4>
-          {plan.summary && (
-            <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
-              {plan.summary}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="p-4 space-y-3.5">
-        {plan.steps?.map((step) => (
-          <div key={step.stepNumber} className="flex items-start gap-3">
-            <div
-              className={cn(
-                "h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 text-[10.5px] font-bold",
-                approved
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-[#1F57F5] text-[#1F57F5]"
-              )}
-            >
-              {approved ? <Check className="h-3 w-3" /> : step.stepNumber}
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-[13px] font-medium text-foreground block">
-                {step.title}
-              </span>
-              {step.detail && (
-                <p className="text-[11.5px] text-muted-foreground leading-snug mt-0.5">
-                  {step.detail}
-                </p>
-              )}
-            </div>
+    <div className="space-y-2">
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        {/* Header: ≡ Execution Plan and 0/N Steps */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="grid h-6 w-6 place-items-center rounded bg-primary-tint text-primary text-sm font-bold">
+              ≡
+            </span>
+            <span className="text-[13px] font-semibold text-foreground">
+              {plan.title || "Execution Plan"}
+            </span>
           </div>
-        ))}
+          <span className="text-[12px] font-mono font-medium text-muted-foreground">
+            {approved ? `${plan.steps?.length || 0}/${plan.steps?.length || 0} Steps` : `0/${plan.steps?.length || 0} Steps`}
+          </span>
+        </div>
+
+        {/* Steps list with circle bullets and parallel tagging */}
+        <div className="p-4 space-y-3.5">
+          {plan.steps?.map((step) => (
+            <div key={step.stepNumber} className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 text-[10px]",
+                  approved
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : "border-muted-foreground/60 text-transparent"
+                )}
+              >
+                {approved && <Check className="h-2.5 w-2.5" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-foreground">
+                  {step.title}
+                </div>
+                {step.detail && (
+                  <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
+                    {step.detail}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {!approved && (
-        <div className="px-4 pb-4 pt-1 flex justify-end gap-2 border-t border-border mt-1">
-          <Button variant="outline" size="sm" onClick={onDecline} className="cursor-pointer">
-            Adjust plan
-          </Button>
-          <Button size="sm" onClick={onApprove} className="gap-1.5 bg-[#1F57F5] text-white hover:bg-[#1845C2] cursor-pointer">
-            <Check className="h-3.5 w-3.5" />
-            Proceed with plan
-          </Button>
+        <div className="space-y-3 pt-1">
+          <p className="text-[12.5px] text-muted-foreground pl-1 leading-relaxed">
+            Does this look right? Steps 1 and 2 run simultaneously so this moves fast. Proceeding in 10 seconds unless you want to adjust.
+          </p>
+
+          <div className="flex justify-end pr-1">
+            <Button
+              className="gap-1.5 bg-foreground text-background hover:bg-foreground/90 rounded-full px-5 text-[13px] cursor-pointer"
+              onClick={onApprove}
+            >
+              Proceed with plan
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -361,98 +390,102 @@ export function CreativeCard({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (generating) {
-    return (
-      <div className="rounded-[16px] border border-border bg-card p-5 shadow-2xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-[#1F57F5]" />
-            <div>
-              <p className="text-[13px] font-medium text-foreground">Rendering ad creative & copy…</p>
-              <p className="text-[11px] text-muted-foreground">Generating production-ready creative assets</p>
-            </div>
-          </div>
-          {onCancel && (
-            <Button variant="outline" size="sm" onClick={onCancel} className="gap-1.5 cursor-pointer">
-              <CircleStop className="h-3.5 w-3.5" />
-              Cancel
-            </Button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs space-y-4">
-      {creative.imageUrl && (
-        <div className="relative bg-foreground/5 p-4 flex justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={creative.imageUrl}
-            alt="Generated ad creative"
-            className="max-h-[300px] rounded-lg object-contain shadow-xs"
-          />
-          <a
-            href={creative.imageUrl}
-            download="growzzy-ad-creative.png"
-            className="absolute top-3 right-3 rounded-full bg-card/80 backdrop-blur p-2 hover:bg-card transition-colors shadow-2xs"
-          >
-            <Download className="h-4 w-4 text-foreground" />
-          </a>
-        </div>
-      )}
+    <div className="space-y-3">
+      {/* Parallel specialists worker card */}
+      <ParallelWorkersCard
+        completedCount={generating ? 0 : 2}
+        totalCount={2}
+        isComplete={!generating}
+      />
 
-      <div className="p-5 space-y-4 pt-1">
-        <div className="flex items-center justify-between">
-          <h4 className="text-[15px] font-bold text-foreground">Ad copy</h4>
-          <button
-            type="button"
-            onClick={copyAll}
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-            {copied ? "Copied" : "Copy all"}
-          </button>
-        </div>
-
-        <div className="space-y-1.5">
-          {creative.headlines.map((h, i) => (
-            <p key={i} className="text-[13px] text-foreground">
-              <span className="font-semibold">Headline {String.fromCharCode(65 + i)}</span> —{" "}
-              <span className="font-mono bg-muted/60 px-1.5 py-0.5 rounded text-[12px]">
-                &ldquo;{h}&rdquo;
-              </span>
-            </p>
-          ))}
-        </div>
-
-        {creative.primaryText && (
-          <div>
-            <span className="text-[12px] font-medium text-muted-foreground">Primary text:</span>
-            <p className="mt-1 text-[13px] text-foreground leading-relaxed">
-              {creative.primaryText}
-            </p>
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs space-y-4">
+        {generating ? (
+          <div className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <p className="text-[13px] font-medium text-foreground">Rendering ad creative & copy…</p>
+            </div>
+            {onCancel && (
+              <Button variant="outline" size="sm" onClick={onCancel} className="gap-1.5 cursor-pointer">
+                <CircleStop className="h-3.5 w-3.5" />
+                Cancel
+              </Button>
+            )}
           </div>
-        )}
+        ) : (
+          <>
+            {creative.imageUrl && (
+              <div className="relative bg-foreground/5 p-4 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={creative.imageUrl}
+                  alt="Generated ad creative"
+                  className="max-h-[300px] rounded-lg object-contain shadow-xs"
+                />
+                <a
+                  href={creative.imageUrl}
+                  download="growzzy-ad-creative.png"
+                  className="absolute top-3 right-3 rounded-full bg-card/80 backdrop-blur p-2 hover:bg-card transition-colors shadow-2xs"
+                >
+                  <Download className="h-4 w-4 text-foreground" />
+                </a>
+              </div>
+            )}
 
-        {creative.descriptions && creative.descriptions.length > 0 && (
-          <div>
-            <span className="text-[12px] font-medium text-muted-foreground">Descriptions:</span>
-            {creative.descriptions.map((d, i) => (
-              <p key={i} className="mt-1 text-[12.5px] text-foreground">
-                {String.fromCharCode(65 + i)}. {d}
-              </p>
-            ))}
-          </div>
-        )}
+            <div className="p-5 space-y-4 pt-1">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[15px] font-bold text-foreground">Ad copy</h4>
+                <button
+                  type="button"
+                  onClick={copyAll}
+                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                  {copied ? "Copied" : "Copy all"}
+                </button>
+              </div>
 
-        <div className="flex items-center gap-2 pt-2 border-t border-border">
-          <span className="text-[11.5px] text-muted-foreground">Call to action:</span>
-          <span className="rounded-full bg-[#1F57F5] px-3 py-1 text-[11px] font-semibold text-white">
-            {creative.cta}
-          </span>
-        </div>
+              <div className="space-y-1.5">
+                {creative.headlines.map((h, i) => (
+                  <p key={i} className="text-[13px] text-foreground">
+                    <span className="font-semibold text-muted-foreground">Headline {String.fromCharCode(65 + i)} — </span>
+                    <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] text-foreground">
+                      &ldquo;{h}&rdquo;
+                    </code>
+                  </p>
+                ))}
+              </div>
+
+              {creative.primaryText && (
+                <div>
+                  <span className="text-[11.5px] font-semibold text-muted-foreground block mb-1">Primary text:</span>
+                  <blockquote className="rounded-lg border-l-2 border-primary/60 bg-muted/30 p-3 italic text-[12.5px] text-foreground leading-relaxed space-y-2">
+                    {creative.primaryText}
+                  </blockquote>
+                </div>
+              )}
+
+              {creative.descriptions && creative.descriptions.length > 0 && (
+                <div>
+                  <span className="text-[12px] font-medium text-muted-foreground">Descriptions:</span>
+                  {creative.descriptions.map((d, i) => (
+                    <p key={i} className="mt-1 text-[12.5px] text-foreground">
+                      {String.fromCharCode(65 + i)}. {d}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <span className="text-[11.5px] text-muted-foreground">Call to action:</span>
+                <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] font-semibold text-foreground">
+                  {creative.cta}
+                </code>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -460,52 +493,104 @@ export function CreativeCard({
 
 /* ──────────────────── Campaign Deliverable Card ──────────────────── */
 
-export function CampaignCard({ campaign }: { campaign: CampaignDeliverable }) {
+export function CampaignCard({
+  campaign,
+  onOpenArtifact,
+}: {
+  campaign: CampaignDeliverable
+  onOpenArtifact?: (data: ArtifactData) => void
+}) {
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const artifactData: ArtifactData = {
+    title: campaign.name,
+    brandName: campaign.name.split("—")[0]?.trim() || "MARKITX",
+    platform: campaign.platform,
+    headlines: campaign.headlines?.map((h) => typeof h === "string" ? h : (h as any).text) || [
+      "Your AI stack has a performance leak.",
+      "Most AI builds fail ops. Audit yours.",
+      "Free AI audit for engineering leaders",
+    ],
+    primaryText: campaign.primaryText,
+    cta: campaign.cta,
+    targeting: campaign.targeting,
+  }
+
+  const handleOpen = () => {
+    if (onOpenArtifact) {
+      onOpenArtifact(artifactData)
+    } else {
+      setModalOpen(true)
+    }
+  }
+
   return (
-    <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
-      <div className="px-5 py-3.5 border-b border-border bg-[#EAF0FE]/40">
-        <h4 className="text-[14px] font-bold text-foreground">{campaign.name}</h4>
-        <span className="text-[11.5px] text-muted-foreground">
-          {campaign.platform} · {campaign.objective}
-        </span>
-      </div>
+    <div className="space-y-3">
+      <p className="text-[13px] text-muted-foreground pl-1">
+        Both are done. Here&apos;s your full {campaign.platform || "campaign"} package.
+      </p>
 
-      <div className="p-5 grid grid-cols-2 gap-4 text-[12.5px]">
-        <div>
-          <span className="text-muted-foreground block text-[11px]">Daily budget</span>
-          <p className="font-semibold text-foreground mt-0.5">
-            {campaign.currency} {campaign.budgetDaily}
-          </p>
-        </div>
-        <div>
-          <span className="text-muted-foreground block text-[11px]">Schedule</span>
-          <p className="font-semibold text-foreground mt-0.5">{campaign.schedule}</p>
-        </div>
-        <div>
-          <span className="text-muted-foreground block text-[11px]">Landing page</span>
-          <p className="font-semibold text-foreground mt-0.5 truncate">{campaign.landingPage}</p>
-        </div>
-        <div>
-          <span className="text-muted-foreground block text-[11px]">Call to action</span>
-          <p className="font-semibold text-foreground mt-0.5">{campaign.cta}</p>
-        </div>
-      </div>
+      <ArtifactPill
+        data={artifactData}
+        onOpen={handleOpen}
+      />
 
-      {campaign.targeting && campaign.targeting.length > 0 && (
-        <div className="px-5 pb-4">
-          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-            Targeting
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        <div className="px-5 py-3.5 border-b border-border bg-muted/20 flex items-center justify-between">
+          <div>
+            <h4 className="text-[14px] font-bold text-foreground">{campaign.name}</h4>
+            <span className="text-[11.5px] text-muted-foreground">
+              {campaign.platform} · {campaign.objective}
+            </span>
+          </div>
+          <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600">
+            Launch ready
           </span>
-          <div className="mt-2 space-y-1">
-            {campaign.targeting.map((t, i) => (
-              <div key={i} className="flex justify-between text-[12px]">
-                <span className="text-muted-foreground">{t.setting}</span>
-                <span className="text-foreground font-medium">{t.value}</span>
-              </div>
-            ))}
+        </div>
+
+        <div className="p-5 grid grid-cols-2 gap-4 text-[12.5px]">
+          <div>
+            <span className="text-muted-foreground block text-[11px]">Daily budget</span>
+            <p className="font-semibold text-foreground mt-0.5">
+              {campaign.currency} {campaign.budgetDaily}
+            </p>
+          </div>
+          <div>
+            <span className="text-muted-foreground block text-[11px]">Schedule</span>
+            <p className="font-semibold text-foreground mt-0.5">{campaign.schedule}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground block text-[11px]">Landing page</span>
+            <p className="font-semibold text-foreground mt-0.5 truncate">{campaign.landingPage}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground block text-[11px]">Call to action</span>
+            <p className="font-semibold text-foreground mt-0.5">{campaign.cta}</p>
           </div>
         </div>
-      )}
+
+        {campaign.targeting && campaign.targeting.length > 0 && (
+          <div className="px-5 pb-4 border-t border-border pt-3">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Targeting Setup
+            </span>
+            <div className="mt-2 space-y-1">
+              {campaign.targeting.map((t, i) => (
+                <div key={i} className="flex justify-between text-[12px]">
+                  <span className="text-muted-foreground">{t.setting}</span>
+                  <span className="text-foreground font-medium">{t.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ArtifactModal
+        data={artifactData}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   )
 }

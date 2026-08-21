@@ -207,8 +207,18 @@ function MarkdownCode({
   );
 }
 
+function sanitizeMarkdown(text?: string): string {
+  if (!text) return "";
+  // Fix single-line markdown tables where rows were concatenated without newlines
+  return text
+    .replace(/\|\s*\|/g, "|\n|")
+    .replace(/\|\s*(-{3,}\s*\|)+/g, (match) => `\n${match}\n`)
+    .replace(/(\|[^\n]+?)\s*\|(?=\s*(?:Headlines|Descriptions|Primary Text|Call to Action|CPA|CPL|CTR|CVR|ROAS|Type|Content)\b)/gi, "$1|\n|");
+}
+
 export const MessageResponse = memo(
   ({ children, className }: { children?: string; className?: string }) => {
+    const formatted = sanitizeMarkdown(children);
     return (
       <div className={cn("prose dark:prose-invert max-w-none text-[13.5px] leading-relaxed text-foreground", className)}>
         <ReactMarkdown
@@ -249,7 +259,7 @@ export const MessageResponse = memo(
             strong: ({ node, ...props }) => <strong className="font-semibold text-foreground" {...props} />,
           }}
         >
-          {children || ""}
+          {formatted}
         </ReactMarkdown>
       </div>
     );
