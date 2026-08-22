@@ -71,10 +71,12 @@ export default function CreativesLibraryPage() {
     }
   }
 
-  const filteredCreatives = creatives.filter(creative => {
-    const matchesSearch = creative.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         creative.headline.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesPlatform = filterPlatform === "all" || creative.platform === filterPlatform
+  const filteredCreatives = (Array.isArray(creatives) ? creatives : []).filter(creative => {
+    const s = (searchTerm || "").toLowerCase()
+    const matchesSearch = !s ||
+      (creative?.name || "").toLowerCase().includes(s) ||
+      (creative?.headline || "").toLowerCase().includes(s)
+    const matchesPlatform = filterPlatform === "all" || creative?.platform === filterPlatform
     return matchesSearch && matchesPlatform
   })
 

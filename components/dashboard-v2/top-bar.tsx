@@ -46,7 +46,7 @@ export function TopBar({ title }: TopBarProps) {
         .then((json) => {
           const all: CampaignResult[] = json?.data?.campaigns ?? []
           const q = query.trim().toLowerCase()
-          setSearchResults(all.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8))
+          setSearchResults(all.filter((c) => (c?.name || "").toLowerCase().includes(q)).slice(0, 8))
         })
         .catch(() => setSearchResults([]))
         .finally(() => setSearching(false))

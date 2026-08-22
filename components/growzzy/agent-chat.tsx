@@ -990,8 +990,8 @@ function QuestionsCard({
     }
   };
 
-  const getOptionIcon = (label: string) => {
-    const l = label.toLowerCase();
+  const getOptionIcon = (label?: string) => {
+    const l = String(label || "").toLowerCase();
     if (l.includes("linkedin")) return <Briefcase className="h-4 w-4" />;
     if (l.includes("meta") || l.includes("facebook") || l.includes("instagram"))
       return <Smartphone className="h-4 w-4" />;

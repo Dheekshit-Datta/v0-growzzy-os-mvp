@@ -113,10 +113,11 @@ export default function AdsManagerPage() {
     }
   }
 
-  const visible = campaigns.filter((c) => {
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false
+  const visible = (Array.isArray(campaigns) ? campaigns : []).filter((c) => {
+    const s = (search || "").toLowerCase()
+    if (s && !(c?.name || "").toLowerCase().includes(s)) return false
     if (status !== "All statuses") {
-      const p = statusPill(c.liveStatus || c.status).label
+      const p = statusPill(c?.liveStatus || c?.status).label
       if (p !== status) return false
     }
     return true

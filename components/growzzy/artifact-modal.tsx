@@ -35,8 +35,8 @@ export interface ArtifactData {
 }
 
 export function formatArtifactTitle(brandName?: string, rawTitle?: string): string {
-  const brand = brandName?.trim() || "MARKITX";
-  const title = rawTitle?.trim() || "Campaign Deliverable";
+  const brand = String(brandName || "MARKITX").trim();
+  const title = String(rawTitle || "Campaign Deliverable").trim();
   if (title.toLowerCase().startsWith(brand.toLowerCase())) {
     return title;
   }
