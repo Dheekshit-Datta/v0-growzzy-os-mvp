@@ -105,7 +105,7 @@ export function ParallelWorkersCard({
 
         {/* Worker rows */}
         <div className="divide-y divide-border">
-          {displayTasks.map((task, index) => {
+          {(Array.isArray(displayTasks) ? displayTasks : []).map((task, index) => {
             const isOpen = openWorker[task.id] ?? false;
             const isWorkerDone = task.status === "completed" || done;
 

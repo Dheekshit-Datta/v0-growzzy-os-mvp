@@ -96,16 +96,16 @@ export function brandContextText(p: BrandProfile): string {
     p.positioning && `Positioning: ${p.positioning}`,
     p.differentiators?.length ? `Differentiators: ${p.differentiators.join("; ")}` : null,
     p.audience && `Ideal customer: ${p.audience}`,
-    p.segments?.length
+    Array.isArray(p.segments) && p.segments.length
       ? `Audience segments:\n${p.segments
-          .map((s) => `- ${s.segment} — pains: ${s.pains} | triggers: ${s.triggers}`)
+          .map((s) => `- ${s?.segment ?? ""} — pains: ${s?.pains ?? ""} | triggers: ${s?.triggers ?? ""}`)
           .join("\n")}`
       : null,
-    p.competitors?.length
-      ? `Competitors:\n${p.competitors.map((c) => `- ${c.name} (${c.url}) — ${c.angle}`).join("\n")}`
+    Array.isArray(p.competitors) && p.competitors.length
+      ? `Competitors:\n${p.competitors.map((c) => `- ${c?.name ?? ""} (${c?.url ?? ""}) — ${c?.angle ?? ""}`).join("\n")}`
       : null,
-    p.keywords?.length ? `Known high-intent keywords: ${p.keywords.join(", ")}` : null,
-    p.creativeAngles?.length ? `Creative angles that fit: ${p.creativeAngles.join("; ")}` : null,
+    Array.isArray(p.keywords) && p.keywords.length ? `Known high-intent keywords: ${p.keywords.join(", ")}` : null,
+    Array.isArray(p.creativeAngles) && p.creativeAngles.length ? `Creative angles that fit: ${p.creativeAngles.join("; ")}` : null,
     p.tone && `Tone of voice: ${p.tone}`,
     p.defaultLandingPage && `Default landing page: ${p.defaultLandingPage}`,
   ].filter(Boolean);

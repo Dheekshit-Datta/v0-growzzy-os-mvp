@@ -22,7 +22,7 @@ export function PromptInput({
   onSubmit,
   children,
   ...props
-}: ComponentProps<"form"> & {
+}: Omit<ComponentProps<"form">, "onSubmit"> & {
   onSubmit: (msg: { text: string; files: any[] }, event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [value, setValue] = useState("");

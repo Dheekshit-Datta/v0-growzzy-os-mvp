@@ -329,17 +329,20 @@ export function ArtifactModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {(data.headlines || [
+                  {(Array.isArray(data.headlines) && data.headlines.length > 0 ? data.headlines : [
                     "Your AI stack has a performance leak.",
                     "Most AI builds fail ops. Audit yours.",
                     "Free AI audit for engineering leaders",
-                  ]).map((h, i) => (
-                    <tr key={i} className="hover:bg-white/5 transition-colors">
-                      <td className="py-2.5 px-4 font-mono font-medium text-white/80">{String.fromCharCode(65 + i)}</td>
-                      <td className="py-2.5 px-4 text-white font-mono text-[12.5px]">{h}</td>
-                      <td className="py-2.5 px-4 font-mono text-white/60 text-right">{h.length}</td>
-                    </tr>
-                  ))}
+                  ]).map((h, i) => {
+                    const hText = typeof h === "string" ? h : (h as any)?.text ?? "";
+                    return (
+                      <tr key={i} className="hover:bg-white/5 transition-colors">
+                        <td className="py-2.5 px-4 font-mono font-medium text-white/80">{String.fromCharCode(65 + i)}</td>
+                        <td className="py-2.5 px-4 text-white font-mono text-[12.5px]">{hText}</td>
+                        <td className="py-2.5 px-4 font-mono text-white/60 text-right">{hText.length}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -353,7 +356,7 @@ export function ArtifactModal({
           <div className="space-y-3">
             <h2 className="text-[17px] font-bold text-white">2. Primary text</h2>
             <blockquote className="rounded-lg border-l-2 border-primary/80 bg-white/5 p-4 italic text-white/90 space-y-3 leading-relaxed">
-              {(data.primaryText ||
+              {(typeof data.primaryText === "string" ? data.primaryText :
                 "Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\nMARKITX runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks."
               ).split("\n\n").map((para, i) => (
                 <p key={i}>{para}</p>
@@ -387,7 +390,7 @@ export function ArtifactModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {(data.targeting || [
+                  {(Array.isArray(data.targeting) && data.targeting.length > 0 ? data.targeting : [
                     { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
                     { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
                     { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },

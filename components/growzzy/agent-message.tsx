@@ -30,14 +30,72 @@ import {
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal"
 import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers"
-import type {
-  AgentResponseBlock,
-  AgentQuestion,
-  ExecutionPlan,
-  CreativeOutput,
-  CampaignDeliverable,
-  SearchResultCitation,
-} from "@/app/api/chat/route"
+
+export interface AgentQuestionOption {
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+export interface AgentQuestion {
+  id: string
+  question: string
+  why?: string
+  options?: AgentQuestionOption[]
+}
+
+export interface ExecutionPlanStep {
+  stepNumber: number
+  title: string
+  detail?: string
+  isParallel?: boolean
+}
+
+export interface ExecutionPlan {
+  title?: string
+  summary?: string
+  steps?: ExecutionPlanStep[]
+}
+
+export interface CreativeOutput {
+  caption?: string
+  imageUrl?: string | null
+  error?: string
+  headlines: string[]
+  descriptions?: string[]
+  primaryText?: string
+  cta: string
+}
+
+export interface CampaignDeliverable {
+  name: string
+  platform: string
+  objective: string
+  budgetDaily: number
+  currency: string
+  bidding?: string
+  schedule: string
+  landingPage: string
+  headlines?: (string | { text: string })[]
+  descriptions?: string[]
+  primaryText?: string
+  cta: string
+  targeting?: { setting: string; value: string }[]
+}
+
+export interface SearchResultCitation {
+  url: string
+  title: string
+  snippet?: string
+}
+
+export type AgentResponseBlock =
+  | { type: "research"; topic?: string; subQueries?: string[]; results?: SearchResultCitation[] }
+  | { type: "questions"; title?: string; questions: AgentQuestion[] }
+  | { type: "plan"; plan: ExecutionPlan }
+  | { type: "creative"; creative: CreativeOutput }
+  | { type: "campaign"; campaign: CampaignDeliverable }
+  | { type: "text"; content: string }
 
 /* ──────────────────── Thinking / Research Block ──────────────────── */
 
@@ -217,9 +275,9 @@ export function QuestionsCard({
           {q.why && <p className="text-[12px] text-muted-foreground">{q.why}</p>}
 
           {/* Options list */}
-          {q.options && q.options.length > 0 && (
+          {Array.isArray(q.options) && q.options.length > 0 && (
             <div className="space-y-2 pt-1">
-              {q.options?.map((opt) => (
+              {q.options.map((opt: AgentQuestionOption) => (
                 <button
                   key={opt.label}
                   type="button"
@@ -316,7 +374,7 @@ export function PlanCard({
 
         {/* Steps list with circle bullets and parallel tagging */}
         <div className="p-4 space-y-3.5">
-          {plan.steps?.map((step) => (
+          {Array.isArray(plan.steps) && plan.steps.map((step: ExecutionPlanStep) => (
             <div key={step.stepNumber} className="flex items-start gap-3">
               <div
                 className={cn(
@@ -379,9 +437,9 @@ export function CreativeCard({
   const copyAll = () => {
     const text = [
       `Headlines:`,
-      ...creative.headlines.map((h, i) => `  ${String.fromCharCode(65 + i)}. "${h}"`),
+      ...creative.headlines.map((h: string, i: number) => `  ${String.fromCharCode(65 + i)}. "${h}"`),
       `\nDescriptions:`,
-      ...creative.descriptions.map((d, i) => `  ${String.fromCharCode(65 + i)}. "${d}"`),
+      ...(creative.descriptions ?? []).map((d: string, i: number) => `  ${String.fromCharCode(65 + i)}. "${d}"`),
       `\nPrimary text: "${creative.primaryText}"`,
       `CTA: ${creative.cta}`,
     ].join("\n")
@@ -447,7 +505,7 @@ export function CreativeCard({
               </div>
 
               <div className="space-y-1.5">
-                {creative.headlines.map((h, i) => (
+                {creative.headlines.map((h: string, i: number) => (
                   <p key={i} className="text-[13px] text-foreground">
                     <span className="font-semibold text-muted-foreground">Headline {String.fromCharCode(65 + i)} — </span>
                     <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] text-foreground">
@@ -469,7 +527,7 @@ export function CreativeCard({
               {creative.descriptions && creative.descriptions.length > 0 && (
                 <div>
                   <span className="text-[12px] font-medium text-muted-foreground">Descriptions:</span>
-                  {creative.descriptions.map((d, i) => (
+                  {creative.descriptions.map((d: string, i: number) => (
                     <p key={i} className="mt-1 text-[12.5px] text-foreground">
                       {String.fromCharCode(65 + i)}. {d}
                     </p>
@@ -506,11 +564,13 @@ export function CampaignCard({
     title: campaign.name,
     brandName: campaign.name.split("—")[0]?.trim() || "MARKITX",
     platform: campaign.platform,
-    headlines: campaign.headlines?.map((h) => typeof h === "string" ? h : (h as any).text) || [
-      "Your AI stack has a performance leak.",
-      "Most AI builds fail ops. Audit yours.",
-      "Free AI audit for engineering leaders",
-    ],
+    headlines: Array.isArray(campaign.headlines) && campaign.headlines.length > 0
+      ? campaign.headlines.map((h: string | { text: string }) => typeof h === "string" ? h : h?.text ?? "")
+      : [
+          "Your AI stack has a performance leak.",
+          "Most AI builds fail ops. Audit yours.",
+          "Free AI audit for engineering leaders",
+        ],
     primaryText: campaign.primaryText,
     cta: campaign.cta,
     targeting: campaign.targeting,
@@ -569,13 +629,13 @@ export function CampaignCard({
           </div>
         </div>
 
-        {campaign.targeting && campaign.targeting.length > 0 && (
+        {Array.isArray(campaign.targeting) && campaign.targeting.length > 0 && (
           <div className="px-5 pb-4 border-t border-border pt-3">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Targeting Setup
             </span>
             <div className="mt-2 space-y-1">
-              {campaign.targeting.map((t, i) => (
+              {campaign.targeting.map((t: { setting: string; value: string }, i: number) => (
                 <div key={i} className="flex justify-between text-[12px]">
                   <span className="text-muted-foreground">{t.setting}</span>
                   <span className="text-foreground font-medium">{t.value}</span>

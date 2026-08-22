@@ -81,8 +81,13 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     readSessionValue("growzzy_sidebar_profile", null)
   )
   const [recentPrompts, setRecentPrompts] = useState<{ id: string; campaignName: string }[]>(() => {
-    const local = typeof window !== "undefined" ? loadSavedChats().map((c) => ({ id: c.id, campaignName: c.title })) : []
-    return local.length ? local : readSessionValue("growzzy_sidebar_prompts", [])
+    try {
+      const local = typeof window !== "undefined" ? (loadSavedChats() ?? []).map((c) => ({ id: c?.id ?? "", campaignName: c?.title ?? "Untitled" })) : []
+      const session = readSessionValue("growzzy_sidebar_prompts", [])
+      return local.length ? local : (Array.isArray(session) ? session : [])
+    } catch {
+      return []
+    }
   })
 
   useEffect(() => {
@@ -125,18 +130,18 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   useEffect(() => {
     const loadPrompts = () => {
-      const deleted = new Set(getDeletedChatIds())
-      const local = loadSavedChats()
-        .filter((c) => !deleted.has(c.id))
-        .map((c) => ({ id: c.id, campaignName: c.title }))
+      const deleted = new Set(getDeletedChatIds() ?? [])
+      const local = (loadSavedChats() ?? [])
+        .filter((c) => c && !deleted.has(c.id))
+        .map((c) => ({ id: c.id, campaignName: c.title || "Untitled" }))
 
       fetch("/api/ai/campaign-plans", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           const items = Array.isArray(json?.plans) ? json.plans : []
           const apiPrompts = items
-            .filter((item: { id: string }) => !deleted.has(item.id))
-            .map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName }))
+            .filter((item: { id: string }) => item && !deleted.has(item.id))
+            .map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName || "Untitled" }))
           const merged = [...local, ...apiPrompts]
           const unique = Array.from(new Map(merged.map((m) => [m.id, m])).values()).slice(0, 10)
           setRecentPrompts(unique)
@@ -297,7 +302,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 </div>
                 {!collapsed && promptsExpanded && (
                   <div className="ml-7 mt-0.5">
-                    {recentPrompts.length ? (
+                    {Array.isArray(recentPrompts) && recentPrompts.length > 0 ? (
                       <div className="space-y-0.5">
                         {recentPrompts.map((prompt) => (
                           <div
@@ -317,7 +322,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 deleteSavedChat(prompt.id);
-                                setRecentPrompts((cur) => cur.filter((p) => p.id !== prompt.id));
+                                setRecentPrompts((cur) => (cur ?? []).filter((p) => p.id !== prompt.id));
                                 toast.success("Chat deleted");
                               }}
                               className="opacity-0 group-hover:opacity-100 p-1 text-[#9CA3AF] hover:text-[#D3564C] transition-opacity rounded hover:bg-black/5 cursor-pointer shrink-0"

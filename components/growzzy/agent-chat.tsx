@@ -59,6 +59,7 @@ import {
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal";
 import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers";
+import { StatusPill } from "@/components/growzzy/status-pill";
 import {
   Check,
   ChevronDown,
@@ -264,7 +265,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign" }),
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onError: (e) => {
+    onError: (e: Error) => {
       const info = classifyChatError(e);
       setChatError(info);
       const last = lastSubmission.current;
@@ -373,7 +374,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   /* Remembers when each turn appeared so the transcript can be timestamped. */
   const turnTimes = useRef<Record<string, string>>({});
   useEffect(() => {
-    messages.forEach((m) => {
+    (messages ?? []).forEach((m: UIMessage) => {
       turnTimes.current[m.id] ??= new Date().toISOString();
     });
   }, [messages]);
@@ -381,7 +382,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const transcript = () =>
     downloadTranscript(
       buildTranscript(
-        messages.map((m) => ({
+        (messages ?? []).map((m: UIMessage) => ({
           role: m.role,
           parts: m.parts as unknown as TranscriptMessage["parts"],
           at: turnTimes.current[m.id],
@@ -445,7 +446,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       <ConversationContent
         className={cn("w-full px-1 pb-6", hasPreview ? "" : "mx-auto max-w-3xl")}
       >
-        {messages.map((m) => (
+        {(Array.isArray(messages) ? messages : []).map((m) => (
           <AgentMessage
             key={m.id}
             message={m}
@@ -491,7 +492,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       )}
 
       <div className="mt-8 grid w-full max-w-3xl grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {suggestions.map((s) => (
+        {(Array.isArray(suggestions) ? suggestions : []).map((s) => (
           <button
             key={s.title}
             onClick={() => submit(s.text)}
@@ -616,14 +617,14 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
             <Field label="Bidding" value={campaign.bidding} />
             <Field label="Schedule" value={campaign.schedule} />
           </div>
-          {campaign.headlines?.length > 0 && (
+          {Array.isArray(campaign.headlines) && campaign.headlines.length > 0 && (
             <div className="mt-3 border-t border-border pt-2">
               <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                 Ad copy
               </div>
-              {campaign.headlines.slice(0, 3).map((h) => (
-                <div key={h} className="text-[12.5px] font-medium text-primary">
-                  {h}
+              {campaign.headlines.slice(0, 3).map((h, i) => (
+                <div key={i} className="text-[12.5px] font-medium text-primary">
+                  {typeof h === "string" ? h : (h as any)?.text ?? ""}
                 </div>
               ))}
               <p className="mt-1 line-clamp-3 text-[12px] text-muted-foreground">
@@ -636,7 +637,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
         <div className="rounded-[12px] border border-border bg-card p-3">
           <div className="text-[13px] font-semibold text-foreground">{plan.title}</div>
           <ol className="mt-2 space-y-1.5">
-            {plan.steps?.map((s, i) => (
+            {Array.isArray(plan.steps) && plan.steps.map((s, i) => (
               <li key={i} className="flex gap-2 text-[12px] text-muted-foreground">
                 <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px]">
                   {i + 1}
@@ -648,14 +649,14 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
         </div>
       ) : null}
 
-      {citations?.length > 0 && (
+      {Array.isArray(citations) && citations.length > 0 && (
         <div className="rounded-[12px] border border-border bg-card p-3">
           <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             Sources read ({citations.length})
           </div>
           <ul className="space-y-1">
-            {citations.slice(0, 10).map((c) => (
-              <li key={c.url} className="truncate text-[11.5px]">
+            {citations.slice(0, 10).map((c, i) => (
+              <li key={c.url || i} className="truncate text-[11.5px]">
                 <a
                   href={c.url}
                   target="_blank"
@@ -1044,7 +1045,7 @@ function QuestionsCard({
 
           {/* Options list */}
           <div className="space-y-2 pt-1">
-            {q.options?.map((o) => {
+            {Array.isArray(q?.options) && q.options.map((o) => {
               const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
               return (
                 <button
@@ -1147,7 +1148,7 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
 
         {/* Steps list with circle bullets and parallel tagging */}
         <div className="p-4 space-y-3.5">
-          {input.steps?.map((s, i) => (
+          {Array.isArray(input.steps) && input.steps.map((s, i) => (
             <div key={i} className="flex items-start gap-3">
               <div
                 className={cn(
@@ -1278,7 +1279,7 @@ function CampaignCard({
     offer: c.offer || "Free AI audit / consultation",
     targetAudience: c.targetAudience || "CTOs / VPs of Engineering",
     platform: c.platform || "Meta feed (Facebook + Instagram)",
-    headlines: c.headlines || [
+    headlines: Array.isArray(c.headlines) && c.headlines.length > 0 ? c.headlines.map((h) => typeof h === "string" ? h : (h as any)?.text ?? "") : [
       "Your AI stack has a performance leak.",
       "Most AI builds fail ops. Audit yours.",
       "Free AI audit for engineering leaders",
@@ -1287,7 +1288,7 @@ function CampaignCard({
     primaryText: c.primaryText || "Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\nMARKITX runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks.",
     cta: c.cta || "Book Free Audit",
     ctaAlternative: c.ctaAlternative || "Get My Audit",
-    targeting: c.targeting || [
+    targeting: Array.isArray(c.targeting) && c.targeting.length > 0 ? c.targeting : [
       { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
       { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
       { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },
@@ -1342,7 +1343,7 @@ function CampaignCard({
         <Block title="Ad copy">
           <div className="space-y-2.5">
             <div className="space-y-1.5">
-              {(c.headlines || [
+              {(Array.isArray(c.headlines) && c.headlines.length > 0 ? c.headlines : [
                 "Your AI stack has a performance leak.",
                 "Most AI builds fail ops. Audit yours.",
                 "Free AI audit. No pitch. Just data.",
@@ -1352,13 +1353,13 @@ function CampaignCard({
                     Headline {String.fromCharCode(65 + i)} —{" "}
                   </span>
                   <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] text-foreground">
-                    &ldquo;{h}&rdquo;
+                    &ldquo;{typeof h === "string" ? h : (h as any)?.text ?? ""}&rdquo;
                   </code>
                 </div>
               ))}
             </div>
 
-            {c.primaryText && (
+            {c.primaryText && typeof c.primaryText === "string" && (
               <div className="pt-1">
                 <span className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                   Primary text:
@@ -1388,7 +1389,7 @@ function CampaignCard({
         </Block>
 
         {/* Deep 7-row Targeting setup */}
-        {c.targeting && c.targeting.length > 0 && (
+        {Array.isArray(c.targeting) && c.targeting.length > 0 && (
           <Block title="Targeting setup">
             <div className="overflow-x-auto rounded-lg border border-border/60">
               <table className="w-full text-left text-[12px]">
@@ -1416,20 +1417,20 @@ function CampaignCard({
           </Block>
         )}
 
-        {c.kpis && c.kpis.length > 0 && (
+        {Array.isArray(c.kpis) && c.kpis.length > 0 && (
           <Block title="Targets">
             <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-              {c.kpis?.map((k) => (
+              {c.kpis.map((k) => (
                 <Field key={k.metric} label={k.metric} value={k.target} />
               ))}
             </div>
           </Block>
         )}
 
-        {c.risks && c.risks.length > 0 && (
+        {Array.isArray(c.risks) && c.risks.length > 0 && (
           <Block title="Watch-outs">
             <ul className="space-y-1">
-              {c.risks?.map((r) => (
+              {c.risks.map((r) => (
                 <li key={r} className="text-[12px] text-muted-foreground">
                   • {r}
                 </li>
