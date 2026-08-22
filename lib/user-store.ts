@@ -33,14 +33,14 @@ export function saveUser(profile: UserProfile) {
 }
 
 /** First name, or an empty string when the user hasn't told us yet. */
-export function firstName(p: UserProfile): string {
-  return p.name.trim().split(/\s+/)[0] ?? "";
+export function firstName(p?: UserProfile | null): string {
+  return String(p?.name || "").trim().split(/\s+/)[0] ?? "";
 }
 
-export function initials(p: UserProfile): string {
-  const parts = p.name.trim().split(/\s+/).filter(Boolean);
+export function initials(p?: UserProfile | null): string {
+  const parts = String(p?.name || "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "";
-  return (parts[0]![0]! + (parts[1]?.[0] ?? "")).toUpperCase();
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 /** Hydration-safe: starts empty on the server and first client render. */

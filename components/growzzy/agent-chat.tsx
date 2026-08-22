@@ -133,8 +133,8 @@ type CampaignInput = {
 
 /** Suggestions are built from the user's own brand profile — never generic demo copy. */
 function buildSuggestions(brand: BrandProfile) {
-  const name = brand.businessName.trim();
-  if (!brandIsReady(brand)) {
+  const name = String(brand?.businessName || "").trim();
+  if (!brand || !brandIsReady(brand)) {
     return [
       {
         icon: Target,
@@ -253,7 +253,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 
   const brandReady = brandIsReady(brand);
   const suggestions = useMemo(() => buildSuggestions(brand), [brand]);
-  const greetingName = firstName(user) || brand.businessName || "there";
+  const greetingName = firstName(user) || brand?.businessName || "there";
 
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
   const lastSubmission = useRef<Submission | null>(null);
