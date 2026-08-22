@@ -28,7 +28,7 @@ export function loadSavedChats(): SavedChat[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const deleted = new Set(getDeletedChatIds());
-    return (Array.isArray(parsed) ? parsed : []).filter((c) => !deleted.has(c.id));
+    return (Array.isArray(parsed) ? parsed : []).filter((c) => c && c.id && !deleted.has(c.id));
   } catch {
     return [];
   }

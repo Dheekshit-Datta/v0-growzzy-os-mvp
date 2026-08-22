@@ -178,9 +178,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   }, [])
 
   const isActive = (href: string) => {
+    if (!pathname) return false
     if (href === "/dashboard/campaigns/new") return pathname === "/dashboard/campaigns/new"
     if (href === "/dashboard") return pathname === "/dashboard"
-    return pathname.startsWith(href)
+    return String(pathname).startsWith(href)
   }
 
   const navLink = (item: NavItem) => {
