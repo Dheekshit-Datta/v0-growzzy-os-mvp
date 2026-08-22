@@ -32,6 +32,8 @@ export interface ArtifactData {
   creativeNotes?: string;
   variantOptions?: string[];
   rawMarkdown?: string;
+}
+
 export function formatArtifactTitle(brandName?: string, rawTitle?: string): string {
   const brand = brandName?.trim() || "MARKITX";
   const title = rawTitle?.trim() || "Campaign Deliverable";
