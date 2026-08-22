@@ -1048,13 +1048,14 @@ function QuestionsCard({
 
           {/* Options list */}
           <div className="space-y-2 pt-1">
-            {Array.isArray(q?.options) && q.options.map((o) => {
-              const selected = (submitted?.[q.id] ?? answers[q.id]) === o.label;
+            {Array.isArray(q?.options) && q.options.map((o, idx) => {
+              const label = o?.label || "";
+              const selected = (submitted?.[q.id] ?? answers[q.id]) === label;
               return (
                 <button
-                  key={o.label}
+                  key={label || idx}
                   disabled={answered}
-                  onClick={() => handleSelectOption(o.label)}
+                  onClick={() => handleSelectOption(label)}
                   className={cn(
                     "w-full rounded-[12px] border p-3 text-left transition-all cursor-pointer flex items-start gap-3",
                     selected
@@ -1064,18 +1065,18 @@ function QuestionsCard({
                   )}
                 >
                   <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-foreground shrink-0 mt-0.5">
-                    {getOptionIcon(o.label)}
+                    {getOptionIcon(label)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold text-foreground">{o.label}</span>
-                      {o.recommended && (
+                      <span className="text-[13px] font-semibold text-foreground">{label}</span>
+                      {o?.recommended && (
                         <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9.5px] font-bold tracking-wider text-muted-foreground uppercase">
                           RECOMMENDED
                         </span>
                       )}
                     </div>
-                    {o.description && (
+                    {o?.description && (
                       <p className="mt-0.5 text-[12px] text-muted-foreground leading-snug">
                         {o.description}
                       </p>
