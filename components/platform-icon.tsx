@@ -3,7 +3,7 @@
 type Platform = "GOOGLE" | "META" | "google" | "meta"
 
 export function PlatformIcon({ platform, className = "h-4 w-4" }: { platform: Platform | string; className?: string }) {
-  const normalized = String(platform).toLowerCase()
+  const normalized = String(platform || "").toLowerCase()
 
   if (normalized === "meta") {
     return (

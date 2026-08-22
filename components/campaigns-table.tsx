@@ -53,7 +53,9 @@ export function CampaignsTable() {
     }
   }
 
-  const filtered = campaigns.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()))
+  const filtered = (Array.isArray(campaigns) ? campaigns : []).filter((c) =>
+    (c?.name || "").toLowerCase().includes((filter || "").toLowerCase())
+  )
 
   return (
     <Card>
