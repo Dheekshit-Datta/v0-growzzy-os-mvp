@@ -34,6 +34,10 @@ export interface ParallelWorkersProps {
   totalCount?: number;
   elapsedSeconds?: number;
   isComplete?: boolean;
+  brandName?: string;
+  offer?: string;
+  targetAudience?: string;
+  platform?: string;
 }
 
 export function ParallelWorkersCard({
@@ -42,6 +46,10 @@ export function ParallelWorkersCard({
   totalCount = 2,
   elapsedSeconds = 30,
   isComplete = true,
+  brandName,
+  offer,
+  targetAudience,
+  platform,
 }: ParallelWorkersProps) {
   const [openWorker, setOpenWorker] = useState<Record<string, boolean>>({
     worker_1: false,
@@ -56,14 +64,19 @@ export function ParallelWorkersCard({
     return () => clearInterval(interval);
   }, [isComplete]);
 
+  const brand = brandName?.trim() || "the brand";
+  const adOffer = offer?.trim() || "Core Offer / Consultation";
+  const target = targetAudience?.trim() || "High-Intent Decision Makers";
+  const plat = platform?.trim() || "Meta (Facebook & Instagram)";
+
   const defaultTasks: SpecialistTask[] = [
     {
       id: "worker_1",
       role: "Performance Marketing",
       avatarIcon: "target",
-      taskTitle: 'Write a Meta (Facebook lead gen ad copy pack...)',
+      taskTitle: `Write a ${plat} ad copy pack...`,
       brief: {
-        rawText: `Write a Meta (Facebook/Instagram) lead gen ad for the brand. **Offer:** Free AI audit / consultation **Target audience:** CTOs / VPs of Engineering **Platform:** Meta feed (Facebook + Instagram)\n\nDeliver the following:\n1. **3 headline variations** (40 chars max each) — direct, technical, no fluff\n2. **Primary text** (2–3 short paragraphs) — speaks to engineering leaders, pain points around AI adoption/performance, edge\n3. **CTA button recommendation** (e.g. "Learn More", "Get Offer", "Book Now")\n4. **Targeting recommendations** — Meta audience targeting`,
+        rawText: `Write a ${plat} lead gen ad for ${brand}.\n**Offer:** ${adOffer}\n**Target audience:** ${target}\n**Platform:** ${plat}\n\nDeliver the following:\n1. **3 headline variations** (40 chars max each) — direct, technical, no fluff\n2. **Primary text** (2–3 short paragraphs) — speaks to ${target}, pain points, and why ${brand} solves them\n3. **CTA button recommendation** (e.g. "Book Now", "Get Offer", "Learn More")\n4. **Targeting recommendations** — audience targeting & exclusions`,
       },
       status: isComplete ? "completed" : "running",
     },
@@ -71,9 +84,9 @@ export function ParallelWorkersCard({
       id: "worker_2",
       role: "Creative Director",
       avatarIcon: "palette",
-      taskTitle: 'Generate a Meta feed ad image...',
+      taskTitle: `Generate a ${plat} feed ad image...`,
       brief: {
-        rawText: `Generate a Meta feed ad image for the campaign. **Ad offer:** Free AI audit / consultation **Target audience:** CTOs / VPs of Engineering **Aesthetic:** Dark, minimalist enterprise AI — high contrast, bold typography, infrastructure/engineering tone. Think terminal interfaces, grid systems, precision. Not loud, not consumer — sharp and authoritative.\n\nGenerate one Meta feed image (1:1 or 4:5 ratio). The image should feel like it belongs in a technical/enterprise context — something a CTO would stop scrolling for. Include visual language that suggests AI systems.`,
+        rawText: `Generate a ${plat} feed ad image for ${brand}.\n**Ad offer:** ${adOffer}\n**Target audience:** ${target}\n**Aesthetic:** Modern, high-contrast, professional visual system tailored for ${brand}.\n\nGenerate one feed image (1:1 ratio) that stops the scroll in feed placements.`,
       },
       status: isComplete ? "completed" : "running",
     },

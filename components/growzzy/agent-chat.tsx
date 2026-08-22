@@ -453,6 +453,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
             addToolResult={addToolResult}
             onStop={stop}
             onOpenArtifact={setActiveArtifact}
+            brand={brand}
           />
         ))}
         {status === "submitted" && (
@@ -684,11 +685,13 @@ function AgentMessage({
   addToolResult,
   onStop,
   onOpenArtifact,
+  brand,
 }: {
   message: UIMessage;
   addToolResult: AddToolResult;
   onStop: () => void;
   onOpenArtifact?: (data: ArtifactData) => void;
+  brand?: BrandProfile;
 }) {
   if (!message?.parts || !Array.isArray(message.parts)) return null;
 
@@ -722,7 +725,7 @@ function AgentMessage({
               return <PlanCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />;
             }
             if (name === "generateCreative") {
-              return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} />;
+              return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} brand={brand} />;
             }
             if (name === "deliverCampaign") {
               return (
@@ -1202,7 +1205,15 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
   );
 }
 
-function CreativeCard({ part, onStop }: { part: ToolUIPart; onStop: () => void }) {
+function CreativeCard({
+  part,
+  onStop,
+  brand,
+}: {
+  part: ToolUIPart;
+  onStop: () => void;
+  brand?: BrandProfile;
+}) {
   const input = part.input as { caption?: string; prompt?: string } | undefined;
   const output = part.output as CreativeOutput | undefined;
   const running = part.state !== "output-available" && part.state !== "output-error";
@@ -1216,6 +1227,9 @@ function CreativeCard({ part, onStop }: { part: ToolUIPart; onStop: () => void }
         totalCount={2}
         elapsedSeconds={elapsed}
         isComplete={!running}
+        brandName={brand?.businessName}
+        offer={brand?.whatTheySell || brand?.productDescription}
+        targetAudience={brand?.audience}
       />
 
       <div className="rounded-[16px] border border-border bg-card p-4 shadow-2xs">

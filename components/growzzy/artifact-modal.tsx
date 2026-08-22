@@ -32,6 +32,13 @@ export interface ArtifactData {
   creativeNotes?: string;
   variantOptions?: string[];
   rawMarkdown?: string;
+export function formatArtifactTitle(brandName?: string, rawTitle?: string): string {
+  const brand = brandName?.trim() || "MARKITX";
+  const title = rawTitle?.trim() || "Campaign Deliverable";
+  if (title.toLowerCase().startsWith(brand.toLowerCase())) {
+    return title;
+  }
+  return `${brand} — ${title}`;
 }
 
 /** Builds a clean, professional markdown document from the artifact data. */
@@ -42,8 +49,9 @@ export function buildArtifactMarkdown(data: ArtifactData): string {
   const platform = data.platform || "Meta feed (Facebook + Instagram)";
   const offer = data.offer || "Free AI audit / consultation";
   const target = data.targetAudience || "CTOs / VPs of Engineering";
+  const fullTitle = formatArtifactTitle(brand, data.title);
 
-  let md = `# ${brand} — ${data.title || "Meta lead gen ad"}\n\n`;
+  let md = `# ${fullTitle}\n\n`;
   md += `**Offer:** ${offer}  \n`;
   md += `**Target:** ${target}  \n`;
   md += `**Platform:** ${platform}  \n\n`;
@@ -158,7 +166,7 @@ export function ArtifactPill({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-semibold text-foreground truncate">
-              {data.brandName || "MARKITX"} — {data.title}
+              {formatArtifactTitle(data.brandName, data.title)}
             </span>
             <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] font-bold text-muted-foreground uppercase">
               MD
@@ -229,6 +237,8 @@ export function ArtifactModal({
     }
   };
 
+  const formattedTitle = formatArtifactTitle(data.brandName, data.title);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-xs transition-all animate-in fade-in">
       <div
@@ -246,7 +256,7 @@ export function ArtifactModal({
               MD
             </div>
             <span className="text-[13.5px] font-medium text-white truncate">
-              {data.brandName || "MARKITX"} — {data.title}
+              {formattedTitle}
             </span>
             <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] text-white/70">
               Markdown
@@ -301,7 +311,7 @@ export function ArtifactModal({
         <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 text-[14px] leading-relaxed text-white/90">
           <div className="space-y-2 border-b border-white/10 pb-5">
             <h1 className="text-2xl font-bold tracking-tight text-white">
-              {data.brandName || "MARKITX"} — {data.title}
+              {formattedTitle}
             </h1>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-[12.5px] text-white/70">
               <div>
