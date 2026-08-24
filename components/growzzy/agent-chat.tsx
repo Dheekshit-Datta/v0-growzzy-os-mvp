@@ -218,7 +218,7 @@ function deriveArtifacts(messages: UIMessage[]): Artifacts {
       if (name === "research") {
         const cites = (p.output as { citations?: Artifacts["citations"] } | undefined)?.citations;
         for (const c of cites ?? []) {
-          if (seen.has(c.url)) continue;
+          if (!c?.url || seen.has(c.url)) continue;
           seen.add(c.url);
           out.citations.push(c);
         }
@@ -237,11 +237,22 @@ export interface AgentChatProps {
   threadId?: string;
 }
 
+type AttachedFile = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url?: string;
+  content?: string;
+};
+
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("standard");
   const [brand, setBrand] = useState<BrandProfile>(emptyBrand);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const user = useUserProfile();
 
   useEffect(() => {
@@ -314,17 +325,22 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   );
 
   const pendingQuestion = useMemo(() => {
-    for (let mi = messages.length - 1; mi >= 0; mi -= 1) {
+    for (let mi = (messages?.length ?? 0) - 1; mi >= 0; mi -= 1) {
       const message = messages[mi];
-      if (!message) continue;
+      if (!message || !Array.isArray(message.parts)) continue;
       for (let pi = message.parts.length - 1; pi >= 0; pi -= 1) {
         const part = message.parts[pi];
         if (
+          part &&
           isToolUIPart(part) &&
           getToolName(part as ToolUIPart) === "askUser" &&
-          part.state !== "output-available"
+          (part as ToolUIPart).state !== "output-available"
         ) {
-          return part as ToolUIPart;
+          return {
+            toolName: "askUser",
+            toolCallId: (part as ToolUIPart).toolCallId,
+            state: (part as ToolUIPart).state,
+          };
         }
       }
     }
@@ -346,9 +362,68 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     void sendMessage({ text: submission.text });
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const id = `${file.name}-${Date.now()}-${Math.random()}`;
+      const reader = new FileReader();
+
+      if (file.type.startsWith("image/")) {
+        reader.onload = () => {
+          setAttachedFiles((prev) => [
+            ...prev,
+            {
+              id,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              url: reader.result as string,
+            },
+          ]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        reader.onload = () => {
+          const text = typeof reader.result === "string" ? reader.result : "";
+          setAttachedFiles((prev) => [
+            ...prev,
+            {
+              id,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              content: text.slice(0, 4000),
+            },
+          ]);
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    toast.success(`Attached ${files.length} file${files.length > 1 ? "s" : ""}`);
+  };
+
+  const removeAttachedFile = (id: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
   const submit = (text: string) => {
+    let fullText = text.trim();
+    if (attachedFiles.length > 0) {
+      const attachmentsContext = attachedFiles
+        .map((f) => {
+          if (f.content) return `[Attached File: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]:\n${f.content}`;
+          return `[Attached Image / Asset: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]`;
+        })
+        .join("\n\n");
+      fullText = fullText ? `${fullText}\n\n${attachmentsContext}` : attachmentsContext;
+    }
+
     const submission = resolveSubmission({
-      text,
+      text: fullText,
       busy,
       mode,
       pending: pendingQuestion
@@ -361,6 +436,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     });
     if (submission.kind === "ignore") return;
     setInput("");
+    setAttachedFiles([]);
     run(submission);
   };
 
@@ -394,6 +470,50 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 
   const composer = (
     <div className={cn("w-full px-1 pb-2", hasPreview ? "" : "mx-auto max-w-3xl")}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,.pdf,.txt,.csv,.json,.md"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
+      {/* Attached Files Chips Bar */}
+      {attachedFiles.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
+          {attachedFiles.map((file) => (
+            <div
+              key={file.id}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border bg-card shadow-2xs text-[12px] text-foreground animate-in fade-in"
+            >
+              {file.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={file.url}
+                  alt={file.name}
+                  className="h-5 w-5 rounded object-cover border border-border shrink-0"
+                />
+              ) : (
+                <Paperclip className="h-3.5 w-3.5 text-primary shrink-0" />
+              )}
+              <span className="max-w-[140px] truncate font-medium">{file.name}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {(file.size / 1024).toFixed(0)} KB
+              </span>
+              <button
+                type="button"
+                onClick={() => removeAttachedFile(file.id)}
+                className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer ml-1"
+                aria-label="Remove attachment"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <PromptInput
         className="rounded-[16px]"
         onSubmit={(_msg, e) => {
@@ -411,9 +531,10 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           <PromptInputTools>
             <button
               type="button"
-              onClick={() => toast.info("Attachments are coming soon.")}
-              aria-label="Attach a file"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach files"
               className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+              title="Attach images, documents or brand assets"
             >
               <Paperclip className="h-4 w-4" />
             </button>
@@ -431,7 +552,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
             className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
             status={status}
             onStop={stop}
-            disabled={!input.trim() && !busy}
+            disabled={!input.trim() && attachedFiles.length === 0 && !busy}
           />
         </PromptInputFooter>
       </PromptInput>

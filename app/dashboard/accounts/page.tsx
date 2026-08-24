@@ -7,8 +7,9 @@ import { PlatformIcon } from "@/components/platform-icon"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plug, Plus, RefreshCw } from "lucide-react"
+import { Plug, Plus, RefreshCw, Building2 } from "lucide-react"
 import { toast } from "sonner"
+import { AdAccountSelectorDialog } from "@/components/growzzy/ad-account-selector-dialog"
 
 type Provider = "google"
 
@@ -39,6 +40,7 @@ export default function AccountsPage() {
   const [platformSpend, setPlatformSpend] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [selectAccountPlatform, setSelectAccountPlatform] = useState<"google" | "meta" | null>(null)
   const loadStateRef = useRef({ inFlight: false, lastRunAt: 0 })
   const connected = useMemo(
     () => platforms.filter((platform) => Boolean(integrations[platform.id]?.hasAdsAccount || integrations[platform.id]?.adAccountId)),
@@ -192,11 +194,14 @@ export default function AccountsPage() {
                   <div className="mt-4 flex gap-2">
                     {hasAccount ? (
                       <>
+                        <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => setSelectAccountPlatform(platform.id)}>
+                          <Building2 className="h-3.5 w-3.5" /> Switch Account
+                        </Button>
                         <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={() => sync(platform.id)}><RefreshCw className="h-3 w-3" /> Sync</Button>
-                        <Button size="sm" variant="ghost" className="flex-1 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => disconnect(platform.id)}>Disconnect</Button>
+                        <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => disconnect(platform.id)}>Disconnect</Button>
                       </>
                     ) : (
-                      <Button size="sm" className="w-full" onClick={() => connect(platform.id)}>Connect</Button>
+                      <Button size="sm" className="w-full" onClick={() => setSelectAccountPlatform(platform.id)}>Connect & Select Account</Button>
                     )}
                   </div>
                 </div>
@@ -204,6 +209,15 @@ export default function AccountsPage() {
             })}
           </div>
         )}
+
+        <AdAccountSelectorDialog
+          open={Boolean(selectAccountPlatform)}
+          onOpenChange={(o) => !o && setSelectAccountPlatform(null)}
+          platform={selectAccountPlatform || "google"}
+          onAccountSelected={() => {
+            load(true)
+          }}
+        />
       </div>
     </DashboardLayout>
   )

@@ -218,10 +218,18 @@ export default function CampaignDetailPage() {
                                   )}
                                 </div>
                                 <p className="text-[13px] text-[#1a0dab] font-medium">
-                                  {(ad.headlines || []).slice(0, 3).map((h) => h.text).join(" | ")}
+                                  {(ad.headlines || [])
+                                    .slice(0, 3)
+                                    .map((h) => (typeof h === "string" ? h : (h as any)?.text ?? ""))
+                                    .filter(Boolean)
+                                    .join(" | ")}
                                 </p>
                                 <p className="text-[12px] text-[#4d5156] mt-1">
-                                  {(ad.descriptions || []).slice(0, 2).map((d) => d.text).join(" ")}
+                                  {(ad.descriptions || [])
+                                    .slice(0, 2)
+                                    .map((d) => (typeof d === "string" ? d : (d as any)?.text ?? ""))
+                                    .filter(Boolean)
+                                    .join(" ")}
                                 </p>
                                 {ad.creativeTest && ad.creativeTest.impressions > 0 && (
                                   <div className="flex items-center gap-4 mt-2 pt-2 border-t border-[#E9EBEF] text-[11px] text-[#6B7280] tabular">
