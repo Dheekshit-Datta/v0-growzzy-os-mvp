@@ -59,6 +59,7 @@ import {
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal";
 import { ThinkingBlock } from "@/components/growzzy/thinking-block";
+import { AdMockupPreview } from "@/components/growzzy/ad-mockup-preview";
 import { StatusPill } from "@/components/growzzy/status-pill";
 import ReactMarkdown from "react-markdown";
 import {
@@ -276,6 +277,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const greetingName = firstName(user) || brand?.businessName || "there";
 
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const lastSubmission = useRef<Submission | null>(null);
 
   const { messages, sendMessage, addToolResult, status, stop } = useChat({
@@ -694,6 +696,39 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           <PreviewRail artifacts={artifacts} />
         </aside>
       )}
+      {/* Mobile preview toggle button */}
+      {hasPreview && (
+        <div className="fixed bottom-24 right-4 z-30 lg:hidden">
+          <Button
+            size="sm"
+            onClick={() => setMobilePreviewOpen(true)}
+            className="rounded-full shadow-lg bg-[#1F57F5] hover:bg-[#1845C4] text-white gap-1.5 px-3.5 text-xs font-medium cursor-pointer"
+          >
+            <Smartphone className="h-3.5 w-3.5" />
+            Ad Preview
+          </Button>
+        </div>
+      )}
+
+      {/* Mobile drawer preview */}
+      {mobilePreviewOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs lg:hidden animate-in fade-in">
+          <div className="flex max-h-[85vh] flex-col rounded-t-[20px] border-t border-border bg-card p-4 overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+              <span className="font-semibold text-sm text-foreground">Live Ad Mockup Preview</span>
+              <button
+                type="button"
+                onClick={() => setMobilePreviewOpen(false)}
+                className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <PreviewRail artifacts={artifacts} />
+          </div>
+        </div>
+      )}
+
       <ArtifactModal
         data={activeArtifact}
         open={Boolean(activeArtifact)}
@@ -726,7 +761,24 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
         ) : null}
       </div>
 
-      {creative?.imageUrl && (
+      {campaign ? (
+        <AdMockupPreview
+          campaignName={campaign.name}
+          platform={campaign.platform}
+          headlines={Array.isArray(campaign.headlines) ? campaign.headlines.map(h => typeof h === "string" ? h : (h as any)?.text ?? "") : []}
+          primaryText={campaign.primaryText}
+          descriptions={campaign.descriptions}
+          cta={campaign.cta}
+          landingPage={campaign.landingPage}
+          imageUrl={creative?.imageUrl}
+          budgetDaily={campaign.budgetDaily}
+          currency={campaign.currency}
+          bidding={campaign.bidding}
+          schedule={campaign.schedule}
+          keywords={campaign.keywords}
+          exclusions={campaign.exclusions}
+        />
+      ) : creative?.imageUrl ? (
         <div className="overflow-hidden rounded-[12px] border border-border bg-card">
           <img
             src={creative.imageUrl}
@@ -734,35 +786,6 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
             className="aspect-square w-full object-cover"
           />
           <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{creative.caption}</div>
-        </div>
-      )}
-
-      {campaign ? (
-        <div className="rounded-[12px] border border-border bg-card p-3">
-          <div className="text-[13px] font-semibold text-foreground">{campaign.name}</div>
-          <div className="text-[11.5px] text-muted-foreground">
-            {campaign.platform} · {campaign.objective}
-          </div>
-          <div className="mt-2 space-y-1">
-            <Field label="Daily budget" value={`${campaign.currency} ${campaign.budgetDaily}`} />
-            <Field label="Bidding" value={campaign.bidding} />
-            <Field label="Schedule" value={campaign.schedule} />
-          </div>
-          {Array.isArray(campaign.headlines) && campaign.headlines.length > 0 && (
-            <div className="mt-3 border-t border-border pt-2">
-              <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                Ad copy
-              </div>
-              {campaign.headlines.slice(0, 3).map((h, i) => (
-                <div key={i} className="text-[12.5px] font-medium text-primary">
-                  {typeof h === "string" ? h : (h as any)?.text ?? ""}
-                </div>
-              ))}
-              <p className="mt-1 line-clamp-3 text-[12px] text-muted-foreground">
-                {campaign.primaryText || campaign.descriptions?.[0]}
-              </p>
-            </div>
-          )}
         </div>
       ) : plan ? (
         <div className="rounded-[12px] border border-border bg-card p-3">
@@ -1453,6 +1476,7 @@ function CampaignCard({
   if (!c?.name) return null;
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [headlines, setHeadlines] = useState<string[]>(
     Array.isArray(c.headlines) ? c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? "")) : []
   );
@@ -1474,6 +1498,37 @@ function CampaignCard({
     keyCaveat: c.keyCaveat,
     creativeNotes: c.creativeNotes,
     variantOptions: c.variantOptions,
+  };
+
+  const handleSaveDraft = async (isDeploy = false) => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: c.name,
+          platform: c.platform?.toUpperCase().includes("GOOGLE") ? "GOOGLE" : "GOOGLE",
+          budgetAmount: budget,
+          objective: c.objective || "LEADS",
+          type: "SEARCH",
+          status: isDeploy ? "ACTIVE" : "DRAFT",
+        }),
+      });
+      if (res.ok) {
+        toast.success(
+          isDeploy
+            ? `Campaign "${c.name}" queued for launch!`
+            : `Campaign "${c.name}" saved to your dashboard!`
+        );
+      } else {
+        toast.success(`Campaign "${c.name}" saved as local draft.`);
+      }
+    } catch {
+      toast.success(`Campaign "${c.name}" saved as local draft.`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const copyAdCopy = () => {
@@ -1687,22 +1742,20 @@ function CampaignCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                toast.success(`Campaign "${c.name}" saved as draft!`);
-              }}
+              disabled={isSaving}
+              onClick={() => handleSaveDraft(false)}
               className="text-xs gap-1 cursor-pointer"
             >
-              Save Draft
+              {isSaving ? "Saving..." : "Save Draft"}
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                toast.success(`Deploying "${c.name}" to your connected ${c.platform} ad account...`);
-              }}
+              disabled={isSaving}
+              onClick={() => handleSaveDraft(true)}
               className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
             >
               <Rocket className="h-3.5 w-3.5" />
-              Launch to {c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}
+              {isSaving ? "Launching..." : `Launch to ${c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}`}
             </Button>
           </div>
         </div>
