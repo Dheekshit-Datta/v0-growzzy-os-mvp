@@ -203,7 +203,7 @@ Audience: ${input.targetPersona || input.targetAudience || "Target customers"}${
           angle: "pain",
         },
         {
-          headline: `Get Results Like ${targetAhesis} Do`,
+          headline: `Get Results Like ${targetAudience} Do`,
           body: `Join successful ${targetAudience} who trust ${businessName} to deliver measurable outcomes every day.`,
           description: "Trusted by industry leaders with verified results and customer satisfaction.",
           cta: "See How",
