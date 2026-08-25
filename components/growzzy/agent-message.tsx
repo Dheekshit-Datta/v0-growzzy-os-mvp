@@ -29,7 +29,7 @@ import {
   ArtifactModal,
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal"
-import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers"
+import { ThinkingBlock } from "@/components/growzzy/thinking-block"
 
 export interface AgentQuestionOption {
   label: string
@@ -450,11 +450,10 @@ export function CreativeCard({
 
   return (
     <div className="space-y-3">
-      {/* Parallel specialists worker card */}
-      <ParallelWorkersCard
-        completedCount={generating ? 0 : 2}
-        totalCount={2}
+      {/* Claude/ChatGPT style thinking disclosure */}
+      <ThinkingBlock
         isComplete={!generating}
+        label="Synthesizing direct-response visual concepts & ad copy"
       />
 
       <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs space-y-4">

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
 import {
   FileText,
   Download,
@@ -35,8 +36,8 @@ export interface ArtifactData {
 }
 
 export function formatArtifactTitle(brandName?: string, rawTitle?: string): string {
-  const brand = String(brandName || "MARKITX").trim();
-  const title = String(rawTitle || "Campaign Deliverable").trim();
+  const brand = String(brandName || "Campaign").trim();
+  const title = String(rawTitle || "Deliverable").trim();
   if (title.toLowerCase().startsWith(brand.toLowerCase())) {
     return title;
   }
@@ -47,89 +48,75 @@ export function formatArtifactTitle(brandName?: string, rawTitle?: string): stri
 export function buildArtifactMarkdown(data: ArtifactData): string {
   if (data.rawMarkdown) return data.rawMarkdown;
 
-  const brand = data.brandName || "MARKITX";
-  const platform = data.platform || "Meta feed (Facebook + Instagram)";
-  const offer = data.offer || "Free AI audit / consultation";
-  const target = data.targetAudience || "CTOs / VPs of Engineering";
+  const brand = data.brandName || "Campaign";
+  const platform = data.platform || "Multi-Channel";
+  const offer = data.offer || "Core Proposition";
+  const target = data.targetAudience || "Target ICP";
   const fullTitle = formatArtifactTitle(brand, data.title);
 
   let md = `# ${fullTitle}\n\n`;
-  md += `**Offer:** ${offer}  \n`;
-  md += `**Target:** ${target}  \n`;
-  md += `**Platform:** ${platform}  \n\n`;
+  if (data.offer) md += `**Offer:** ${offer}  \n`;
+  if (data.targetAudience) md += `**Target:** ${target}  \n`;
+  if (data.platform) md += `**Platform:** ${platform}  \n\n`;
   md += `---\n\n`;
 
   // 1. Headline variations
-  md += `### 1. Headline variations (40 chars max)\n\n`;
-  md += `| # | Headline | Chars |\n`;
-  md += `|---|---|---|\n`;
-  const headlines = data.headlines && data.headlines.length > 0
-    ? data.headlines
-    : [
-        "Your AI stack has a performance leak.",
-        "Most AI builds fail ops. Audit yours.",
-        "Free AI audit for engineering leaders",
-      ];
-  headlines.forEach((h, i) => {
-    const label = String.fromCharCode(65 + i);
-    md += `| ${label} | ${h} | ${h.length} |\n`;
-  });
-  md += `\n`;
+  const headlines = data.headlines && data.headlines.length > 0 ? data.headlines : [];
+  if (headlines.length > 0) {
+    md += `### 1. Headline Variations\n\n`;
+    md += `| # | Headline | Character Count |\n`;
+    md += `|---|---|---|\n`;
+    headlines.forEach((h, i) => {
+      const label = String.fromCharCode(65 + i);
+      const text = typeof h === "string" ? h : String((h as any)?.text || "");
+      md += `| ${label} | ${text} | ${text.length} |\n`;
+    });
+    md += `\n`;
+  }
+
   if (data.headlineStrategy) {
-    md += `**Which to lead with:** ${data.headlineStrategy}\n\n`;
-  } else {
-    md += `**Which to lead with:** A for cold audiences (provokes immediate self-audit). B as variant if A fatigues. C as a direct-offer fallback for retargeting.\n\n`;
+    md += `**Headline Strategy:** ${data.headlineStrategy}\n\n`;
   }
 
   // 2. Primary text
-  md += `### 2. Primary text\n\n`;
-  const primary = data.primaryText ||
-    `Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\n${brand} runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks.`;
-
-  const paragraphs = primary.split("\n\n");
-  paragraphs.forEach((p) => {
-    md += `> ${p.trim()}\n>\n`;
-  });
-  md += `\n`;
+  if (data.primaryText) {
+    md += `### 2. Ad Copy & Narrative Structure\n\n`;
+    const paragraphs = data.primaryText.split("\n\n");
+    paragraphs.forEach((p) => {
+      if (p.trim()) md += `> ${p.trim()}\n>\n`;
+    });
+    md += `\n`;
+  }
 
   // 3. CTA button
-  md += `**CTA button:** \`${data.cta || "Book Free Audit"}\``;
-  if (data.ctaAlternative) {
-    md += ` — (alternatively \`${data.ctaAlternative}\`)\n\n`;
-  } else {
-    md += ` — (alternatively \`Get My Audit\` for first-person framing — tests well on lead gen objectives)\n\n`;
+  if (data.cta) {
+    md += `**Call to Action:** \`${data.cta}\``;
+    if (data.ctaAlternative) {
+      md += ` — (Alternative: \`${data.ctaAlternative}\`)\n\n`;
+    } else {
+      md += `\n\n`;
+    }
   }
 
   // 4. Targeting setup table
-  md += `### 3. Targeting setup\n\n`;
-  md += `| Setting | Recommendation |\n`;
-  md += `|---|---|\n`;
-  const targeting = data.targeting && data.targeting.length > 0
-    ? data.targeting
-    : [
-        { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
-        { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
-        { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },
-        { setting: "Interests layer", value: "Cloud infrastructure, DevOps, Machine learning, AWS/GCP/Azure" },
-        { setting: "Exclusions", value: "Job titles: intern, student, junior, freelancer" },
-        { setting: "Placement", value: "Facebook + Instagram Feed only — no Audience Network" },
-        { setting: "Bid strategy", value: "Cost Cap (set at your target CPL) or Lowest Cost to gather early signal" },
-      ];
-  targeting.forEach((t) => {
-    md += `| **${t.setting}** | ${t.value} |\n`;
-  });
-  md += `\n`;
+  if (data.targeting && data.targeting.length > 0) {
+    md += `### 3. Targeting & Channel Setup\n\n`;
+    md += `| Setting | Recommendation |\n`;
+    md += `|---|---|\n`;
+    data.targeting.forEach((t) => {
+      md += `| **${t.setting}** | ${t.value} |\n`;
+    });
+    md += `\n`;
+  }
 
   // 5. Key caveat
   if (data.keyCaveat) {
-    md += `**Key caveat:** ${data.keyCaveat}\n\n`;
-  } else {
-    md += `**Key caveat:** Meta job title data is self-reported — expect 20–30% title bleed. The company size filter compensates for most of it.\n\n`;
+    md += `**Key Strategic Caveat:** ${data.keyCaveat}\n\n`;
   }
 
   // 6. Ad creative
   if (data.creativeNotes) {
-    md += `### 4. Ad creative\n\n${data.creativeNotes}\n\n`;
+    md += `### 4. Creative Visual Art Direction\n\n${data.creativeNotes}\n\n`;
   }
 
   return md;
@@ -310,131 +297,8 @@ export function ArtifactModal({
         </div>
 
         {/* Content body */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 text-[14px] leading-relaxed text-white/90">
-          <div className="space-y-2 border-b border-white/10 pb-5">
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {formattedTitle}
-            </h1>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-[12.5px] text-white/70">
-              <div>
-                <span className="font-semibold text-white/90">Offer:</span> {data.offer || "Free AI audit / consultation"}
-              </div>
-              <div>
-                <span className="font-semibold text-white/90">Target:</span> {data.targetAudience || "CTOs / VPs of Engineering"}
-              </div>
-              <div>
-                <span className="font-semibold text-white/90">Platform:</span> {data.platform || "Meta feed (Facebook + Instagram)"}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 1: Headline variations */}
-          <div className="space-y-3">
-            <h2 className="text-[17px] font-bold text-white">1. Headline variations (40 chars max)</h2>
-            <div className="overflow-x-auto rounded-lg border border-white/10">
-              <table className="w-full text-left text-[13px]">
-                <thead className="bg-white/5 text-white/70 border-b border-white/10">
-                  <tr>
-                    <th className="py-2.5 px-4 font-semibold w-12">#</th>
-                    <th className="py-2.5 px-4 font-semibold">Headline</th>
-                    <th className="py-2.5 px-4 font-semibold w-20 text-right">Chars</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(Array.isArray(data.headlines) && data.headlines.length > 0 ? data.headlines : [
-                    "Your AI stack has a performance leak.",
-                    "Most AI builds fail ops. Audit yours.",
-                    "Free AI audit for engineering leaders",
-                  ]).map((h, i) => {
-                    const hText = typeof h === "string" ? h : (h as any)?.text ?? "";
-                    return (
-                      <tr key={i} className="hover:bg-white/5 transition-colors">
-                        <td className="py-2.5 px-4 font-mono font-medium text-white/80">{String.fromCharCode(65 + i)}</td>
-                        <td className="py-2.5 px-4 text-white font-mono text-[12.5px]">{hText}</td>
-                        <td className="py-2.5 px-4 font-mono text-white/60 text-right">{hText.length}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-[12.5px] text-white/70 leading-relaxed pt-1">
-              <strong className="text-white">Which to lead with:</strong>{" "}
-              {data.headlineStrategy || "A for cold audiences (provokes immediate self-audit). B as variant if A fatigues. C as a direct-offer fallback for retargeting."}
-            </p>
-          </div>
-
-          {/* Section 2: Primary text */}
-          <div className="space-y-3">
-            <h2 className="text-[17px] font-bold text-white">2. Primary text</h2>
-            <blockquote className="rounded-lg border-l-2 border-primary/80 bg-white/5 p-4 italic text-white/90 space-y-3 leading-relaxed">
-              {(typeof data.primaryText === "string" ? data.primaryText :
-                "Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\nMARKITX runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks."
-              ).split("\n\n").map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
-            </blockquote>
-
-            <div className="pt-2 text-[13px]">
-              <span className="font-semibold text-white">CTA button:</span>{" "}
-              <code className="rounded bg-white/10 px-2 py-0.5 font-mono text-[12px] text-white">
-                {data.cta || "Book Free Audit"}
-              </code>{" "}
-              <span className="text-white/70">
-                — (alternatively{" "}
-                <code className="rounded bg-white/10 px-2 py-0.5 font-mono text-[12px] text-white">
-                  {data.ctaAlternative || "Get My Audit"}
-                </code>{" "}
-                for first-person framing — tests well on lead gen objectives)
-              </span>
-            </div>
-          </div>
-
-          {/* Section 3: Targeting setup */}
-          <div className="space-y-3">
-            <h2 className="text-[17px] font-bold text-white">3. Targeting setup</h2>
-            <div className="overflow-x-auto rounded-lg border border-white/10">
-              <table className="w-full text-left text-[13px]">
-                <thead className="bg-white/5 text-white/70 border-b border-white/10">
-                  <tr>
-                    <th className="py-2.5 px-4 font-semibold w-1/3">Setting</th>
-                    <th className="py-2.5 px-4 font-semibold">Recommendation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(Array.isArray(data.targeting) && data.targeting.length > 0 ? data.targeting : [
-                    { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
-                    { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
-                    { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },
-                    { setting: "Interests layer", value: "Cloud infrastructure, DevOps, Machine learning, AWS/GCP/Azure" },
-                    { setting: "Exclusions", value: "Job titles: intern, student, junior, freelancer" },
-                    { setting: "Placement", value: "Facebook + Instagram Feed only — no Audience Network" },
-                    { setting: "Bid strategy", value: "Cost Cap (set at your target CPL) or Lowest Cost to gather early signal" },
-                  ]).map((t, i) => (
-                    <tr key={i} className="hover:bg-white/5 transition-colors">
-                      <td className="py-2.5 px-4 font-semibold text-white/90">{t.setting}</td>
-                      <td className="py-2.5 px-4 text-white/80">{t.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="text-[12.5px] text-white/70 leading-relaxed pt-1">
-              <strong className="text-white">Key caveat:</strong>{" "}
-              {data.keyCaveat || "Meta job title data is self-reported — expect 20–30% title bleed. The company size filter compensates for most of it."}
-            </p>
-          </div>
-
-          {/* Section 4: Ad creative notes */}
-          {data.creativeNotes && (
-            <div className="space-y-3">
-              <h2 className="text-[17px] font-bold text-white">4. Ad creative</h2>
-              <p className="text-[13px] text-white/80 leading-relaxed">
-                {data.creativeNotes}
-              </p>
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 prose prose-invert max-w-none prose-headings:font-bold prose-h1:text-2xl prose-h2:text-lg prose-h3:text-base prose-table:border prose-table:border-white/10 prose-th:bg-white/5 prose-td:border-white/5 prose-blockquote:border-l-primary prose-blockquote:bg-white/5 prose-blockquote:py-1 prose-blockquote:px-3 text-white/90">
+          <ReactMarkdown>{markdown}</ReactMarkdown>
         </div>
       </div>
     </div>

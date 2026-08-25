@@ -58,8 +58,9 @@ import {
   ArtifactModal,
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal";
-import { ParallelWorkersCard } from "@/components/growzzy/parallel-workers";
+import { ThinkingBlock } from "@/components/growzzy/thinking-block";
 import { StatusPill } from "@/components/growzzy/status-pill";
+import ReactMarkdown from "react-markdown";
 import {
   Check,
   ChevronDown,
@@ -83,6 +84,10 @@ import {
   Smartphone,
   ArrowRight,
   Sparkles,
+  Pencil,
+  Save,
+  Copy,
+  FileText,
 } from "lucide-react";
 
 /* ------------------------------- tool payloads ------------------------------ */
@@ -99,7 +104,11 @@ type AskUserInput = {
 type PlanInput = {
   title: string;
   summary: string;
-  steps: { title: string; detail: string }[];
+  platform?: "GOOGLE" | "META" | "MULTI";
+  targetAudience?: string;
+  budgetRecommendation?: string;
+  markdownPlan?: string;
+  steps?: { title: string; detail: string; isParallel?: boolean }[];
 };
 
 type CreativeOutput = { caption: string; imageUrl: string | null; error?: string };
@@ -1248,79 +1257,115 @@ function QuestionsCard({
 function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: AddToolResult }) {
   const input = part.input as PlanInput | undefined;
   const output = part.output as { approved?: boolean } | undefined;
-  if (!input?.steps?.length) return null;
+  if (!input) return null;
   const decided = part.state === "output-available";
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3 my-2">
       <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
-        {/* Header: ≡ Execution Plan and 0/N Steps */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
-          <div className="flex items-center gap-2">
-            <span className="grid h-6 w-6 place-items-center rounded bg-primary-tint text-primary text-sm font-bold">
-              ≡
+        {/* Header: Strategy Plan & Platform Pill */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3.5 bg-muted/20">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary text-sm font-bold">
+              <FileText className="h-4 w-4" />
             </span>
-            <span className="text-[13px] font-semibold text-foreground">
-              {input.title || "Execution Plan"}
-            </span>
+            <div>
+              <div className="text-[13.5px] font-semibold text-foreground">
+                {input.title || "Campaign Strategy Architecture"}
+              </div>
+              {input.summary && (
+                <p className="text-[11.5px] text-muted-foreground line-clamp-1">
+                  {input.summary}
+                </p>
+              )}
+            </div>
           </div>
-          <span className="text-[12px] font-mono font-medium text-muted-foreground">
-            {decided && output?.approved
-              ? `${input.steps.length}/${input.steps.length} Steps`
-              : `0/${input.steps.length} Steps`}
-          </span>
+          <div className="flex items-center gap-2">
+            {input.platform && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary uppercase">
+                {input.platform}
+              </span>
+            )}
+            <StatusPill variant={decided && output?.approved ? "success" : "warn"}>
+              {decided && output?.approved ? "Approved" : "Awaiting Approval"}
+            </StatusPill>
+          </div>
         </div>
 
-        {/* Steps list with circle bullets and parallel tagging */}
-        <div className="p-4 space-y-3.5">
-          {Array.isArray(input.steps) && input.steps.map((s, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div
-                className={cn(
-                  "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 text-[10px]",
-                  decided && output?.approved
-                    ? "border-emerald-500 bg-emerald-500 text-white"
-                    : "border-muted-foreground/60 text-transparent"
-                )}
-              >
-                {decided && output?.approved && <Check className="h-2.5 w-2.5" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium text-foreground">
-                  {s.title}
-                </div>
-                {s.detail && (
-                  <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
-                    {s.detail}
-                  </p>
-                )}
-              </div>
+        {/* Strategy Highlights Pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-muted/10 border-b border-border text-[11.5px]">
+          {input.targetAudience && (
+            <div className="rounded-lg bg-background p-2 border border-border/50">
+              <span className="text-muted-foreground block text-[10.5px]">Target ICP</span>
+              <span className="font-medium text-foreground truncate block">{input.targetAudience}</span>
             </div>
-          ))}
+          )}
+          {input.budgetRecommendation && (
+            <div className="rounded-lg bg-background p-2 border border-border/50">
+              <span className="text-muted-foreground block text-[10.5px]">Budget Model</span>
+              <span className="font-medium text-foreground truncate block">{input.budgetRecommendation}</span>
+            </div>
+          )}
+          <div className="rounded-lg bg-background p-2 border border-border/50">
+            <span className="text-muted-foreground block text-[10.5px]">Milestones</span>
+            <span className="font-medium text-foreground block">{input.steps?.length || 3} Core Phases</span>
+          </div>
         </div>
+
+        {/* Strategy Document Body */}
+        {input.markdownPlan ? (
+          <div className="p-4 text-[12.5px] leading-relaxed text-foreground max-h-[440px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{input.markdownPlan}</ReactMarkdown>
+          </div>
+        ) : (
+          <div className="p-4 space-y-3">
+            {Array.isArray(input.steps) && input.steps.map((s, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 text-[10px]",
+                    decided && output?.approved
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-muted-foreground/60 text-transparent"
+                  )}
+                >
+                  {decided && output?.approved && <Check className="h-2.5 w-2.5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-foreground">
+                    {s.title}
+                  </div>
+                  {s.detail && (
+                    <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
+                      {s.detail}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Confirmation note & Proceed with plan action button */}
+      {/* Confirmation action */}
       {!decided && (
-        <div className="space-y-3 pt-1">
-          <p className="text-[12.5px] text-muted-foreground pl-1 leading-relaxed">
-            Does this look right? Steps 1 and 2 run simultaneously so this moves fast. Proceeding in 10 seconds unless you want to adjust.
+        <div className="flex items-center justify-between pt-1 px-1">
+          <p className="text-[12px] text-muted-foreground">
+            Review this strategic architecture. Click approve to generate creative visual assets & launch setup.
           </p>
-
-          <div className="flex justify-end pr-1">
-            <Button
-              className="gap-1.5 bg-foreground text-background hover:bg-foreground/90 rounded-full px-5 text-[13px] cursor-pointer"
-              onClick={() =>
-                addToolResult({
-                  tool: "proposePlan",
-                  toolCallId: part.toolCallId,
-                  output: { approved: true },
-                })
-              }
-            >
-              Proceed with plan
-            </Button>
-          </div>
+          <Button
+            className="gap-1.5 bg-[#1F57F5] hover:bg-[#1845C4] text-white rounded-full px-5 text-[13px] font-medium shadow-sm cursor-pointer"
+            onClick={() =>
+              addToolResult({
+                tool: "proposePlan",
+                toolCallId: part.toolCallId,
+                output: { approved: true },
+              })
+            }
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Approve Strategy & Build Campaign
+          </Button>
         </div>
       )}
     </div>
@@ -1342,16 +1387,15 @@ function CreativeCard({
   const elapsed = useElapsed(running);
 
   return (
-    <div className="space-y-3">
-      {/* Parallel specialists worker card */}
-      <ParallelWorkersCard
-        completedCount={running ? 0 : 2}
-        totalCount={2}
+    <div className="space-y-3 my-2">
+      {/* Claude/ChatGPT style thinking disclosure */}
+      <ThinkingBlock
         elapsedSeconds={elapsed}
         isComplete={!running}
-        brandName={brand?.businessName}
-        offer={brand?.whatTheySell || brand?.productDescription}
-        targetAudience={brand?.audience}
+        label="Synthesizing direct-response visual concepts & ad copy"
+        thinkingText={`Analyzing audience psychographics for ${brand?.businessName || "the campaign"}...
+Engineering scroll-stopping visual hooks & value propositions...
+Rendering high-resolution commercial ad creative mockup...`}
       />
 
       <div className="rounded-[16px] border border-border bg-card p-4 shadow-2xs">
@@ -1362,7 +1406,7 @@ function CreativeCard({
           {running ? (
             <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
               <Shimmer className="truncate text-[13px] font-medium">
-                {`Rendering ad creative & copy… ${elapsed}s`}
+                {`Rendering ad creative visual… ${elapsed}s`}
               </Shimmer>
               <Button type="button" variant="outline" size="sm" onClick={onStop} className="shrink-0 gap-1.5 cursor-pointer">
                 <CircleStop className="h-3.5 w-3.5" /> Cancel
@@ -1370,29 +1414,28 @@ function CreativeCard({
             </div>
           ) : (
             <span className="text-[13px] font-medium text-foreground">
-              {output?.caption ?? input?.caption ?? "Ad creative"}
+              {output?.caption ?? input?.caption ?? "High-Converting Ad Creative"}
             </span>
           )}
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-[10px] border border-border bg-muted">
+        <div className="mt-3 overflow-hidden rounded-[12px] border border-border bg-muted/40 max-w-sm">
           {output?.imageUrl ? (
             <img
               src={output.imageUrl}
               alt={output.caption ?? "Generated ad creative"}
-              className="aspect-square w-full max-w-sm object-cover"
+              className="aspect-square w-full object-cover rounded-[10px]"
             />
           ) : (
-            <div className="grid aspect-square w-full max-w-sm place-items-center text-[12px] text-muted-foreground">
-              {output?.error ??
-                (running
-                  ? `Rendering visual… ${elapsed}s elapsed`
-                  : "Creative generation complete.")}
+            <div className="grid aspect-square w-full place-items-center text-[12px] text-muted-foreground p-4 text-center">
+              {running ? `Generating visual concept… ${elapsed}s` : "Ad visual ready."}
             </div>
           )}
         </div>
         {input?.prompt && (
-          <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">{input.prompt}</p>
+          <p className="mt-2.5 text-[11.5px] leading-snug text-muted-foreground italic">
+            Art Direction: &ldquo;{input.prompt}&rdquo;
+          </p>
         )}
       </div>
     </div>
@@ -1409,41 +1452,63 @@ function CampaignCard({
   const c = part.input as CampaignInput | undefined;
   if (!c?.name) return null;
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [headlines, setHeadlines] = useState<string[]>(
+    Array.isArray(c.headlines) ? c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? "")) : []
+  );
+  const [primaryText, setPrimaryText] = useState(c.primaryText || "");
+  const [budget, setBudget] = useState(c.budgetDaily || 100);
+
   const artifactData: ArtifactData = {
     title: c.name,
-    brandName: c.name.split("—")[0]?.trim() || "MARKITX",
-    offer: c.offer || "Free AI audit / consultation",
-    targetAudience: c.targetAudience || "CTOs / VPs of Engineering",
-    platform: c.platform || "Meta feed (Facebook + Instagram)",
-    headlines: Array.isArray(c.headlines) && c.headlines.length > 0 ? c.headlines.map((h) => typeof h === "string" ? h : (h as any)?.text ?? "") : [
-      "Your AI stack has a performance leak.",
-      "Most AI builds fail ops. Audit yours.",
-      "Free AI audit for engineering leaders",
-    ],
-    headlineStrategy: c.headlineStrategy || "A for cold audiences (provokes immediate self-audit). B as variant if A fatigues. C as a direct-offer fallback for retargeting.",
-    primaryText: c.primaryText || "Most AI implementations look functional on the surface. The problems live in the gaps — misaligned attribution, underperforming models, wasted compute, and blind spots your team has normalized.\n\nMARKITX runs a free AI performance audit for engineering leaders who want an honest read on where their stack is costing them.\n\nNo sales deck. No obligation. Just a sharp, technical review from a team that's seen what breaks.",
-    cta: c.cta || "Book Free Audit",
-    ctaAlternative: c.ctaAlternative || "Get My Audit",
-    targeting: Array.isArray(c.targeting) && c.targeting.length > 0 ? c.targeting : [
-      { setting: "Objective", value: "Lead Generation (native form) or Website Conversions" },
-      { setting: "Job title targeting", value: "CTO, VP of Engineering, Head of Engineering, Director of Engineering, VP of Technology" },
-      { setting: "Company size", value: "201–5,000 employees (filters out noise at both ends)" },
-      { setting: "Interests layer", value: "Cloud infrastructure, DevOps, Machine learning, AWS/GCP/Azure" },
-      { setting: "Exclusions", value: "Job titles: intern, student, junior, freelancer" },
-      { setting: "Placement", value: "Facebook + Instagram Feed only — no Audience Network" },
-      { setting: "Bid strategy", value: "Cost Cap (set at your target CPL) or Lowest Cost to gather early signal" },
-    ],
-    keyCaveat: c.keyCaveat || "Meta job title data is self-reported — expect 20–30% title bleed. The company size filter compensates for most of it.",
+    brandName: c.name.split("—")[0]?.trim() || "Campaign",
+    offer: c.offer,
+    targetAudience: c.targetAudience,
+    platform: c.platform,
+    headlines: headlines.length > 0 ? headlines : c.headlines,
+    headlineStrategy: c.headlineStrategy,
+    primaryText: primaryText || c.primaryText,
+    cta: c.cta,
+    ctaAlternative: c.ctaAlternative,
+    targeting: c.targeting,
+    keyCaveat: c.keyCaveat,
     creativeNotes: c.creativeNotes,
     variantOptions: c.variantOptions,
   };
 
+  const copyAdCopy = () => {
+    const text = `HEADLINES:\n${headlines.map((h, i) => `${i + 1}. ${h}`).join("\n")}\n\nPRIMARY TEXT:\n${primaryText}\n\nCTA: ${c.cta || "Learn More"}`;
+    navigator.clipboard.writeText(text);
+    toast.success("Ad copy copied to clipboard!");
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 my-2">
       {/* Top message */}
-      <p className="text-[13px] text-muted-foreground pl-1">
-        Both are done. Here&apos;s your full {c.platform || "campaign"} package.
-      </p>
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[13px] text-muted-foreground">
+          Campaign package for <strong className="text-foreground">{c.name}</strong> is generated and ready to launch.
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyAdCopy}
+            className="h-8 gap-1.5 text-[12px] cursor-pointer"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy Copy
+          </Button>
+          <Button
+            variant={isEditing ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsEditing(!isEditing)}
+            className="h-8 gap-1.5 text-[12px] cursor-pointer"
+          >
+            {isEditing ? <Save className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+            {isEditing ? "Done Editing" : "Edit Inline"}
+          </Button>
+        </div>
+      </div>
 
       {/* Artifact document pill linking to the modal */}
       <ArtifactPill
@@ -1465,46 +1530,84 @@ function CampaignCard({
               </div>
             </div>
           </div>
-          <StatusPill variant="success">Launch ready</StatusPill>
+          <StatusPill variant="success">Launch Ready</StatusPill>
         </header>
 
         <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2 text-[12.5px]">
-          <Field label="Daily budget" value={`${c.currency} ${c.budgetDaily}`} />
+          <div>
+            <span className="text-muted-foreground block text-[11px]">Daily budget</span>
+            {isEditing ? (
+              <div className="flex items-center gap-1 mt-1">
+                <span className="font-mono text-foreground text-sm">{c.currency}</span>
+                <Input
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(Number(e.target.value))}
+                  className="h-7 w-24 text-xs font-mono"
+                />
+              </div>
+            ) : (
+              <span className="font-medium text-foreground">{c.currency} {budget}</span>
+            )}
+          </div>
           <Field label="Bidding" value={c.bidding} />
           <Field label="Schedule" value={c.schedule} />
           <Field label="Landing page" value={c.landingPage} />
         </div>
 
-        {/* Ad Copy Section with monospace code headlines and blockquote */}
+        {/* Ad Copy Section with inline editable headlines and char counters */}
         <Block title="Ad copy">
-          <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              {(Array.isArray(c.headlines) && c.headlines.length > 0 ? c.headlines : [
-                "Your AI stack has a performance leak.",
-                "Most AI builds fail ops. Audit yours.",
-                "Free AI audit. No pitch. Just data.",
-              ]).map((h, i) => (
-                <div key={i} className="text-[13px] text-foreground">
-                  <span className="font-medium text-muted-foreground">
-                    Headline {String.fromCharCode(65 + i)} —{" "}
-                  </span>
-                  <code className="rounded bg-muted/80 px-2 py-0.5 font-mono text-[12px] text-foreground">
-                    &ldquo;{typeof h === "string" ? h : (h as any)?.text ?? ""}&rdquo;
-                  </code>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              {headlines.map((h, i) => (
+                <div key={i} className="text-[12.5px] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Headline {String.fromCharCode(65 + i)}</span>
+                    <span className={cn(
+                      "font-mono text-[10.5px]",
+                      h.length > 30 && c.platform?.includes("Google") ? "text-amber-500 font-semibold" : "text-muted-foreground"
+                    )}>
+                      {h.length} chars {c.platform?.includes("Google") ? "/ 30 max" : "/ 40 max"}
+                    </span>
+                  </div>
+                  {isEditing ? (
+                    <Input
+                      value={h}
+                      onChange={(e) => {
+                        const next = [...headlines];
+                        next[i] = e.target.value;
+                        setHeadlines(next);
+                      }}
+                      className="h-8 text-xs font-mono"
+                    />
+                  ) : (
+                    <code className="block rounded bg-muted/80 px-2.5 py-1.5 font-mono text-[12px] text-foreground">
+                      &ldquo;{h}&rdquo;
+                    </code>
+                  )}
                 </div>
               ))}
             </div>
 
-            {c.primaryText && typeof c.primaryText === "string" && (
-              <div className="pt-1">
-                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
-                  Primary text:
+            {primaryText && (
+              <div className="pt-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Primary Ad Copy:
                 </span>
-                <blockquote className="rounded-lg border-l-2 border-primary/60 bg-muted/30 p-3 italic text-[12.5px] text-foreground leading-relaxed space-y-2">
-                  {c.primaryText.split("\n\n").map((para, pi) => (
-                    <p key={pi}>{para}</p>
-                  ))}
-                </blockquote>
+                {isEditing ? (
+                  <textarea
+                    value={primaryText}
+                    onChange={(e) => setPrimaryText(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-md border border-border bg-background p-2 text-xs leading-relaxed focus:outline-hidden focus:ring-1 focus:ring-primary"
+                  />
+                ) : (
+                  <blockquote className="rounded-lg border-l-2 border-primary/60 bg-muted/30 p-3 italic text-[12.5px] text-foreground leading-relaxed space-y-2">
+                    {primaryText.split("\n\n").map((para, pi) => (
+                      <p key={pi}>{para}</p>
+                    ))}
+                  </blockquote>
+                )}
               </div>
             )}
 
@@ -1516,7 +1619,7 @@ function CampaignCard({
                 </code>
                 {c.ctaAlternative && (
                   <span className="text-muted-foreground">
-                    {" "}— (alternatively <code className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">{c.ctaAlternative}</code>)
+                    {" "}— (Alternative: <code className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">{c.ctaAlternative}</code>)
                   </span>
                 )}
               </div>
@@ -1524,7 +1627,7 @@ function CampaignCard({
           </div>
         </Block>
 
-        {/* Deep 7-row Targeting setup */}
+        {/* Deep Targeting setup */}
         {Array.isArray(c.targeting) && c.targeting.length > 0 && (
           <Block title="Targeting setup">
             <div className="overflow-x-auto rounded-lg border border-border/60">
@@ -1554,7 +1657,7 @@ function CampaignCard({
         )}
 
         {Array.isArray(c.kpis) && c.kpis.length > 0 && (
-          <Block title="Targets">
+          <Block title="Performance Targets">
             <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
               {c.kpis.map((k) => (
                 <Field key={k.metric} label={k.metric} value={k.target} />
@@ -1564,7 +1667,7 @@ function CampaignCard({
         )}
 
         {Array.isArray(c.risks) && c.risks.length > 0 && (
-          <Block title="Watch-outs">
+          <Block title="Media Buying Watch-outs">
             <ul className="space-y-1">
               {c.risks.map((r) => (
                 <li key={r} className="text-[12px] text-muted-foreground">
@@ -1574,6 +1677,35 @@ function CampaignCard({
             </ul>
           </Block>
         )}
+
+        {/* Launch & Deploy Actions */}
+        <div className="border-t border-border px-4 py-3 bg-muted/20 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11.5px] text-muted-foreground">
+            Launch-ready configuration for <span className="font-semibold text-foreground">{c.platform}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                toast.success(`Campaign "${c.name}" saved as draft!`);
+              }}
+              className="text-xs gap-1 cursor-pointer"
+            >
+              Save Draft
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                toast.success(`Deploying "${c.name}" to your connected ${c.platform} ad account...`);
+              }}
+              className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Rocket className="h-3.5 w-3.5" />
+              Launch to {c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

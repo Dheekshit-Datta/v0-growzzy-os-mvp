@@ -78,16 +78,17 @@ export function ConversationScrollButton({
     !isAtBottom && (
       <Button
         className={cn(
-          "absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full dark:bg-background dark:hover:bg-muted shadow-md",
+          "absolute bottom-3 right-5 z-30 h-8 w-8 rounded-full bg-background/95 hover:bg-muted border border-border shadow-md backdrop-blur-xs transition-all cursor-pointer",
           className
         )}
         onClick={scrollToBottom}
         size="icon"
         type="button"
         variant="outline"
+        aria-label="Scroll to bottom"
         {...props}
       >
-        <ArrowDownIcon className="size-4" />
+        <ArrowDownIcon className="size-3.5" />
       </Button>
     )
   );
