@@ -331,8 +331,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const hasPreview = Boolean(
     artifacts.campaign ||
       artifacts.plan ||
-      artifacts.creative?.imageUrl ||
-      artifacts.citations.length > 0,
+      artifacts.creative?.imageUrl,
   );
 
   const pendingQuestion = useMemo(() => {
@@ -1475,13 +1474,47 @@ function CampaignCard({
   const c = part.input as CampaignInput | undefined;
   if (!c?.name) return null;
 
+  const defaultHeadlines = useMemo(() => {
+    if (Array.isArray(c.headlines) && c.headlines.length > 0) {
+      return c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? ""));
+    }
+    return [
+      "Deploy Multi-Agent AI in 48h",
+      "Enterprise AI Infrastructure",
+      "Cut Ops Overhead by 40%",
+    ];
+  }, [c.headlines]);
+
+  const defaultPrimaryText = useMemo(() => {
+    return (
+      c.primaryText ||
+      "Automate mission-critical business workflows with custom multi-agent architecture. Enterprise security with zero data retention."
+    );
+  }, [c.primaryText]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [headlines, setHeadlines] = useState<string[]>(
-    Array.isArray(c.headlines) ? c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? "")) : []
-  );
-  const [primaryText, setPrimaryText] = useState(c.primaryText || "");
+  const [headlines, setHeadlines] = useState<string[]>(defaultHeadlines);
+  const [primaryText, setPrimaryText] = useState(defaultPrimaryText);
   const [budget, setBudget] = useState(c.budgetDaily || 100);
+
+  useEffect(() => {
+    if (Array.isArray(c.headlines) && c.headlines.length > 0) {
+      setHeadlines(c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? "")));
+    }
+  }, [c.headlines]);
+
+  useEffect(() => {
+    if (c.primaryText) {
+      setPrimaryText(c.primaryText);
+    }
+  }, [c.primaryText]);
+
+  useEffect(() => {
+    if (c.budgetDaily) {
+      setBudget(c.budgetDaily);
+    }
+  }, [c.budgetDaily]);
 
   const artifactData: ArtifactData = {
     title: c.name,

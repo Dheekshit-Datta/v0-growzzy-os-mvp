@@ -179,18 +179,20 @@ export function AdMockupPreview({
         <div className="p-4 space-y-3.5 bg-background">
           <div className="rounded-[12px] border border-border/70 bg-card p-4 space-y-2.5 shadow-2xs">
             {/* Header URL and Sponsored Badge */}
-            <div className="flex items-center gap-2 text-[12px]">
-              <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center font-bold text-[10px] text-foreground">
-                {cleanBrand.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 leading-tight">
-                  <span className="font-semibold text-foreground text-[12px]">{cleanBrand}</span>
-                  <span className="text-muted-foreground text-[11px]">·</span>
-                  <span className="text-muted-foreground text-[11px] font-mono">https://{rootDomain} › {pathSegment}</span>
+            <div className="flex items-center justify-between gap-2 text-[12px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center font-bold text-[10px] text-foreground shrink-0">
+                  {cleanBrand.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5 leading-tight truncate">
+                    <span className="font-semibold text-foreground text-[12px] shrink-0">{cleanBrand}</span>
+                    <span className="text-muted-foreground text-[11px]">·</span>
+                    <span className="text-muted-foreground text-[11px] font-mono truncate">https://{rootDomain} › {pathSegment}</span>
+                  </div>
                 </div>
               </div>
-              <span className="ml-auto rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted/80 px-2 py-0.5 text-[10px] font-bold text-muted-foreground tracking-wide">
                 Sponsored
               </span>
             </div>
@@ -219,23 +221,23 @@ export function AdMockupPreview({
           </div>
 
           {/* Action toolbar */}
-          <div className="flex items-center justify-between pt-1 text-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[12px]">
             <Button
               variant="outline"
               size="sm"
               onClick={copyNegativeKeywords}
-              className="gap-1.5 h-8 text-[11.5px] cursor-pointer"
+              className="gap-1.5 h-8 text-[11px] px-2.5 cursor-pointer shrink-0"
             >
               {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-              Copy Negative Keywords ({exclusions.length})
+              Copy Negatives ({exclusions.length})
             </Button>
             <Button
               size="sm"
               onClick={exportGoogleAdsCsv}
-              className="gap-1.5 h-8 text-[11.5px] bg-[#1F57F5] hover:bg-[#1845C4] text-white cursor-pointer"
+              className="gap-1.5 h-8 text-[11px] px-2.5 bg-[#1F57F5] hover:bg-[#1845C4] text-white cursor-pointer shrink-0"
             >
               <Download className="h-3 w-3" />
-              Download Google Ads CSV
+              Download CSV
             </Button>
           </div>
         </div>

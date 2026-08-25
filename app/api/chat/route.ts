@@ -65,7 +65,8 @@ Once approved (approved=true):
   * Primary Text: 3 structured direct-response paragraphs (Hook -> Problem/Agitation -> Unique Mechanism & Risk-Reversal CTA).
   * NEVER output prompt instructional meta-text (like "Handle objections by...") as ad copy! Write the actual persuasive objection-handling proof (e.g., "SOC2 Type II certified with zero data retention.").
   * Headline: Punchy, high-impact <= 40 characters.
-- CTAs: Choose industry-accurate CTAs (e.g. "Book Architecture Review", "Request Technical Demo", "Audit Your AI Stack" for B2B AI; "Start Free Trial" for SaaS; "Get 20% Off" for D2C). Never use generic "Get Your Instant Quote" for enterprise software.`;
+- CTAs: Choose industry-accurate CTAs (e.g. "Book Architecture Review", "Request Technical Demo", "Audit Your AI Stack" for B2B AI; "Start Free Trial" for SaaS; "Get 20% Off" for D2C). Never use generic "Get Your Instant Quote" for enterprise software.
+- NO DUPLICATE TEXT SUMMARY: After calling deliverCampaign, DO NOT output any markdown recaps, bulleted summaries, or overview lists in conversational text! The CampaignCard and Artifact Document deliverable already display all campaign parameters. Keep your closing message to a single, concise 1-line handoff (e.g. "Your campaign package is generated and ready for launch above. Review, edit inline, or deploy directly to your ad account!").`;
 
 const questionSchema = z.object({
   questions: z
