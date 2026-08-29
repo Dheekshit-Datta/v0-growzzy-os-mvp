@@ -36,12 +36,19 @@ Ask 2-3 strategic setup questions tailored to their specific business:
 
 For each question, provide 3-4 options with category labels, short benefit descriptions, and mark exactly ONE option as recommended:true.
 
-3. MANDATORY MARKET RESEARCH (research):
-After the user submits answers, you MUST run live web research before proposing the strategy plan!
+3. EXECUTION PLAN PREVIEW (previewExecution):
+MANDATORY: After the user submits askUser answers, BEFORE running any other tool, you MUST call previewExecution to render an "Execution Plan" card in chat. The card lists 3-5 generic activity steps (e.g. "Researching your market", "Building the strategy document", "Writing high-converting ad copy", "Generating the ad creative").
+- Use PLAIN ACTIVITY LABELS — never role names like "Performance Marketing" or "Creative Director". The user explicitly does not want role framing.
+- Tailor steps to the chosen platform and goal (e.g. for Google Search skip "Generating ad creative"; for Meta include it).
+- The card has a "Proceed with plan" button and a 10s auto-proceed countdown. The model continues to step 4 only after the user clicks Proceed OR the countdown fires.
+- Wait for the tool result before proceeding. Do NOT call research in the same turn as previewExecution.
+
+4. MANDATORY MARKET RESEARCH (research):
+After the user proceeds (or 10s elapses), run live web research before proposing the strategy plan!
 - Call the research tool with 3-5 real search queries specific to this industry, competitors, high-intent keywords, and real CPC benchmarks.
 - Ground every claim, keyword cluster, and benchmark in the research findings. NEVER hallucinate benchmarks.
 
-4. COMPREHENSIVE CAMPAIGN STRATEGY DOCUMENT (proposePlan):
+5. COMPREHENSIVE CAMPAIGN STRATEGY DOCUMENT (proposePlan):
 Synthesize the research into a rich, comprehensive Campaign Strategy Document via proposePlan.
 The markdownPlan MUST be an executive-grade, 2000+ word strategy artifact containing all 8 sections:
   ## 1. Executive Strategy & Market Opportunity (Target CPL/CPA benchmarks from research, market gap analysis)
@@ -55,7 +62,7 @@ The markdownPlan MUST be an executive-grade, 2000+ word strategy artifact contai
 
 STOP and wait for the user to click "Approve Strategy & Build Campaign" or request adjustments.
 
-5. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
+6. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
 Once approved (approved=true):
 - GOOGLE SEARCH CAMPAIGNS: Do NOT call generateCreative! Google Search Ads are 100% text-based (RSAs). Immediately call deliverCampaign with:
   * 15 high-converting headlines (Strictly <= 30 chars each)
@@ -245,6 +252,26 @@ export async function POST(req: Request) {
           description:
             "Ask the user 2-3 strategic setup questions as a clickable card-based UI. ALWAYS use this tool — never write questions as plain text. Each question gets 3-4 options with category labels (e.g. 'Inbound Qualified Leads'), short benefit descriptions, and exactly ONE option marked recommended:true.",
           inputSchema: questionSchema,
+        }),
+
+        previewExecution: tool({
+          description:
+            "MANDATORY: After the user answers askUser, call this tool BEFORE research to show the user an Execution Plan card. It lists 3-5 upcoming activities (e.g. 'Researching your market', 'Building the strategy document', 'Writing the ad copy', 'Generating the ad creative'). The card has a 'Proceed with plan' button and a 10s auto-proceed countdown. Use PLAIN ACTIVITY LABELS — never role names like 'Performance Marketing' or 'Creative Director'. The model only continues after the user clicks Proceed or the countdown fires.",
+          inputSchema: z.object({
+            title: z.string().describe("Short plan title, e.g. 'Lead-gen campaign build plan'"),
+            summary: z.string().describe("One-line summary, e.g. 'Research, strategy, copy, and creative for the Meta campaign'"),
+            steps: z
+              .array(
+                z.object({
+                  activity: z.string().describe("Generic activity label, e.g. 'Researching your market'. NEVER use role names — use plain activity verbs."),
+                  description: z.string().describe("One-line description of what this step produces."),
+                }),
+              )
+              .min(3)
+              .max(5)
+              .describe("3-5 upcoming activities"),
+          }),
+          execute: async (input) => ({ proceed: false, ...input }),
         }),
 
         proposePlan: tool({

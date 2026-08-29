@@ -74,6 +74,7 @@ import {
   Globe,
   Image as ImageIcon,
   ListChecks,
+  Loader2,
   Megaphone,
   MessageCircleQuestion,
   Paperclip,
@@ -137,6 +138,7 @@ type CampaignInput = {
   variantOptions?: string[];
   keywords?: string[];
   descriptions?: string[];
+  sitelinks?: { title: string; description: string }[];
   kpis?: { metric: string; target: string }[];
   risks?: string[];
 };
@@ -588,9 +590,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           />
         ))}
         {status === "submitted" && (
-          <div className="flex items-center gap-2 pl-1">
-            <Shimmer className="text-[13.5px]">Analyzing client requirements to determine approach…</Shimmer>
-          </div>
+          <InlineStatusPill messages={messages} />
         )}
       </ConversationContent>
       <ConversationScrollButton />
@@ -776,6 +776,7 @@ function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
           schedule={campaign.schedule}
           keywords={campaign.keywords}
           exclusions={campaign.exclusions}
+          sitelinks={campaign.sitelinks}
         />
       ) : creative?.imageUrl ? (
         <div className="overflow-hidden rounded-[12px] border border-border bg-card">
@@ -874,7 +875,20 @@ function AgentMessage({
               );
             }
             if (name === "proposePlan") {
-              return <PlanCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />;
+              return (
+                <PlanCard
+                  key={i}
+                  part={part as ToolUIPart}
+                  addToolResult={addToolResult}
+                  onOpenArtifact={onOpenArtifact}
+                  brandName={brand?.businessName}
+                />
+              );
+            }
+            if (name === "previewExecution") {
+              return (
+                <ExecutionPlanCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
+              );
             }
             if (name === "generateCreative") {
               return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} brand={brand} />;
@@ -1276,14 +1290,37 @@ function QuestionsCard({
   );
 }
 
-function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: AddToolResult }) {
+function PlanCard({
+  part,
+  addToolResult,
+  onOpenArtifact,
+  brandName,
+}: {
+  part: ToolUIPart;
+  addToolResult: AddToolResult;
+  onOpenArtifact?: (data: ArtifactData) => void;
+  brandName?: string;
+}) {
   const input = part.input as PlanInput | undefined;
   const output = part.output as { approved?: boolean } | undefined;
   if (!input) return null;
   const decided = part.state === "output-available";
 
+  const strategyArtifact: ArtifactData = {
+    title: input.title || "Campaign Strategy Architecture",
+    brandName: brandName || input.title?.split(" ")[0] || "Strategy",
+    rawMarkdown: input.markdownPlan,
+  };
+
   return (
     <div className="space-y-3 my-2">
+      {input.markdownPlan && (
+        <ArtifactPill
+          data={strategyArtifact}
+          onOpen={() => onOpenArtifact?.(strategyArtifact)}
+        />
+      )}
+
       <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
         {/* Header: Strategy Plan & Platform Pill */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3.5 bg-muted/20">
@@ -1394,6 +1431,147 @@ function PlanCard({ part, addToolResult }: { part: ToolUIPart; addToolResult: Ad
   );
 }
 
+function ExecutionPlanCard({
+  part,
+  addToolResult,
+}: {
+  part: ToolUIPart;
+  addToolResult: AddToolResult;
+}) {
+  const input = part.input as
+    | {
+        title?: string;
+        summary?: string;
+        steps?: { activity: string; description: string }[];
+      }
+    | undefined;
+  const decided = part.state === "output-available";
+  const [secondsLeft, setSecondsLeft] = useState(10);
+  const [proceeded, setProceeded] = useState(false);
+  const fired = useRef(false);
+
+  // Auto-proceed after 10s
+  useEffect(() => {
+    if (decided || proceeded) return;
+    const t = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(t);
+          if (!fired.current && !decided) {
+            fired.current = true;
+            addToolResult({
+              tool: "previewExecution",
+              toolCallId: part.toolCallId,
+              output: { proceed: true },
+            });
+            setProceeded(true);
+          }
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [decided, proceeded, part.toolCallId, addToolResult]);
+
+  if (!input?.steps?.length) return null;
+
+  const handleProceed = () => {
+    if (fired.current) return;
+    fired.current = true;
+    addToolResult({
+      tool: "previewExecution",
+      toolCallId: part.toolCallId,
+      output: { proceed: true },
+    });
+    setProceeded(true);
+  };
+
+  return (
+    <div className="space-y-2 my-2">
+      <div className="flex items-center gap-2 text-[12.5px] text-foreground/80 pl-1">
+        <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="font-medium">Execution plan</span>
+        <span className="text-muted-foreground">
+          — {input.title || "about to run these activities"}
+        </span>
+      </div>
+      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+        <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary shrink-0">
+            <ListChecks className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-semibold text-foreground truncate">
+              {input.title || "Execution Plan"}
+            </div>
+            {input.summary && (
+              <p className="text-[11.5px] text-muted-foreground truncate">{input.summary}</p>
+            )}
+          </div>
+        </div>
+        <ol className="divide-y divide-border">
+          {(input.steps || []).map((s, i) => {
+            const isDone = proceeded || decided;
+            const isActive = !isDone && i === 0;
+            return (
+              <li key={i} className="flex items-start gap-3 px-4 py-2.5">
+                <div
+                  className={cn(
+                    "mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0",
+                    isDone
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : isActive
+                        ? "border-primary text-primary"
+                        : "border-muted-foreground/40 text-muted-foreground/40",
+                  )}
+                >
+                  {isDone ? (
+                    <Check className="h-3 w-3" />
+                  ) : isActive ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <span className="text-[10px] font-mono">{i + 1}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12.5px] font-medium text-foreground">{s.activity}</div>
+                  {s.description && (
+                    <p className="text-[11.5px] text-muted-foreground leading-snug">
+                      {s.description}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+        {!decided && !proceeded && (
+          <div className="border-t border-border px-4 py-3 flex items-center justify-between gap-3 bg-muted/10">
+            <p className="text-[11.5px] text-muted-foreground">
+              Proceeding in{" "}
+              <span className="font-mono font-bold text-foreground">{secondsLeft}s</span> unless you
+              want to adjust.
+            </p>
+            <Button
+              size="sm"
+              onClick={handleProceed}
+              className="bg-[#1F57F5] hover:bg-[#1845C4] text-white gap-1.5 text-[12.5px] cursor-pointer"
+            >
+              Proceed with plan
+            </Button>
+          </div>
+        )}
+        {proceeded && (
+          <div className="border-t border-border px-4 py-2.5 text-[11.5px] text-emerald-600 font-medium flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5" /> Proceeding
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CreativeCard({
   part,
   onStop,
@@ -1462,6 +1640,94 @@ Rendering high-resolution commercial ad creative mockup...`}
       </div>
     </div>
   );
+}
+
+/** Serialise a delivered campaign into a clean Markdown document. */
+function buildCampaignMarkdown(c: CampaignInput): string {
+  const lines: string[] = [];
+  lines.push(`# ${c.name}`);
+  lines.push("");
+  lines.push(`**Platform:** ${c.platform}  `);
+  lines.push(`**Objective:** ${c.objective}  `);
+  lines.push(`**Daily Budget:** ${c.currency} ${c.budgetDaily}  `);
+  lines.push(`**Bidding:** ${c.bidding}  `);
+  lines.push(`**Schedule:** ${c.schedule}  `);
+  lines.push(`**Landing Page:** ${c.landingPage}  `);
+  if (c.offer) lines.push(`**Offer:** ${c.offer}  `);
+  if (c.targetAudience) lines.push(`**Target Audience:** ${c.targetAudience}  `);
+  lines.push("");
+  if (Array.isArray(c.headlines) && c.headlines.length) {
+    lines.push("## Headlines");
+    c.headlines.forEach((h, i) => lines.push(`${i + 1}. ${typeof h === "string" ? h : (h as { text?: string })?.text ?? ""}`));
+    lines.push("");
+  }
+  if (Array.isArray(c.descriptions) && c.descriptions.length) {
+    lines.push("## Descriptions");
+    c.descriptions.forEach((d) => lines.push(`- ${d}`));
+    lines.push("");
+  }
+  if (c.primaryText) {
+    lines.push("## Primary Text");
+    lines.push(c.primaryText);
+    lines.push("");
+  }
+  if (c.cta) {
+    lines.push(`**CTA:** ${c.cta}${c.ctaAlternative ? ` (alt: ${c.ctaAlternative})` : ""}`);
+    lines.push("");
+  }
+  if (Array.isArray(c.targeting) && c.targeting.length) {
+    lines.push("## Targeting");
+    c.targeting.forEach((t) => lines.push(`- **${t.setting}:** ${t.value}`));
+    lines.push("");
+  }
+  if (Array.isArray(c.keywords) && c.keywords.length) {
+    lines.push("## High-Intent Keywords");
+    c.keywords.forEach((k) => lines.push(`\`${k}\``));
+    lines.push("");
+  }
+  if (Array.isArray(c.exclusions) && c.exclusions.length) {
+    lines.push("## Negative Exclusions");
+    c.exclusions.forEach((e) => lines.push(`-${e}`));
+    lines.push("");
+  }
+  if (Array.isArray(c.sitelinks) && c.sitelinks.length) {
+    lines.push("## Sitelinks");
+    c.sitelinks.forEach((s) => lines.push(`- **${s.title}** — ${s.description}`));
+    lines.push("");
+  }
+  if (Array.isArray(c.kpis) && c.kpis.length) {
+    lines.push("## Performance Targets");
+    c.kpis.forEach((k) => lines.push(`- **${k.metric}:** ${k.target}`));
+    lines.push("");
+  }
+  if (Array.isArray(c.risks) && c.risks.length) {
+    lines.push("## Watch-outs");
+    c.risks.forEach((r) => lines.push(`- ${r}`));
+    lines.push("");
+  }
+  if (c.keyCaveat) {
+    lines.push(`**Key caveat:** ${c.keyCaveat}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function downloadCampaignAsMarkdown(c: CampaignInput) {
+  try {
+    const md = buildCampaignMarkdown(c);
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${String(c.name || "campaign").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Campaign downloaded as Markdown");
+  } catch {
+    toast.error("Could not download campaign as Markdown");
+  }
 }
 
 function CampaignCard({
@@ -1541,7 +1807,7 @@ function CampaignCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: c.name,
-          platform: c.platform?.toUpperCase().includes("GOOGLE") ? "GOOGLE" : "GOOGLE",
+          platform: c.platform?.toUpperCase().includes("META") ? "META" : "GOOGLE",
           budgetAmount: budget,
           objective: c.objective || "LEADS",
           type: "SEARCH",
@@ -1598,27 +1864,34 @@ function CampaignCard({
         </div>
       </div>
 
-      {/* Artifact document pill linking to the modal */}
-      <ArtifactPill
-        data={artifactData}
-        onOpen={() => onOpenArtifact?.(artifactData)}
-      />
-
       {/* Campaign card container */}
       <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
         <header className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
-          <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary shrink-0">
               <Megaphone className="h-3.5 w-3.5" />
             </span>
-            <div>
-              <div className="text-[13.5px] font-semibold text-foreground">{c.name}</div>
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-semibold text-foreground truncate">{c.name}</div>
               <div className="text-[11.5px] text-muted-foreground">
                 {c.platform} · {c.objective}
               </div>
             </div>
           </div>
-          <StatusPill variant="success">Launch Ready</StatusPill>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadCampaignAsMarkdown(c)}
+              className="h-7 gap-1.5 text-[11.5px] cursor-pointer"
+              title="Download as Markdown"
+            >
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground font-mono">MD</span>
+              <DownloadIcon className="h-3 w-3" />
+            </Button>
+            <StatusPill variant="success">Launch Ready</StatusPill>
+          </div>
         </header>
 
         <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2 text-[12.5px]">
@@ -1744,6 +2017,28 @@ function CampaignCard({
           </Block>
         )}
 
+        {/* Keywords & Intent */}
+        {Array.isArray(c.keywords) && c.keywords.length > 0 && (
+          <Block title="High-Intent Keywords">
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {c.keywords.map((k, i) => (
+                <span
+                  key={i}
+                  className="rounded bg-muted px-2 py-1 font-mono text-[11.5px] text-foreground border border-border/50"
+                >
+                  {k}
+                </span>
+              ))}
+            </div>
+            {Array.isArray(c.exclusions) && c.exclusions.length > 0 && (
+              <div className="mt-2 text-[11.5px] text-muted-foreground">
+                <span className="font-medium text-foreground">Negative exclusions ({c.exclusions.length}): </span>
+                {c.exclusions.map((ex) => `-${ex}`).join(", ")}
+              </div>
+            )}
+          </Block>
+        )}
+
         {Array.isArray(c.kpis) && c.kpis.length > 0 && (
           <Block title="Performance Targets">
             <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -1804,6 +2099,41 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
         {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Inline status pill shown at the bottom of the chat while tools are running.
+ *  Reflects the most recent in-flight tool call with a contextual label. */
+function InlineStatusPill({ messages }: { messages: UIMessage[] }) {
+  const label = useMemo(() => {
+    for (let mi = (messages?.length ?? 0) - 1; mi >= 0; mi -= 1) {
+      const m = messages[mi];
+      if (!m?.parts) continue;
+      for (let pi = m.parts.length - 1; pi >= 0; pi -= 1) {
+        const p = m.parts[pi];
+        if (!p || !isToolUIPart(p)) continue;
+        const state = (p as ToolUIPart).state;
+        if (state === "input-available" || state === "input-streaming") {
+          const name = getToolName(p as ToolUIPart);
+          if (name === "research") return "Researching your market";
+          if (name === "analyzeWebsite") return "Analyzing your website";
+          if (name === "askUser") return "Preparing setup questions";
+          if (name === "askBrandUrl") return "Waiting for your website";
+          if (name === "proposePlan") return "Building the strategy document";
+          if (name === "generateCreative") return "Generating the ad creative";
+          if (name === "deliverCampaign") return "Packaging the campaign";
+          if (name === "previewExecution") return "Preparing the execution plan";
+          return "Working on it";
+        }
+      }
+    }
+    return "Thinking";
+  }, [messages]);
+
+  return (
+    <div className="flex items-center gap-2 pl-1">
+      <Shimmer className="text-[13.5px]">{`${label}…`}</Shimmer>
     </div>
   );
 }
