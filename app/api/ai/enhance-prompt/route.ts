@@ -8,12 +8,14 @@ import { getBusinessContextForWorkspace } from "@/lib/business-context"
 import { aiErrorMetadata, aiUnavailableMessage, cachedUtilityCompletion } from "@/lib/ai-utility"
 import { log } from "@/lib/logger"
 import { CreditQuotaError } from "@/lib/ai-credits"
+import { analyzeLandingPageSentiment } from "@/lib/landing-page-sentiment"
 
 const EnhanceSchema = z.object({
   prompt: z.string().min(3).max(2000),
   budget: z.coerce.number().positive().optional(),
   location: z.string().max(120).optional(),
   goal: z.string().max(80).optional(),
+  landingPageUrl: z.string().url().optional().or(z.literal("")),
 })
 
 const EnhancedBriefSchema = z.object({
@@ -100,7 +102,23 @@ Saved business context: ${businessContext || "None"}`
         messages: [{ role: "user", content: `${prompt}${attempt ? "\nThe previous response was invalid. Return complete JSON only." : ""}` }],
       })
       const brief = parseBrief(content)
-      if (brief.success) return NextResponse.json({ ok: true, enhanced: brief.data.enhancedText, brief: brief.data })
+      if (brief.success) {
+      // Analyze landing page sentiment if URL provided
+      let sentiment: any = null
+      if (input.landingPageUrl) {
+        try {
+          sentiment = await analyzeLandingPageSentiment(input.landingPageUrl, input.prompt)
+        } catch (error) {
+          log("warn", "ai/enhance-prompt", "Landing page sentiment analysis failed", aiErrorMetadata(error))
+        }
+      }
+      return NextResponse.json({
+        ok: true,
+        enhanced: brief.data.enhancedText,
+        brief: brief.data,
+        ...(sentiment ? { landingPageSentiment: sentiment } : {}),
+      })
+    }
       lastFailure = "output"
       lastError = brief.error.issues[0]?.message || "Invalid enhanced brief"
     } catch (error) {
