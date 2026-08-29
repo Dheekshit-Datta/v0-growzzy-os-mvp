@@ -1449,17 +1449,20 @@ function ExecutionPlanCard({
   const [secondsLeft, setSecondsLeft] = useState(10);
   const [proceeded, setProceeded] = useState(false);
   const fired = useRef(false);
+  const addToolResultRef = useRef(addToolResult);
+  addToolResultRef.current = addToolResult;
 
-  // Auto-proceed after 10s
+  // Auto-proceed after 10s — only run when the tool is actually pending.
+  // Keep dependencies tight to avoid re-creating the interval on every parent render.
   useEffect(() => {
     if (decided || proceeded) return;
     const t = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
           clearInterval(t);
-          if (!fired.current && !decided) {
+          if (!fired.current) {
             fired.current = true;
-            addToolResult({
+            addToolResultRef.current({
               tool: "previewExecution",
               toolCallId: part.toolCallId,
               output: { proceed: true },
@@ -1472,14 +1475,15 @@ function ExecutionPlanCard({
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [decided, proceeded, part.toolCallId, addToolResult]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decided, proceeded, part.toolCallId]);
 
   if (!input?.steps?.length) return null;
 
   const handleProceed = () => {
     if (fired.current) return;
     fired.current = true;
-    addToolResult({
+    addToolResultRef.current({
       tool: "previewExecution",
       toolCallId: part.toolCallId,
       output: { proceed: true },
@@ -1738,6 +1742,10 @@ function CampaignCard({
   onOpenArtifact?: (data: ArtifactData) => void;
 }) {
   const c = part.input as CampaignInput | undefined;
+  // If the server-side validator rejected this delivery, show a quality-issue
+  // banner instead of a launch-ready card. The model is retrying in the same turn.
+  const out = part.output as { delivered?: boolean; qualityIssues?: string[] } | undefined;
+  const rejected = part.state === "output-available" && out?.delivered === false;
   if (!c?.name) return null;
 
   const defaultHeadlines = useMemo(() => {
@@ -1760,6 +1768,7 @@ function CampaignCard({
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [launchedId, setLaunchedId] = useState<string | null>(null);
   const [headlines, setHeadlines] = useState<string[]>(defaultHeadlines);
   const [primaryText, setPrimaryText] = useState(defaultPrimaryText);
   const [budget, setBudget] = useState(c.budgetDaily || 100);
@@ -1801,6 +1810,59 @@ function CampaignCard({
 
   const handleSaveDraft = async (isDeploy = false) => {
     setIsSaving(true);
+    if (isDeploy) {
+      // Real launch path — pushes to the user's connected Google / Meta ad account
+      try {
+        const res = await fetch("/api/chat/launch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: c.name,
+            platform: c.platform?.toUpperCase().includes("META") ? "META" : "GOOGLE",
+            objective: c.objective || "LEADS",
+            budgetDaily: Number(budget) || 50,
+            currency: "USD",
+            bidding: c.bidding || "maximize conversions",
+            schedule: c.schedule || undefined,
+            landingPage: c.landingPage || undefined,
+            offer: c.offer || undefined,
+            targetAudience: c.targetAudience || undefined,
+            headlines,
+            descriptions: c.descriptions || [],
+            primaryText: primaryText || undefined,
+            cta: c.cta || undefined,
+            keywords: c.keywords || [],
+            exclusions: c.exclusions || [],
+            targeting: c.targeting || [],
+            keyCaveat: c.keyCaveat || undefined,
+            imageUrl: undefined,
+            brandContext: c.offer || c.name,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.ok) {
+          setLaunchedId(data.externalCampaignId || null);
+          toast.success(data.message || `Campaign is live.`);
+        } else {
+          const code = data?.error?.code || "LAUNCH_FAILED";
+          const message = data?.error?.message || "Ad account rejected the launch.";
+          if (code === "INTEGRATION_REQUIRED" || code === "AD_ACCOUNT_REQUIRED") {
+            toast.error(message, { duration: 6000 });
+          } else if (code === "QUALITY_BLOCK") {
+            toast.error(message, { duration: 6000 });
+          } else {
+            toast.error(message);
+          }
+        }
+      } catch (err) {
+        toast.error("Network error. Could not reach the launch service.");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
+    // Save Draft path — local-only persistence
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
@@ -1811,15 +1873,11 @@ function CampaignCard({
           budgetAmount: budget,
           objective: c.objective || "LEADS",
           type: "SEARCH",
-          status: isDeploy ? "ACTIVE" : "DRAFT",
+          status: "DRAFT",
         }),
       });
       if (res.ok) {
-        toast.success(
-          isDeploy
-            ? `Campaign "${c.name}" queued for launch!`
-            : `Campaign "${c.name}" saved to your dashboard!`
-        );
+        toast.success(`Campaign "${c.name}" saved to your dashboard!`);
       } else {
         toast.success(`Campaign "${c.name}" saved as local draft.`);
       }
@@ -2063,28 +2121,49 @@ function CampaignCard({
 
         {/* Launch & Deploy Actions */}
         <div className="border-t border-border px-4 py-3 bg-muted/20 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[11.5px] text-muted-foreground">
-            Launch-ready configuration for <span className="font-semibold text-foreground">{c.platform}</span>
+          <div className="flex items-center gap-2">
+            <div className="text-[11.5px] text-muted-foreground">
+              {launchedId ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    LIVE
+                  </span>
+                  {launchedId && <span className="text-[11px] text-muted-foreground font-mono">{launchedId}</span>}
+                </span>
+              ) : (
+                <>Launch-ready for <span className="font-semibold text-foreground">{c.platform}</span></>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isSaving}
-              onClick={() => handleSaveDraft(false)}
-              className="text-xs gap-1 cursor-pointer"
-            >
-              {isSaving ? "Saving..." : "Save Draft"}
-            </Button>
-            <Button
-              size="sm"
-              disabled={isSaving}
-              onClick={() => handleSaveDraft(true)}
-              className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Rocket className="h-3.5 w-3.5" />
-              {isSaving ? "Launching..." : `Launch to ${c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}`}
-            </Button>
+            {!launchedId && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSaving}
+                onClick={() => handleSaveDraft(false)}
+                className="text-xs gap-1 cursor-pointer"
+              >
+                {isSaving ? "Saving..." : "Save Draft"}
+              </Button>
+            )}
+            {launchedId ? (
+              <span className="text-[11.5px] text-emerald-600 font-medium flex items-center gap-1">
+                <Check className="h-3.5 w-3.5" />
+                Live in {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"}
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                disabled={isSaving}
+                onClick={() => handleSaveDraft(true)}
+                className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                {isSaving ? "Pushing..." : `Launch to ${c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}`}
+              </Button>
+            )}
           </div>
         </div>
       </div>

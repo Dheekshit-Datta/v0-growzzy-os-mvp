@@ -55,7 +55,7 @@ export function ThinkingBlock({
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-[#1F57F5] animate-pulse" />
               <Shimmer className="text-foreground/90 font-medium">
-                {label}... ({elapsedSeconds}s)
+                {`${label}... (${elapsedSeconds}s)`}
               </Shimmer>
             </div>
           )}

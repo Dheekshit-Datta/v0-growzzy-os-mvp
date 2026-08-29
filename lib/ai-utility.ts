@@ -39,6 +39,26 @@ export function utilityCacheKey(operation: string, workspaceId: string, input: u
   return `growzzy:ai-cache:${operation}:${digest}`
 }
 
+const inMemoryCache = new Map<string, { value: string; expiresAt: number }>()
+
+function getMemoryCache(key: string): string | null {
+  const item = inMemoryCache.get(key)
+  if (!item) return null
+  if (Date.now() > item.expiresAt) {
+    inMemoryCache.delete(key)
+    return null
+  }
+  return item.value
+}
+
+function setMemoryCache(key: string, value: string, ttlSeconds: number) {
+  if (inMemoryCache.size > 1000) {
+    const firstKey = inMemoryCache.keys().next().value
+    if (firstKey) inMemoryCache.delete(firstKey)
+  }
+  inMemoryCache.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 })
+}
+
 async function redis(command: string[]) {
   const url = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/$/, "")
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -58,10 +78,28 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
   let model = UTILITY_MODEL
   const key = utilityCacheKey(call.operation, call.workspaceId, call.input)
 
+  // 1. Check in-memory cache first
+  const memoryCached = getMemoryCache(key)
+  if (typeof memoryCached === "string") {
+    log("info", "ai/usage", "AI utility completed (in-memory cache)", {
+      route: call.route,
+      model,
+      inputTokens: 0,
+      outputTokens: 0,
+      durationMs: Date.now() - startedAt,
+      cacheHit: true,
+      userId: call.userId,
+      workspaceId: call.workspaceId,
+    })
+    return memoryCached
+  }
+
+  // 2. Check Redis cache if available
   try {
     const cached = await redis(["GET", key])
     if (typeof cached === "string") {
-      log("info", "ai/usage", "AI utility completed", {
+      setMemoryCache(key, cached, CACHE_TTL_SECONDS)
+      log("info", "ai/usage", "AI utility completed (redis cache)", {
         route: call.route,
         model,
         inputTokens: 0,
@@ -106,6 +144,7 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
   })
 
   if (content) {
+    setMemoryCache(key, content, CACHE_TTL_SECONDS)
     try {
       await redis(["SET", key, content, "EX", String(CACHE_TTL_SECONDS)])
     } catch {
@@ -125,3 +164,4 @@ export async function cachedUtilityCompletion(call: UtilityCall) {
   })
   return content
 }
+

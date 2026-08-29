@@ -36,6 +36,7 @@ interface AdMockupPreviewProps {
   schedule?: string;
   keywords?: string[];
   exclusions?: string[];
+  sitelinks?: { title: string; description: string }[];
   className?: string;
 }
 
@@ -55,6 +56,7 @@ export function AdMockupPreview({
   schedule = "Immediate start, run ongoing",
   keywords = ["[multi-agent systems]", "\"enterprise ai workflows\"", "[custom ai agents]"],
   exclusions = ["free", "jobs", "salary", "internship", "github", "tutorial", "course"],
+  sitelinks,
   className,
 }: AdMockupPreviewProps) {
   const isMetaInitial = platform.toUpperCase().includes("META");
@@ -209,14 +211,25 @@ export function AdMockupPreview({
 
             {/* Sitelinks Extension Chips */}
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50 text-[12px]">
-              <div className="rounded-lg bg-muted/30 p-2 hover:bg-muted/50 cursor-pointer">
-                <span className="font-medium text-[#1A0DAB] dark:text-[#8AB4F8] block">{cta}</span>
-                <span className="text-[11px] text-muted-foreground line-clamp-1">Explore custom implementation</span>
-              </div>
-              <div className="rounded-lg bg-muted/30 p-2 hover:bg-muted/50 cursor-pointer">
-                <span className="font-medium text-[#1A0DAB] dark:text-[#8AB4F8] block">SOC2 & Compliance</span>
-                <span className="text-[11px] text-muted-foreground line-clamp-1">Zero data retention architecture</span>
-              </div>
+              {Array.isArray(sitelinks) && sitelinks.length >= 2 ? (
+                sitelinks.slice(0, 2).map((s, idx) => (
+                  <div key={idx} className="rounded-lg bg-muted/30 p-2 hover:bg-muted/50 cursor-pointer">
+                    <span className="font-medium text-[#1A0DAB] dark:text-[#8AB4F8] block truncate">{s.title}</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">{s.description}</span>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="rounded-lg bg-muted/30 p-2 hover:bg-muted/50 cursor-pointer">
+                    <span className="font-medium text-[#1A0DAB] dark:text-[#8AB4F8] block">{cta}</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">Explore custom implementation</span>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-2 hover:bg-muted/50 cursor-pointer">
+                    <span className="font-medium text-[#1A0DAB] dark:text-[#8AB4F8] block">Technical Architecture</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">Enterprise-grade deployment</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

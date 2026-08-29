@@ -11,6 +11,7 @@ import {
   createAIProvider,
   generateAdImage,
 } from "@/lib/ai-gateway.server";
+import { BANNED_FILLER_PHRASES } from "@/lib/google-plan-quality";
 
 export const maxDuration = 120;
 
@@ -136,6 +137,83 @@ function stripCreativeImages(messages: UIMessage[]): UIMessage[] {
     }),
   })) as UIMessage[];
 }
+
+/** Server-side quality gate for the chat route's `deliverCampaign`.
+ *  Returns a list of specific issues the model must fix before delivery.
+ *  Empty array = pass. */
+function validateDeliverCampaignInput(input: Record<string, unknown>): string[] {
+  const issues: string[] = [];
+  const platform = String(input.platform || "").toLowerCase();
+  const isGoogle = platform.includes("google");
+  const isMeta = platform.includes("meta") || platform.includes("facebook") || platform.includes("instagram");
+
+  const headlines = Array.isArray(input.headlines) ? (input.headlines as unknown[]).map(String) : [];
+  const descriptions = Array.isArray(input.descriptions) ? (input.descriptions as unknown[]).map(String) : [];
+  const primaryText = String(input.primaryText || "");
+  const allCopy = [...headlines, ...descriptions, primaryText];
+
+  // 1. Banned phrase check across all copy
+  for (const phrase of BANNED_FILLER_PHRASES) {
+    for (const line of allCopy) {
+      if (line.toLowerCase().includes(phrase)) {
+        issues.push(`BANNED PHRASE "${phrase}" found in: "${line.trim()}" — rewrite with specific number, mechanism, or proof.`);
+        break;
+      }
+    }
+  }
+
+  // 2. Generic verb openers that look like banned phrases
+  const GENERIC_OPENERS = [
+    /^(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform|empower|revolutionize|revitalize|discover|explore|introducing)\s/i,
+  ];
+  for (const h of headlines) {
+    if (GENERIC_OPENERS.some(rx => rx.test(h.trim()))) {
+      issues.push(`HEADLINE uses generic opener verb: "${h}" — rewrite with a specific number, mechanism, or named outcome.`);
+    }
+  }
+
+  // 3. "So What?" test — at least 5 of 15 headlines must contain specificity
+  //    (a number, $, %, a time, or a named mechanism).
+  if (isGoogle && headlines.length >= 8) {
+    const SPECIFIC = /(\$|\d|%|x faster|hours?|days?|weeks?|months?|\bin\b.*\bin\b|cut|ship|build|audit|free\b|save|deadline|miss|break|scale|ship|launch)/i;
+    const specificCount = headlines.filter(h => SPECIFIC.test(h)).length;
+    if (specificCount < 5) {
+      issues.push(`Only ${specificCount}/15 headlines pass the "So What?" test. At least 5 must include a number, dollar amount, percent, time, or specific mechanism (e.g. "Cut $150K Manual Ops", "48-Hour Audit", "60% Faster Pipeline").`);
+    }
+  }
+
+  // 4. Headline char limits per platform
+  const maxHeadline = isGoogle ? 30 : isMeta ? 40 : 40;
+  for (const h of headlines) {
+    if (h.length > maxHeadline) {
+      issues.push(`HEADLINE "${h}" is ${h.length} chars — max ${maxHeadline} for ${platform || "platform"}.`);
+    }
+  }
+
+  // 5. Description char limit
+  for (const d of descriptions) {
+    if (d.length > 90) {
+      issues.push(`DESCRIPTION "${d}" is ${d.length} chars — max 90.`);
+    }
+  }
+
+  // 6. Primary text must be at least 80 chars and contain a real CTA
+  if (isMeta && primaryText.length < 80) {
+    issues.push(`PRIMARY TEXT is too short (${primaryText.length} chars). Meta primary text needs >= 80 chars across 2-3 paragraphs (Hook -> Agitation -> CTA).`);
+  }
+  if (primaryText && !/(book|learn|get|try|sign|request|schedule|see|watch|discover|start|download|claim)/i.test(primaryText)) {
+    issues.push(`PRIMARY TEXT is missing a CTA verb (book, learn, get, try, sign, request, schedule, etc.).`);
+  }
+
+  // 7. Headline count for Google — at least 10 (RSA best practice)
+  if (isGoogle && headlines.length < 10) {
+    issues.push(`Google Search RSA needs 10-15 headlines for proper rotation. Only ${headlines.length} provided.`);
+  }
+
+  return issues;
+}
+
+
 
 export async function POST(req: Request) {
   try {
@@ -345,7 +423,24 @@ export async function POST(req: Request) {
             kpis: z.array(z.object({ metric: z.string(), target: z.string() })).optional(),
             risks: z.array(z.string()).optional(),
           }),
-          execute: async (input) => ({ delivered: true, name: input.name }),
+          execute: async (input) => {
+            // Server-side quality gate — block delivery and force regeneration
+            // when the output violates the copywriting rules.
+            const issues = validateDeliverCampaignInput(input as Record<string, unknown>);
+            if (issues.length > 0) {
+              return {
+                delivered: false,
+                qualityIssues: issues,
+                retryGuidance:
+                  "Your previous output was REJECTED for copywriting violations. Rewrite the campaign package now, fixing every issue. " +
+                  "BANNED PHRASES: 'unlock ai efficiency', 'seamless', 'revolutionary', 'world-class', 'holistic', 'transform your business', 'reduce costs with ai', 'empower your team', 'drive growth', 'get more leads', 'revitalize operations'. " +
+                  "BANNED OPENER VERBS in headlines: unlock, unleash, elevate, maximize, boost, enhance, streamline, transform, empower, revolutionize, revitalize, discover, explore, introducing. " +
+                  "REQUIRED: At least 5 of 15 Google headlines must contain a specific number ($150K, 48 hours, 60%), a named mechanism, or a quantified outcome. Every headline must pass the 'So What?' test — if a competitor could say the same thing, it's banned. " +
+                  "Primary text must follow Hook -> Agitation -> Unique Mechanism & Proof -> CTA structure with a real CTA verb (book, learn, get, try, request, schedule).",
+              };
+            }
+            return { delivered: true, name: input.name };
+          },
         }),
       },
     });

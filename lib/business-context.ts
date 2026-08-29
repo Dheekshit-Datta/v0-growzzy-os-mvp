@@ -287,3 +287,20 @@ export function formatBusinessContext(workspace: {
   ].filter(Boolean)
   return details.length ? `\nThis business has confirmed the following context. Use it when relevant and never invent facts beyond it:\n${details.join("\n")}` : ""
 }
+
+/**
+ * Normalize and sanitize business context before prompt injection.
+ * Removes excessive whitespace, strips empty lines, and enforces a safety cap.
+ */
+export function normalizeBusinessContext(context: string | null | undefined, maxChars = 2000): string {
+  if (!context || typeof context !== "string") return ""
+  const cleaned = context
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+
+  if (cleaned.length <= maxChars) return cleaned
+  return `${cleaned.slice(0, maxChars).trim()}...`
+}
+

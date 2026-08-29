@@ -40,11 +40,26 @@ const leaked = structuredClone(goodPlan)
 leaked.adGroups[0].headlines[0] = "Campaign brief: buy now"
 if (assessGoogleSearchPlan(leaked).status !== "FAIL") throw new Error("Internal fallback copy was not rejected")
 
-const duplicate = structuredClone(goodPlan)
-duplicate.adGroups[0].keywords[1].text = duplicate.adGroups[0].keywords[0].text
-if (assessGoogleSearchPlan(duplicate).status !== "FAIL") throw new Error("Duplicate keywords were not rejected")
+// Within-group duplicate keyword test
+const duplicateWithin = structuredClone(goodPlan)
+duplicateWithin.adGroups[0].keywords[1].text = duplicateWithin.adGroups[0].keywords[0].text
+if (assessGoogleSearchPlan(duplicateWithin).status !== "FAIL") throw new Error("Duplicate keywords within group were not rejected")
+
+// Cross-ad-group duplicate keyword test
+const duplicateCross = structuredClone(goodPlan)
+duplicateCross.adGroups[1].keywords[0].text = duplicateCross.adGroups[0].keywords[0].text
+const crossResult = assessGoogleSearchPlan(duplicateCross)
+if (crossResult.status !== "FAIL" || !crossResult.errors.some(e => e.includes("duplicated across") || e.includes("appears in both"))) {
+  throw new Error("Cross-ad-group duplicate keywords were not rejected")
+}
+
+// TARGET_ROAS rejection test
+const roasPlan = structuredClone(goodPlan)
+;(roasPlan as any).biddingStrategy = "TARGET_ROAS"
+if (parseGoogleSearchPlan(roasPlan).plan) throw new Error("TARGET_ROAS was not rejected on day-one search plan")
 
 const placeholder = { ...goodPlan, finalUrl: "https://example.com" }
 if (assessGoogleSearchPlan(placeholder, { requireFinalUrl: true }).status !== "FAIL") throw new Error("Placeholder URL was not rejected")
 
-console.log("Google plan quality checks passed")
+console.log("All Google plan quality & deduplication checks passed successfully!")
+

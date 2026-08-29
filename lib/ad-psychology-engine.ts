@@ -9,8 +9,7 @@
  * 5. Proven Direct-Response Copywriting Frameworks (PAS, AIDA, BAB)
  */
 
-import OpenAI from "openai"
-import { UTILITY_MODEL } from "@/lib/ai-utility"
+import { cachedUtilityCompletion } from "@/lib/ai-utility"
 
 export interface BuyerPsychologyProfile {
   targetPersona: string
@@ -28,73 +27,73 @@ export async function buildPsychologyPromptContext(params: {
   goal: string
   brandMemory?: string
   landingPageUrl?: string
+  workspaceId?: string
+  userId?: string
 }): Promise<BuyerPsychologyProfile> {
-  const { offer, targetCustomer, goal, brandMemory, landingPageUrl } = params;
+  const { offer, targetCustomer, goal, brandMemory, landingPageUrl, workspaceId, userId } = params;
 
   if (!process.env.OPENAI_API_KEY) {
-    // Fallback to basic profile if OpenAI is not available
     return getFallbackPsychologyProfile(offer, targetCustomer, goal, brandMemory || "");
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const systemPrompt = `You are an expert psychologist and marketing strategist specializing in direct-response advertising. Analyze the provided business information to extract deep psychological insights for creating high-converting ad campaigns.
+
+Return a JSON object with EXACTLY these fields:
+{
+  "targetPersona": "string (e.g., 'founder', 'parent', 'student', 'executive')",
+  "awarenessStage": "one of: 'PROBLEM_AWARE', 'SOLUTION_AWARE', 'PRODUCT_AWARE', 'MOST_AWARE'",
+  "primaryEmotionalTrigger": "string describing the main emotional driver",
+  "corePainPoints": ["array of 2-4 specific pain points"],
+  "desireOutcomes": ["array of 2-4 specific desired outcomes"],
+  "visualPatternInterrupt": "string describing a scroll-stopping visual concept",
+  "recommendedVisualPrompt": "string for DALL-E 3 image generation"
+}
+
+Follow the 5-step framework:
+1. WHO: Identify the actual persona and awareness level (not generic)
+2. WHAT: Analyze the offer with context
+3. WHY: Extract psychological triggers and emotional levers
+4. VISUAL: Generate pattern-interrupt concepts
+5. COPY: Specify psychological angles for headlines
+
+Base your analysis on proven psychological frameworks like Eugene Schwartz's Customer Awareness Spectrum, PAS (Pain-Agitate-Solution), AIDA, and emotional trigger mapping.
+
+Be specific and insightful - avoid generic responses. Tailor everything to the specific input provided.`
+
+  const userPromptLines = [
+    `Analyze this business for psychological insights:`,
+    `OFFER: ${offer}`,
+    `TARGET CUSTOMER: ${targetCustomer}`,
+    `GOAL: ${goal}`,
+  ]
+  if (brandMemory) userPromptLines.push(`BRAND MEMORY: ${brandMemory}`)
+  if (landingPageUrl) userPromptLines.push(`LANDING PAGE URL: ${landingPageUrl}`)
+  userPromptLines.push(`Provide deep psychological analysis following the 5-step framework. Return ONLY the JSON object as specified.`)
+
+  const userPrompt = userPromptLines.join("\n\n")
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: UTILITY_MODEL,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
+    const rawContent = await cachedUtilityCompletion({
+      route: "/api/ai/psychology-profile",
+      operation: "buyer-psychology",
+      userId: userId || "system",
+      workspaceId: workspaceId || "global",
+      input: { offer, targetCustomer, goal, brandMemory: brandMemory || "", landingPageUrl: landingPageUrl || "" },
       messages: [
-        {
-          role: "system",
-          content: `You are an expert psychologist and marketing strategist specializing in direct-response advertising. Analyze the provided business information to extract deep psychological insights for creating high-converting ad campaigns.
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      json: true,
+    })
 
-          Return a JSON object with EXACTLY these fields:
-          {
-            "targetPersona": "string (e.g., 'founder', 'parent', 'student', 'executive')",
-            "awarenessStage": "one of: 'PROBLEM_AWARE', 'SOLUTION_AWARE', 'PRODUCT_AWARE', 'MOST_AWARE'",
-            "primaryEmotionalTrigger": "string describing the main emotional driver",
-            "corePainPoints": ["array of 2-4 specific pain points"],
-            "desireOutcomes": ["array of 2-4 specific desired outcomes"],
-            "visualPatternInterrupt": "string describing a scroll-stopping visual concept",
-            "recommendedVisualPrompt": "string for DALL-E 3 image generation"
-          }
-
-          Follow the 5-step framework:
-          1. WHO: Identify the actual persona and awareness level (not generic)
-          2. WHAT: Analyze the offer with context
-          3. WHY: Extract psychological triggers and emotional levers
-          4. VISUAL: Generate pattern-interrupt concepts
-          5. COPY: Specify psychological angles for headlines
-
-          Base your analysis on proven psychological frameworks like Eugene Schwartz's Customer Awareness Spectrum, PAS (Pain-Agitate-Solution), AIDA, and emotional trigger mapping.
-
-          Be specific and insightful - avoid generic responses. Tailor everything to the specific input provided.`
-        },
-        {
-          role: "user",
-          content: `Analyze this business for psychological insights:
-
-          OFFER: ${offer}
-          TARGET CUSTOMER: ${targetCustomer}
-          GOAL: ${goal}
-          BRAND MEMORY: ${brandMemory || "Not provided"}
-          LANDING PAGE URL: ${landingPageUrl || "Not provided"}
-
-          Provide deep psychological analysis following the 5-step framework. Return ONLY the JSON object as specified.`
-        }
-      ]
-    });
-
-    const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}")
-
-    // Validate and return the psychology profile
-    return validateAndReturnPsychologyProfile(parsed);
+    const parsed = JSON.parse(rawContent || "{}")
+    return validateAndReturnPsychologyProfile(parsed)
   } catch (error) {
     console.error("Psychological analysis failed, using fallback:", error);
-    // Fallback to basic profile on error
     return getFallbackPsychologyProfile(offer, targetCustomer, goal, brandMemory || "");
   }
 }
+
 
 // Fallback function for when OpenAI is unavailable
 function getFallbackPsychologyProfile(offer: string, targetCustomer: string, goal: string, brandMemory: string): BuyerPsychologyProfile {
