@@ -59,7 +59,6 @@ import {
   type ArtifactData,
 } from "@/components/growzzy/artifact-modal";
 import { ThinkingBlock } from "@/components/growzzy/thinking-block";
-import { AdMockupPreview } from "@/components/growzzy/ad-mockup-preview";
 import { StatusPill } from "@/components/growzzy/status-pill";
 import ReactMarkdown from "react-markdown";
 import {
@@ -83,7 +82,6 @@ import {
   Target,
   Wand2,
   Briefcase,
-  Smartphone,
   ArrowRight,
   Sparkles,
   Pencil,
@@ -279,7 +277,6 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const greetingName = firstName(user) || brand?.businessName || "there";
 
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
-  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const lastSubmission = useRef<Submission | null>(null);
 
   const { messages, sendMessage, addToolResult, status, stop } = useChat({
@@ -329,12 +326,6 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 
   const busy = status === "submitted" || status === "streaming";
   const started = messages.length > 0;
-  const artifacts = useMemo(() => deriveArtifacts(messages), [messages]);
-  const hasPreview = Boolean(
-    artifacts.campaign ||
-      artifacts.plan ||
-      artifacts.creative?.imageUrl,
-  );
 
   const pendingQuestion = useMemo(() => {
     for (let mi = (messages?.length ?? 0) - 1; mi >= 0; mi -= 1) {
@@ -481,7 +472,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     );
 
   const composer = (
-    <div className={cn("w-full px-1 pb-2", hasPreview ? "" : "mx-auto max-w-3xl")}>
+    <div className={cn("w-full px-1 pb-2 mx-auto max-w-4xl")}>
       <input
         ref={fileInputRef}
         type="file"
@@ -577,7 +568,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const thread = started ? (
     <Conversation className="flex-1">
       <ConversationContent
-        className={cn("w-full px-1 pb-6", hasPreview ? "" : "mx-auto max-w-3xl")}
+        className={cn("w-full px-1 pb-6 mx-auto max-w-4xl")}
       >
         {(Array.isArray(messages) ? messages : []).map((m) => (
           <AgentMessage
@@ -659,8 +650,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         {chatError && (
           <div
             className={cn(
-              "mx-1 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border p-3",
-              hasPreview ? "" : "mx-auto w-full max-w-3xl",
+              "mx-1 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border p-3 mx-auto w-full max-w-4xl",
               chatError.kind === "credits" || chatError.kind === "blocked"
                 ? "border-amber-500/40 bg-amber-500/10"
                 : "border-border bg-muted/50",
@@ -690,141 +680,12 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         )}
         {composer}
       </div>
-      {hasPreview && (
-        <aside className="hidden w-[380px] shrink-0 flex-col overflow-y-auto rounded-[14px] border border-border bg-muted/30 p-3 lg:flex">
-          <PreviewRail artifacts={artifacts} />
-        </aside>
-      )}
-      {/* Mobile preview toggle button */}
-      {hasPreview && (
-        <div className="fixed bottom-24 right-4 z-30 lg:hidden">
-          <Button
-            size="sm"
-            onClick={() => setMobilePreviewOpen(true)}
-            className="rounded-full shadow-lg bg-[#1F57F5] hover:bg-[#1845C4] text-white gap-1.5 px-3.5 text-xs font-medium cursor-pointer"
-          >
-            <Smartphone className="h-3.5 w-3.5" />
-            Ad Preview
-          </Button>
-        </div>
-      )}
-
-      {/* Mobile drawer preview */}
-      {mobilePreviewOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs lg:hidden animate-in fade-in">
-          <div className="flex max-h-[85vh] flex-col rounded-t-[20px] border-t border-border bg-card p-4 overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
-              <span className="font-semibold text-sm text-foreground">Live Ad Mockup Preview</span>
-              <button
-                type="button"
-                onClick={() => setMobilePreviewOpen(false)}
-                className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <PreviewRail artifacts={artifacts} />
-          </div>
-        </div>
-      )}
 
       <ArtifactModal
         data={activeArtifact}
         open={Boolean(activeArtifact)}
         onClose={() => setActiveArtifact(null)}
       />
-    </div>
-  );
-}
-
-/* --------------------------- live preview rail ----------------------------- */
-
-function PreviewRail({ artifacts }: { artifacts: Artifacts }) {
-  const { plan, planApproved, creative, campaign, citations } = artifacts;
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Live campaign preview
-        </span>
-        {campaign ? (
-          <StatusPill variant="success">Ready</StatusPill>
-        ) : plan ? (
-          <StatusPill variant={planApproved ? "primary" : "warn"}>
-            {planApproved ? "Building" : "Awaiting approval"}
-          </StatusPill>
-        ) : creative?.imageUrl ? (
-          <StatusPill variant="success">Creative ready</StatusPill>
-        ) : citations.length > 0 ? (
-          <StatusPill variant="info">Researching</StatusPill>
-        ) : null}
-      </div>
-
-      {campaign ? (
-        <AdMockupPreview
-          campaignName={campaign.name}
-          platform={campaign.platform}
-          headlines={Array.isArray(campaign.headlines) ? campaign.headlines.map(h => typeof h === "string" ? h : (h as any)?.text ?? "") : []}
-          primaryText={campaign.primaryText}
-          descriptions={campaign.descriptions}
-          cta={campaign.cta}
-          landingPage={campaign.landingPage}
-          imageUrl={creative?.imageUrl}
-          budgetDaily={campaign.budgetDaily}
-          currency={campaign.currency}
-          bidding={campaign.bidding}
-          schedule={campaign.schedule}
-          keywords={campaign.keywords}
-          exclusions={campaign.exclusions}
-          sitelinks={campaign.sitelinks}
-        />
-      ) : creative?.imageUrl ? (
-        <div className="overflow-hidden rounded-[12px] border border-border bg-card">
-          <img
-            src={creative.imageUrl}
-            alt={creative.caption ?? "Ad creative"}
-            className="aspect-square w-full object-cover"
-          />
-          <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{creative.caption}</div>
-        </div>
-      ) : plan ? (
-        <div className="rounded-[12px] border border-border bg-card p-3">
-          <div className="text-[13px] font-semibold text-foreground">{plan.title}</div>
-          <ol className="mt-2 space-y-1.5">
-            {Array.isArray(plan.steps) && plan.steps.map((s, i) => (
-              <li key={i} className="flex gap-2 text-[12px] text-muted-foreground">
-                <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px]">
-                  {i + 1}
-                </span>
-                {s.title}
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
-
-      {Array.isArray(citations) && citations.length > 0 && (
-        <div className="rounded-[12px] border border-border bg-card p-3">
-          <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-            Sources read ({citations.length})
-          </div>
-          <ul className="space-y-1">
-            {citations.slice(0, 10).map((c, i) => (
-              <li key={c.url || i} className="truncate text-[11.5px]">
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-primary hover:underline"
-                >
-                  {c.site}
-                </a>
-                <span className="text-muted-foreground"> — {c.title}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
@@ -1160,7 +1021,7 @@ function QuestionsCard({
     const l = String(label || "").toLowerCase();
     if (l.includes("linkedin")) return <Briefcase className="h-4 w-4" />;
     if (l.includes("meta") || l.includes("facebook") || l.includes("instagram"))
-      return <Smartphone className="h-4 w-4" />;
+      return <Megaphone className="h-4 w-4" />;
     if (l.includes("google") || l.includes("search")) return <Search className="h-4 w-4" />;
     if (l.includes("multiple") || l.includes("multi")) return <Globe className="h-4 w-4" />;
     return <Sparkles className="h-4 w-4" />;
@@ -1629,6 +1490,12 @@ Rendering high-resolution commercial ad creative mockup...`}
               src={output.imageUrl}
               alt={output.caption ?? "Generated ad creative"}
               className="aspect-square w-full object-cover rounded-[10px]"
+              onError={(e) => {
+                const el = e.currentTarget
+                if (el.dataset.fallback === "1") return
+                el.dataset.fallback = "1"
+                el.src = "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1080&q=80"
+              }}
             />
           ) : (
             <div className="grid aspect-square w-full place-items-center text-[12px] text-muted-foreground p-4 text-center">

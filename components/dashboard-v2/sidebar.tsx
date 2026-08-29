@@ -22,7 +22,6 @@ import {
   Settings,
   FileText,
   Trash2,
-  Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { loadSavedChats, deleteSavedChat, getDeletedChatIds } from "@/lib/chat-store"
@@ -32,14 +31,12 @@ interface NavItem {
   href: string
   label: string
   icon: React.ElementType
-  isAction?: boolean
 }
 
 const CREATE_NAV: NavItem[] = [
   { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
   { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
   { href: "/dashboard/prompts",       label: "Recent Chats",   icon: History },
-  { href: "#ai-assistant",            label: "AI Assistant",   icon: Bot, isAction: true },
 ]
 
 const MANAGE_NAV: NavItem[] = [
@@ -190,24 +187,6 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const navLink = (item: NavItem) => {
     const active = isActive(item.href)
     const Icon = item.icon
-
-    if (item.isAction) {
-      return (
-        <button
-          key={item.label}
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("growzzy:open-ai-assistant"))}
-          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-[13px] text-[#4B5563] hover:bg-white/60 hover:text-[#111827] transition-colors cursor-pointer"
-        >
-          <Icon
-            size={15}
-            strokeWidth={1.8}
-            className="shrink-0 text-[#1F57F5]"
-          />
-          {!collapsed && <span className="truncate">{item.label}</span>}
-        </button>
-      )
-    }
 
     return (
       <Link

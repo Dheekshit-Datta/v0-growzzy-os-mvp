@@ -37,6 +37,8 @@ Ask 2-3 strategic setup questions tailored to their specific business:
 
 For each question, provide 3-4 options with category labels, short benefit descriptions, and mark exactly ONE option as recommended:true.
 
+PLATFORM POLICY: Growzzy currently supports **Google Ads only** (Search + Display/Discovery image formats). The "Which platform?" question is intentionally omitted — there is no Meta option. Do NOT ask the user which ad network to use; assume Google Ads and proceed.
+
 3. EXECUTION PLAN PREVIEW (previewExecution):
 MANDATORY: After the user submits askUser answers, BEFORE running any other tool, you MUST call previewExecution to render an "Execution Plan" card in chat. The card lists 3-5 generic activity steps (e.g. "Researching your market", "Building the strategy document", "Writing high-converting ad copy", "Generating the ad creative").
 - Use PLAIN ACTIVITY LABELS — never role names like "Performance Marketing" or "Creative Director". The user explicitly does not want role framing.
@@ -65,16 +67,18 @@ STOP and wait for the user to click "Approve Strategy & Build Campaign" or reque
 
 6. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
 Once approved (approved=true):
-- GOOGLE SEARCH CAMPAIGNS: Do NOT call generateCreative! Google Search Ads are 100% text-based (RSAs). Immediately call deliverCampaign with:
+- GOOGLE SEARCH CAMPAIGNS (text-only RSA): Do NOT call generateCreative. Immediately call deliverCampaign with:
   * 15 high-converting headlines (Strictly <= 30 chars each)
   * 4 compelling descriptions (Strictly <= 90 chars each)
   * 4 Sitelink extensions
   * Negative keywords and targeting setup
-- META ADS CAMPAIGNS: Call generateCreative for 1:1 Feed visual, then call deliverCampaign with:
-  * Primary text in 3 structured paragraphs (Hook -> Agitation/Proof -> Risk-Reversal CTA)
-  * Punchy headline (Strictly <= 40 chars)
-  * Call-to-action button
-- MULTI-CHANNEL CAMPAIGNS: Call generateCreative for Meta creative, then deliverCampaign with both packages.
+- GOOGLE DISPLAY / DISCOVERY IMAGE AD: Call generateCreative ONCE for the 1:1 image, then call deliverCampaign with:
+  * Headline (Strictly <= 40 chars)
+  * Description (Strictly <= 90 chars)
+  * Final URL and CTA
+  * Targeting setup
+
+NEVER generate Meta-specific fields (no OUTCOME_LEADS, no Facebook/Instagram targeting, no Meta pixel). The user is building on Google Ads only.
 
 === COPYWRITING QUALITY & BANNED PHRASES ===
 ❌ BANNED (generic corporate filler — NEVER write headlines like these):
@@ -173,12 +177,12 @@ function validateDeliverCampaignInput(input: Record<string, unknown>): string[] 
   }
 
   // 3. "So What?" test — at least 5 of 15 headlines must contain specificity
-  //    (a number, $, %, a time, or a named mechanism).
-  if (isGoogle && headlines.length >= 8) {
+  //    (a number, $, %, a time, or a named mechanism). Only applies to Search RSA (10-15 headlines).
+  if (isGoogle && headlines.length >= 10) {
     const SPECIFIC = /(\$|\d|%|x faster|hours?|days?|weeks?|months?|\bin\b.*\bin\b|cut|ship|build|audit|free\b|save|deadline|miss|break|scale|ship|launch)/i;
     const specificCount = headlines.filter(h => SPECIFIC.test(h)).length;
     if (specificCount < 5) {
-      issues.push(`Only ${specificCount}/15 headlines pass the "So What?" test. At least 5 must include a number, dollar amount, percent, time, or specific mechanism (e.g. "Cut $150K Manual Ops", "48-Hour Audit", "60% Faster Pipeline").`);
+      issues.push(`Only ${specificCount}/${headlines.length} headlines pass the "So What?" test. At least 5 must include a number, dollar amount, percent, time, or specific mechanism (e.g. "Cut $150K Manual Ops", "48-Hour Audit", "60% Faster Pipeline").`);
     }
   }
 
@@ -205,9 +209,13 @@ function validateDeliverCampaignInput(input: Record<string, unknown>): string[] 
     issues.push(`PRIMARY TEXT is missing a CTA verb (book, learn, get, try, sign, request, schedule, etc.).`);
   }
 
-  // 7. Headline count for Google — at least 10 (RSA best practice)
-  if (isGoogle && headlines.length < 10) {
-    issues.push(`Google Search RSA needs 10-15 headlines for proper rotation. Only ${headlines.length} provided.`);
+  // 7. Headline count for Google Search RSA — at least 10. Google Display/Discovery image
+  //    ads only need 1 short headline. Heuristic: < 5 headlines = Display image ad.
+  if (isGoogle && headlines.length >= 5 && headlines.length < 10) {
+    issues.push(`Google Search RSA needs 10-15 headlines for proper rotation. Only ${headlines.length} provided. (If this is a Display/Discovery image ad, set headlines to a single short line and let generateCreative handle the visual.)`);
+  }
+  if (isGoogle && headlines.length < 5 && descriptions.length < 1) {
+    issues.push(`A Google Ads campaign needs at least 1 headline and 1 description.`);
   }
 
   return issues;
@@ -358,7 +366,7 @@ export async function POST(req: Request) {
           inputSchema: z.object({
             title: z.string().describe("Campaign strategy title, e.g. 'Markitxai Enterprise AI Lead-Gen Strategy'"),
             summary: z.string().describe("Executive summary of campaign approach and core objective"),
-            platform: z.enum(["GOOGLE", "META", "MULTI"]).describe("Target ad network platform"),
+            platform: z.enum(["GOOGLE"]).describe("Target ad network platform. Growzzy currently supports Google Ads only (Search + Display image formats)."),
             targetAudience: z.string().describe("Primary ICP role & company profile"),
             budgetRecommendation: z.string().describe("Recommended daily/monthly budget with allocation"),
             markdownPlan: z.string().describe("Full, rich 8-section Campaign Strategy Document in Markdown: 1. Executive Strategy & Market Opportunity, 2. ICP Deep Dive, 3. Full Funnel Architecture, 4. Channel-Specific Architecture, 5. Direct-Response Messaging Framework, 6. Competitive Positioning, 7. Budget & Scaling Roadmap, 8. KPI Benchmarks"),
@@ -395,10 +403,10 @@ export async function POST(req: Request) {
         }),
 
         deliverCampaign: tool({
-          description: "Deliver the complete, launch-ready campaign package.",
+          description: "Deliver the complete, launch-ready campaign package. Platform is locked to GOOGLE (Search RSA text-only OR Display/Discovery image ad).",
           inputSchema: z.object({
             name: z.string(),
-            platform: z.string(),
+            platform: z.literal("GOOGLE").describe("Always 'GOOGLE' — Growzzy only ships to Google Ads. Use 15 RSA headlines + 4 descriptions for Search, or 1 short headline + 1 description for a Display/Discovery image ad."),
             objective: z.string(),
             budgetDaily: z.number(),
             currency: z.string(),

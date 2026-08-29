@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Bell, MessageSquare, Plus, X, Loader2, Sparkles } from "lucide-react"
+import { Search, Bell, MessageSquare, Plus, X, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { AIAssistantDrawer } from "@/components/growzzy/ai-assistant-drawer"
 
 interface TopBarProps {
   title?: string
@@ -24,14 +23,6 @@ export function TopBar({ title }: TopBarProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const notifRef = useRef<HTMLDivElement>(null)
-
-  const [aiAssistantOpen, setAiAssistantOpen] = useState(false)
-
-  useEffect(() => {
-    const handleOpenAI = () => setAiAssistantOpen(true)
-    window.addEventListener("growzzy:open-ai-assistant", handleOpenAI)
-    return () => window.removeEventListener("growzzy:open-ai-assistant", handleOpenAI)
-  }, [])
 
   useEffect(() => {
     fetch("/api/notifications", { cache: "no-store" })
@@ -103,17 +94,6 @@ export function TopBar({ title }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-1.5">
-        {/* Ask AI Assistant Button */}
-        <button
-          type="button"
-          onClick={() => setAiAssistantOpen(true)}
-          className="flex items-center gap-1.5 h-8 px-2.5 rounded-[8px] text-[12px] font-semibold text-[#1F57F5] bg-[#EAF0FE] hover:bg-[#1F57F5]/15 transition-colors cursor-pointer mr-1"
-          title="Ask beginner-friendly questions, metrics or advice"
-        >
-          <Sparkles size={13} className="text-[#1F57F5]" />
-          <span>Ask AI</span>
-        </button>
-
         {/* Search */}
         <div className="relative">
           {showSearch ? (
@@ -234,12 +214,6 @@ export function TopBar({ title }: TopBarProps) {
           New Campaign
         </Link>
       </div>
-
-      {/* Beginner-friendly AI Assistant Drawer */}
-      <AIAssistantDrawer
-        open={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-      />
     </header>
   )
 }
