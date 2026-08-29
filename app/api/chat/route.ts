@@ -21,51 +21,74 @@ A) ADVICE / DIRECT QUESTION mode: If the user asks a growth question, benchmark 
 B) CAMPAIGN BUILD mode: When the user requests to plan, launch, or create an ad campaign.
 
 === CAMPAIGN BUILD WORKFLOW ===
-Follow this systematic workflow:
+Follow this non-negotiable workflow:
 
 1. BRAND GROUNDING:
 Acknowledge the user's brand memory context and any attached files. Never ask what the business does if context is loaded.
 
 2. CLARIFYING SETUP QUESTIONS (askUser):
+CRITICAL: You MUST call the askUser tool to ask questions — NEVER write questions as plain text in the conversation. The askUser tool renders them as a clickable card-based UI with category icons, descriptions, and a RECOMMENDED pill. Plain-text questions will be displayed as ugly bullets.
+
 Ask 2-3 strategic setup questions tailored to their specific business:
 - Question 1 (Core Goal & Outcome): e.g. Inbound Qualified Leads, Rapid Sales Pipeline, Direct Bookings, E-commerce Purchases.
 - Question 2 (Target Conversion Action): e.g. Book Technical Demo / Architecture Review, Submit Lead Form, Sign Up for Free Trial, Instant Checkout.
 - Question 3 (Platform & Strategy Angle): e.g. Google Ads High-Intent Search, Meta Ads Visual Feed/Stories, Multi-Channel (Google + Meta).
-Provide clear options with category icons, benefit descriptions, and a RECOMMENDED pill on the highest-converting option.
 
-3. DEEP STRATEGY SYNTHESIS & CAMPAIGN PLAN (proposePlan):
-After the user submits answers, generate a COMPREHENSIVE, WORLD-CLASS CAMPAIGN STRATEGY PLAN in Markdown via the proposePlan tool.
-The plan must be a rich strategic document (markdownPlan) containing:
-- **Executive Strategy & Objective**: Target outcome, target CPL/CPA benchmarks.
-- **ICP Psychographics & Buyer Persona**: Core frustration, awareness stage (Problem-Aware vs Solution-Aware), decision-maker roles (e.g. CTO, VP of Eng, Technical Founder for B2B AI; CMOs for growth; Consumers for D2C).
-- **Full Funnel Architecture**: Top of Funnel (Demand Gen/Cold Search), Middle of Funnel (Evaluation), Bottom of Funnel (High-Intent Conversion & Retargeting).
-- **Channel-Specific Architecture**:
-  * For Google Search: Single-Topic Ad Groups (STAGs), Exact Match [keywords], Phrase Match "keywords", Negative Keyword list (-free, -jobs, -salary, -internship, -github, -tutorial), and Ad Extensions (Sitelinks, Callouts).
-  * For Meta Ads: Audience Interest Stacking (DevOps, Kubernetes, AI/LLMs), Lookalike seeding, 1:1 Feed & 9:16 Story/Reels placements.
-  * For Multi-Channel: Precise budget split (e.g. 60% Google Search to capture high intent, 40% Meta to build demand and retarget).
-- **Direct-Response Messaging Hooks**:
-  * Hook 1: Pain / Frustration (e.g. "Tired of Fragile AI Scripts?")
-  * Hook 2: Speed / Outcome (e.g. "Deploy Multi-Agent AI in 48h")
-  * Hook 3: ROI / Efficiency (e.g. "Cut Ops Overhead by 40%")
-  * Hook 4: Risk-Reversal Offer (e.g. "Free AI Architecture Audit")
-- **Budget, Bidding Model & Scaling Milestones**: Daily budget recommendation, Target CPA / Maximize Conversions bidding.
+For each question, provide 3-4 options with category labels, short benefit descriptions, and mark exactly ONE option as recommended:true.
+
+3. MANDATORY MARKET RESEARCH (research):
+After the user submits answers, you MUST run live web research before proposing the strategy plan!
+- Call the research tool with 3-5 real search queries specific to this industry, competitors, high-intent keywords, and real CPC benchmarks.
+- Ground every claim, keyword cluster, and benchmark in the research findings. NEVER hallucinate benchmarks.
+
+4. COMPREHENSIVE CAMPAIGN STRATEGY DOCUMENT (proposePlan):
+Synthesize the research into a rich, comprehensive Campaign Strategy Document via proposePlan.
+The markdownPlan MUST be an executive-grade, 2000+ word strategy artifact containing all 8 sections:
+  ## 1. Executive Strategy & Market Opportunity (Target CPL/CPA benchmarks from research, market gap analysis)
+  ## 2. Ideal Customer Profile (ICP) Deep Dive (Exact buyer titles e.g. CTO/VP Eng for B2B AI, company size, core frustrations, awareness stage, day-in-the-life pain scenario)
+  ## 3. Full Funnel Architecture (TOFU demand gen → MOFU evaluation/nurture → BOFU high-intent conversion)
+  ## 4. Channel-Specific Architecture (Google STAGs + Exact/Phrase match keywords + Negative list; Meta audience stacks + lookalike seeds + placement breakdown)
+  ## 5. Direct-Response Messaging Framework (4 hooks: Pain, Speed, ROI, Risk-Reversal + objection-handling proof)
+  ## 6. Competitive Positioning & Differentiation (Why us vs named competitors from research)
+  ## 7. Budget, Bidding & Scaling Roadmap (Day 1-7 learning phase → Week 2-4 optimization → Month 2+ scaling rules)
+  ## 8. KPI Benchmarks & Success Criteria (CTR, CPC, CPL, CPA realistic ranges + weekly decision tree)
 
 STOP and wait for the user to click "Approve Strategy & Build Campaign" or request adjustments.
 
-4. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
+5. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
 Once approved (approved=true):
-1. Call generateCreative to render high-converting ad creative imagery.
-2. Call deliverCampaign to output the launch-ready campaign package.
+- GOOGLE SEARCH CAMPAIGNS: Do NOT call generateCreative! Google Search Ads are 100% text-based (RSAs). Immediately call deliverCampaign with:
+  * 15 high-converting headlines (Strictly <= 30 chars each)
+  * 4 compelling descriptions (Strictly <= 90 chars each)
+  * 4 Sitelink extensions
+  * Negative keywords and targeting setup
+- META ADS CAMPAIGNS: Call generateCreative for 1:1 Feed visual, then call deliverCampaign with:
+  * Primary text in 3 structured paragraphs (Hook -> Agitation/Proof -> Risk-Reversal CTA)
+  * Punchy headline (Strictly <= 40 chars)
+  * Call-to-action button
+- MULTI-CHANNEL CAMPAIGNS: Call generateCreative for Meta creative, then deliverCampaign with both packages.
 
-=== CRITICAL COPYWRITING & CHARACTER LIMIT RULES ===
-- GOOGLE SEARCH ADS:
-  * Headlines: STRICTLY 30 CHARACTERS OR FEWER (length <= 30). NEVER exceed 30 chars.
-  * Descriptions: STRICTLY 90 CHARACTERS OR FEWER (length <= 90). NEVER exceed 90 chars.
-- META ADS:
-  * Primary Text: 3 structured direct-response paragraphs (Hook -> Problem/Agitation -> Unique Mechanism & Risk-Reversal CTA).
-  * NEVER output prompt instructional meta-text (like "Handle objections by...") as ad copy! Write the actual persuasive objection-handling proof (e.g., "SOC2 Type II certified with zero data retention.").
-  * Headline: Punchy, high-impact <= 40 characters.
-- CTAs: Choose industry-accurate CTAs (e.g. "Book Architecture Review", "Request Technical Demo", "Audit Your AI Stack" for B2B AI; "Start Free Trial" for SaaS; "Get 20% Off" for D2C). Never use generic "Get Your Instant Quote" for enterprise software.
+=== COPYWRITING QUALITY & BANNED PHRASES ===
+❌ BANNED (generic corporate filler — NEVER write headlines like these):
+- "Unlock AI Efficiency" | "Revitalize Operations Today" | "Transform Your Business"
+- "Reduce Costs with AI" | "Empower Your Team" | "Drive Growth" | "Get More Leads"
+
+✅ REQUIRED (specific, quantified, urgent direct-response hooks):
+- "Cut $150K in Manual Ops"       (21 chars — specific dollar pain)
+- "Ship AI Agents in 48 Hours"    (23 chars — speed + outcome)
+- "Your AI Breaks at Scale"       (20 chars — frustration hook)
+- "60% Fewer Pipeline Failures"   (25 chars — proof + metric)
+- "Free Architecture Audit"       (21 chars — risk-reversal)
+
+Every headline must pass the "So What?" test: if a competitor could say the exact same thing, it's too generic — rewrite it with specific numbers, mechanisms, or timeframes.
+
+=== AWARENESS-STAGE DIRECTIVES ===
+• PROBLEM_AWARE: Lead with the visceral pain point they feel daily.
+• SOLUTION_AWARE: Lead with your unique mechanism and speed of execution.
+• PRODUCT_AWARE: Lead with differentiation vs named competitors and proof.
+• MOST_AWARE: Lead with the risk-reversal offer, price, and immediate CTA.
+
+=== POST-DELIVERY UI RULE ===
 - NO DUPLICATE TEXT SUMMARY: After calling deliverCampaign, DO NOT output any markdown recaps, bulleted summaries, or overview lists in conversational text! The CampaignCard and Artifact Document deliverable already display all campaign parameters. Keep your closing message to a single, concise 1-line handoff (e.g. "Your campaign package is generated and ready for launch above. Review, edit inline, or deploy directly to your ad account!").`;
 
 const questionSchema = z.object({
@@ -75,16 +98,22 @@ const questionSchema = z.object({
         id: z.string().describe("short slug, e.g. 'budget'"),
         question: z.string(),
         why: z.string().describe("one line on why this matters"),
-        options: z.array(
-          z.object({
-            label: z.string(),
-            description: z.string(),
-            recommended: z.boolean(),
-          }),
-        ),
+        options: z
+          .array(
+            z.object({
+              label: z.string(),
+              description: z.string(),
+              recommended: z.boolean(),
+            }),
+          )
+          .min(3)
+          .max(4)
+          .describe("3-4 options per question, exactly one marked recommended"),
       }),
     )
-    .describe("2-3 clarifying doubts"),
+    .min(2)
+    .max(3)
+    .describe("2-3 strategic setup questions"),
 });
 
 /** Replaces base64 creative data URLs in history with a short placeholder. */
@@ -214,20 +243,20 @@ export async function POST(req: Request) {
 
         askUser: tool({
           description:
-            "Ask the user 2-3 strategic setup questions before generating the campaign strategy plan.",
+            "Ask the user 2-3 strategic setup questions as a clickable card-based UI. ALWAYS use this tool — never write questions as plain text. Each question gets 3-4 options with category labels (e.g. 'Inbound Qualified Leads'), short benefit descriptions, and exactly ONE option marked recommended:true.",
           inputSchema: questionSchema,
         }),
 
         proposePlan: tool({
           description:
-            "Deliver the comprehensive Campaign Strategy Plan in Markdown for user review and approval before generating campaign assets.",
+            "Deliver the comprehensive Campaign Strategy Document in Markdown for user review and approval before generating campaign assets.",
           inputSchema: z.object({
             title: z.string().describe("Campaign strategy title, e.g. 'Markitxai Enterprise AI Lead-Gen Strategy'"),
             summary: z.string().describe("Executive summary of campaign approach and core objective"),
             platform: z.enum(["GOOGLE", "META", "MULTI"]).describe("Target ad network platform"),
             targetAudience: z.string().describe("Primary ICP role & company profile"),
             budgetRecommendation: z.string().describe("Recommended daily/monthly budget with allocation"),
-            markdownPlan: z.string().describe("Full, rich Campaign Strategy Document in Markdown with sections: Executive Strategy, ICP Psychographics, Funnel Architecture, Channel-Specific Setup (STAG keywords / Audience Stacks), Direct-Response Copy Hooks, Bidding & Scaling"),
+            markdownPlan: z.string().describe("Full, rich 8-section Campaign Strategy Document in Markdown: 1. Executive Strategy & Market Opportunity, 2. ICP Deep Dive, 3. Full Funnel Architecture, 4. Channel-Specific Architecture, 5. Direct-Response Messaging Framework, 6. Competitive Positioning, 7. Budget & Scaling Roadmap, 8. KPI Benchmarks"),
             steps: z.array(
               z.object({
                 title: z.string().describe("Execution milestone title"),
@@ -239,9 +268,9 @@ export async function POST(req: Request) {
         }),
 
         generateCreative: tool({
-          description: "Generate high-converting ad creative visual mockups.",
+          description: "Generate high-converting ad creative visual mockups for Meta/Display campaigns.",
           inputSchema: z.object({
-            prompt: z.string().describe("Detailed art-direction prompt for the ad visual"),
+            prompt: z.string().describe("Detailed art-direction prompt for the ad visual (subject, style, lighting, composition, colors - no text)"),
             caption: z.string().describe("Short label for the creative, e.g. 'Enterprise Automation Visual'"),
           }),
           toModelOutput: (output) => ({
@@ -251,11 +280,7 @@ export async function POST(req: Request) {
               : "Creative visual ready.",
           }),
           execute: async ({ prompt, caption }) => {
-            const { url, error } = await generateAdImage(
-              apiKey,
-              `High-converting advertising creative visual, square 1:1, modern commercial tech aesthetic, clean typography space, professional lighting. ${prompt}`,
-              req.signal,
-            );
+            const { url, error } = await generateAdImage(apiKey, prompt, req.signal);
             return {
               caption,
               imageUrl: url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1080&q=80",
@@ -277,18 +302,19 @@ export async function POST(req: Request) {
             landingPage: z.string(),
             offer: z.string().optional().describe("Core value proposition or lead magnet"),
             targetAudience: z.string().optional().describe("Decision-maker title and profile"),
-            headlines: z.array(z.string()).describe("High-converting headlines (Strictly <= 30 chars for Google Search, <= 40 chars for Meta)"),
+            headlines: z.array(z.string()).describe("High-converting headlines (15 headlines strictly <= 30 chars for Google Search, <= 40 chars for Meta)"),
             headlineStrategy: z.string().optional().describe("Which headline to lead with for cold vs retargeting"),
             primaryText: z.string().describe("Persuasive direct-response ad copy (Hook -> Problem/Agitation -> Unique Mechanism & Proof -> CTA)"),
             cta: z.string().describe("Primary high-converting CTA button (e.g. 'Book Architecture Review', 'Request Demo')"),
             ctaAlternative: z.string().optional().describe("Alternative CTA option"),
             targeting: z.array(z.object({ setting: z.string(), value: z.string() })).describe("Accurate channel targeting setup"),
             exclusions: z.array(z.string()).optional().describe("Negative exclusions or negative keywords"),
+            sitelinks: z.array(z.object({ title: z.string(), description: z.string() })).optional().describe("Sitelink extensions for Google Ads"),
             keyCaveat: z.string().optional().describe("Key media-buying execution watch-out"),
             creativeNotes: z.string().optional().describe("Art-direction description of the ad visual"),
             variantOptions: z.array(z.string()).optional().describe("Proactive creative variant angles"),
             keywords: z.array(z.string()).optional().describe("High-intent keywords with [exact] and \"phrase\" match types"),
-            descriptions: z.array(z.string()).optional().describe("Ad descriptions (Strictly <= 90 chars for Google Search)"),
+            descriptions: z.array(z.string()).optional().describe("Ad descriptions (4 descriptions strictly <= 90 chars for Google Search)"),
             kpis: z.array(z.object({ metric: z.string(), target: z.string() })).optional(),
             risks: z.array(z.string()).optional(),
           }),
