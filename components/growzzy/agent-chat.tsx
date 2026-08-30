@@ -2069,6 +2069,10 @@ function InlineStatusPill({ messages }: { messages: UIMessage[] }) {
           if (name === "proposePlan") return "Building the strategy document";
           if (name === "generateCreative") return "Generating the ad creative";
           if (name === "deliverCampaign") return "Packaging the campaign";
+          if (name === "getMyAnalytics") return "Reviewing your account performance";
+          if (name === "getMyCampaigns") return "Checking your live campaigns";
+          if (name === "getMyLeads") return "Pulling your recent leads";
+          if (name === "getMyRecommendations") return "Finding optimization opportunities";
           if (name === "previewExecution") return "Preparing the execution plan";
           return "Working on it";
         }
