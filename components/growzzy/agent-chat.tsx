@@ -1615,7 +1615,11 @@ function CampaignCard({
   const rejected = part.state === "output-available" && out?.delivered === false;
   if (!c?.name) return null;
 
-  const defaultHeadlines = useMemo(() => {
+  // Derive base values directly from the tool input so streaming updates
+  // flow in without a useEffect → setState round-trip. useEffect-based
+  // syncing against `c.headlines` was causing a React #185 infinite loop
+  // because the AI SDK hands us a new array reference on every stream tick.
+  const baseHeadlines: string[] = useMemo(() => {
     if (Array.isArray(c.headlines) && c.headlines.length > 0) {
       return c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? ""));
     }
@@ -1626,37 +1630,25 @@ function CampaignCard({
     ];
   }, [c.headlines]);
 
-  const defaultPrimaryText = useMemo(() => {
-    return (
+  const basePrimaryText: string = useMemo(
+    () =>
       c.primaryText ||
-      "Automate mission-critical business workflows with custom multi-agent architecture. Enterprise security with zero data retention."
-    );
-  }, [c.primaryText]);
+      "Automate mission-critical business workflows with custom multi-agent architecture. Enterprise security with zero data retention.",
+    [c.primaryText],
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [launchedId, setLaunchedId] = useState<string | null>(null);
-  const [headlines, setHeadlines] = useState<string[]>(defaultHeadlines);
-  const [primaryText, setPrimaryText] = useState(defaultPrimaryText);
-  const [budget, setBudget] = useState(c.budgetDaily || 100);
+  const [editedHeadlines, setEditedHeadlines] = useState<string[] | null>(null);
+  const [editedPrimaryText, setEditedPrimaryText] = useState<string | null>(null);
+  const [editedBudget, setEditedBudget] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (Array.isArray(c.headlines) && c.headlines.length > 0) {
-      setHeadlines(c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? "")));
-    }
-  }, [c.headlines]);
-
-  useEffect(() => {
-    if (c.primaryText) {
-      setPrimaryText(c.primaryText);
-    }
-  }, [c.primaryText]);
-
-  useEffect(() => {
-    if (c.budgetDaily) {
-      setBudget(c.budgetDaily);
-    }
-  }, [c.budgetDaily]);
+  // Once the user starts editing, lock the values to whatever they typed.
+  // While NOT editing, follow the streamed base values so updates flow in.
+  const headlines = editedHeadlines ?? baseHeadlines;
+  const primaryText = editedPrimaryText ?? basePrimaryText;
+  const budget = editedBudget ?? c.budgetDaily ?? 100;
 
   const artifactData: ArtifactData = {
     title: c.name,
@@ -1828,7 +1820,7 @@ function CampaignCard({
                 <Input
                   type="number"
                   value={budget}
-                  onChange={(e) => setBudget(Number(e.target.value))}
+                  onChange={(e) => setEditedBudget(Number(e.target.value))}
                   className="h-7 w-24 text-xs font-mono"
                 />
               </div>
@@ -1860,9 +1852,11 @@ function CampaignCard({
                     <Input
                       value={h}
                       onChange={(e) => {
-                        const next = [...headlines];
-                        next[i] = e.target.value;
-                        setHeadlines(next);
+                        setEditedHeadlines((prev) => {
+                          const base = prev ? [...prev] : [...headlines];
+                          base[i] = e.target.value;
+                          return base;
+                        });
                       }}
                       className="h-8 text-xs font-mono"
                     />
@@ -1883,7 +1877,7 @@ function CampaignCard({
                 {isEditing ? (
                   <textarea
                     value={primaryText}
-                    onChange={(e) => setPrimaryText(e.target.value)}
+                    onChange={(e) => setEditedPrimaryText(e.target.value)}
                     rows={4}
                     className="w-full rounded-md border border-border bg-background p-2 text-xs leading-relaxed focus:outline-hidden focus:ring-1 focus:ring-primary"
                   />

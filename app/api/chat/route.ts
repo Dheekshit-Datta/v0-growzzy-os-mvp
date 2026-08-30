@@ -88,6 +88,8 @@ The markdownPlan MUST be an executive-grade, 2000+ word strategy artifact contai
   ## 7. Budget, Bidding & Scaling Roadmap
   ## 8. KPI Benchmarks & Success Criteria
 
+CRITICAL: Call proposePlan EXACTLY ONCE with the full markdownPlan. Do NOT dump the strategy as raw markdown text in the conversation. The tool renders a proper strategy document card with an Approve button — that's the only way the strategy should reach the user. Free-text prose after research is a UX bug.
+
 STOP and wait for the user to click "Approve Strategy & Build Campaign" or request adjustments.
 
 6. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
@@ -497,6 +499,35 @@ export async function POST(req: Request) {
               }),
             ),
           }),
+          execute: async (input) => {
+            // Server-side quality gate: reject any strategy document that
+            // contains banned filler phrases in the prose (not just in ad
+            // copy). The model gets auto-corrected in the same turn.
+            const issues: string[] = [];
+            const md = String(input.markdownPlan || "").toLowerCase();
+            for (const phrase of BANNED_FILLER_PHRASES) {
+              if (md.includes(phrase)) {
+                issues.push(`BANNED PHRASE "${phrase}" found inside the strategy document. Rewrite that section with specific numbers, named mechanisms, or quantified outcomes — never generic corporate filler.`);
+                break;
+              }
+            }
+            // Same generic-opener verb check on any bolded creative angles
+            const GENERIC_OPENERS = /\*\*(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform(?:ative)?|empower|revolutionize|revitalize|seamless|discover|explore|introducing|holistic|world-class)\b[^*]*\*\*/i;
+            if (GENERIC_OPENERS.test(String(input.markdownPlan || ""))) {
+              issues.push(`The strategy document bolds generic-opener creative angles (e.g. "**Transformative Efficiency**", "**Seamless Integration**"). Replace with specific, quantified angles ("**Cut 4-Hour Audit Cycles**", "**48-Hour AI Agent Deployment**").`);
+            }
+            if (issues.length > 0) {
+              return {
+                approved: false,
+                qualityIssues: issues,
+                retryGuidance:
+                  "Your previous strategy document was REJECTED for copywriting violations. Rewrite it now, fixing every issue. " +
+                  "BANNED PHRASES in prose: 'unlock ai efficiency', 'seamless', 'revolutionary', 'world-class', 'holistic', 'transform your business', 'reduce costs with ai', 'empower your team', 'drive growth', 'get more leads', 'revitalize operations', 'transformative efficiency', 'seamless integration'. " +
+                  "Creative angles must be SPECIFIC and QUANTIFIED, not generic verbs. Examples: '48-Hour AI Agent Deployment', '60% Reduction in Pipeline Failures', 'Free Architecture Audit in 72 Hours'.",
+              };
+            }
+            return { approved: true, title: input.title };
+          },
         }),
 
         generateCreative: tool({
