@@ -17,6 +17,18 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
 const HeadlineAngleEnum = z.enum(["pain_point", "solution", "urgency", "cta", "feature", "question", "social_proof", "risk_reversal"])
 
+const AWARENESS_DIRECTIVES: Record<string, string> = {
+  PROBLEM_AWARE: "Lead with the visceral pain point they feel daily. Name the symptom.",
+  SOLUTION_AWARE: "Lead with your unique mechanism and speed of execution. Differentiate from alternatives.",
+  PRODUCT_AWARE: "Lead with differentiation vs named competitors and proof (numbers, testimonials, results).",
+  MOST_AWARE: "Lead with the risk-reversal offer, price, and immediate CTA. Remove purchase friction.",
+  UNKNOWN: "Default to PROBLEM_AWARE — name a sharp pain point that pulls the reader in.",
+}
+
+function awarenessDirective(stage: string | null | undefined): string {
+  return AWARENESS_DIRECTIVES[stage ?? ""] ?? AWARENESS_DIRECTIVES.UNKNOWN
+}
+
 const GenerateAdCopyInputSchema = z.object({
   goal: z.string().min(2, "Goal is required").max(120),
   type: z.string().optional().default("SEARCH"),
@@ -235,7 +247,7 @@ Return ONLY JSON:
     if (/(guarantee|refund|risk-free|warranty)/i.test(h)) angleCounts["risk_reversal"] = (angleCounts["risk_reversal"] || 0) + 1
   })
 
-  const missingAngles = new Set(["pain_point", "solution", "urgency", "cta", "social_proof", "risk_reversal"]).filter(a => !uniqueAngles.has(a))
+  const missingAngles = [...new Set(["pain_point", "solution", "urgency", "cta", "social_proof", "risk_reversal"])].filter(a => !uniqueAngles.has(a))
   if (missingAngles.length > 0) {
     return NextResponse.json({
       ok: false,

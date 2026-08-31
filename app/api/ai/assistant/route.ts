@@ -106,21 +106,31 @@ export async function POST(req: NextRequest) {
     const assistantMessage = response.choices[0]?.message
 
     if (conversationId) {
-      try {
-        await prisma.conversation.update({
-          where: { id: conversationId, userId },
-          data: {
-            messages: [...messages, assistantMessage] as any,
-            updatedAt: new Date(),
-          },
-        })
-      } catch {
+      // Keep only the last 20 messages to prevent unbounded storage growth
+      const MAX_STORED = 20
+      const trimmedMessages = messages.slice(-MAX_STORED)
+      // Verify the conversation belongs to this user before writing
+      const existing = await prisma.conversation.findFirst({ where: { id: conversationId, userId }, select: { id: true } })
+      if (existing) {
+        try {
+          await prisma.conversation.update({
+            where: { id: conversationId, userId },
+            data: {
+              messages: [...trimmedMessages, assistantMessage] as any,
+              updatedAt: new Date(),
+            },
+          })
+        } catch {
+          /* update race condition — ignore */
+        }
+      } else {
+        // New conversation — safe to create with client-provided ID
         await prisma.conversation.create({
           data: {
             id: conversationId,
             userId,
             title: messages[0]?.content?.substring(0, 50) || "New Conversation",
-            messages: [...messages, assistantMessage] as any,
+            messages: [...trimmedMessages, assistantMessage] as any,
           },
         }).catch(() => {})
       }

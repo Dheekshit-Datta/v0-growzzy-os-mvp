@@ -16,16 +16,32 @@ function isMissingLeadAdAccountColumn(error: unknown) {
   return message.includes("Lead.adAccountId") && message.includes("does not exist")
 }
 
+async function checkLeadSchema(): Promise<boolean> {
+  try {
+    await prisma.lead.findFirst({ where: { id: "00000000-0000-0000-0000-000000000000" }, select: { id: true, adAccountId: true }, take: 1 })
+    return true
+  } catch (error) {
+    return !isMissingLeadAdAccountColumn(error)
+  }
+}
+
 function schemaMigrationRequiredResponse() {
   return NextResponse.json(
     {
       ok: false,
       code: "SCHEMA_MIGRATION_REQUIRED",
-      error: "Leads schema is outdated. Run prisma migrate deploy to enable scoped lead access.",
+      error: "Leads schema is outdated. Run prisma migrate deploy to enable account-scoped lead access.",
       remediation: ["Run `prisma migrate deploy` on the production database.", "Refresh and retry lead operations."],
     },
     { status: 503 }
   )
+}
+
+let SCHEMA_OK: boolean | null = null
+async function ensureSchema(): Promise<boolean> {
+  if (SCHEMA_OK !== null) return SCHEMA_OK
+  SCHEMA_OK = await checkLeadSchema()
+  return SCHEMA_OK
 }
 
 export async function GET(req: NextRequest) {
@@ -36,6 +52,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (!(await ensureSchema())) return schemaMigrationRequiredResponse()
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const { searchParams } = new URL(req.url)
@@ -102,6 +119,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (!(await ensureSchema())) return schemaMigrationRequiredResponse()
     const userId = await resolveUserId(session.user.id)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const { searchParams } = new URL(req.url)

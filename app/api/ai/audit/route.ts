@@ -16,6 +16,7 @@ import { recordActivity } from "@/lib/activity-log"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 import { UTILITY_MODEL } from "@/lib/ai-utility"
+import { assertCreditsAvailable, estimatedCredits, CreditQuotaError } from "@/lib/ai-credits"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" })
 
@@ -118,6 +119,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (process.env.OPENAI_API_KEY && campaigns.length) {
+      try {
+        await assertCreditsAvailable(workspaceId, estimatedCredits(UTILITY_MODEL))
+      } catch (error) {
+        if (error instanceof CreditQuotaError) {
+          return NextResponse.json(
+            { success: false, ok: false, error: "Monthly credit quota exceeded. Audit will use rule-based recommendations only.", code: "CREDITS_EXHAUSTED" },
+            { status: 402 }
+          )
+        }
+        throw error
+      }
       const confidenceThreshold = settings.riskLevel === "CONSERVATIVE" ? 85 : settings.riskLevel === "BALANCED" ? 70 : 0
       const auditPrompt = `You are an elite Google Ads account auditor with 15 years experience managing $500M+ in ad spend.
 
@@ -157,11 +169,18 @@ Return ONLY valid JSON in this exact format:
         messages: [{ role: "user", content: auditPrompt }],
       })
       const parsed = safeJsonObject(completion.choices[0]?.message?.content, auditData)
+      // Merge AI-generated content with deterministic baseline — never discard the AI work
       auditData = {
         ...auditData,
+        overallScore: typeof parsed.overallScore === "number" ? parsed.overallScore : auditData.overallScore,
         summary: typeof parsed.summary === "string" ? parsed.summary : auditData.summary,
+        scores: parsed.scores && typeof parsed.scores === "object" ? { ...auditData.scores, ...parsed.scores } : auditData.scores,
       }
-      auditData.recommendations = ruleRecommendations
+      // Blend AI recommendations with deterministic ones — prefer AI-written ones, fill gaps from rules
+      const aiRecs: any[] = Array.isArray(parsed.recommendations) ? parsed.recommendations : []
+      const ruleIds = new Set(ruleRecommendations.map((r: any) => r.id))
+      const uniqueRuleRecs = ruleRecommendations.filter((r: any) => !aiRecs.some((a) => a.campaignId === r.campaignId && a.type === r.type))
+      auditData.recommendations = [...aiRecs, ...uniqueRuleRecs].slice(0, 8)
         .filter((rec: any) => Number(rec.confidence || 0) >= confidenceThreshold)
         .slice(0, 8)
     }

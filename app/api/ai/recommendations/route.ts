@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { NextRequest, NextResponse } from "next/server"
 import { getRequestWorkspaceId } from "@/lib/workspace"
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -61,6 +62,8 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
+    const limit = await rateLimitPolicy(userId, "optimizationMutation")
+    if (!limit.allowed) return rateLimitResponse(limit)
     const workspaceId = await getRequestWorkspaceId(userId, req)
     const body = await req.json().catch(() => ({}))
     const suggestionId = typeof body?.suggestionId === "string" ? body.suggestionId : null

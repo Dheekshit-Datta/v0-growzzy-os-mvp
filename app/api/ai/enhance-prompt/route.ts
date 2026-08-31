@@ -132,19 +132,20 @@ Saved business context: ${businessContext || "None"}`
     }
   }
 
-  // Provider/transient error fallback - return a structured enhanced brief based on user input
+  // Provider/transient error fallback — use prompt-extracted values to stay grounded
+  // in the user's intent. Do NOT invent generic corporate filler.
   const fallbackBrief = {
-    enhancedText: `${input.prompt}\n\nTargeting customers looking for reliable solutions. Optimized for high engagement and conversion with clear value propositions and strong calls to action.`,
+    enhancedText: input.prompt,
     productOrOffer: input.prompt.slice(0, 100),
-    targetCustomer: input.location ? `Customers in ${input.location}` : "Target buyers",
-    painPoints: ["Finding quality solutions", "Best value for price"],
-    differentiators: ["Verified quality", "Fast delivery"],
-    proofPoints: ["High customer rating"],
-    geography: input.location || "United States",
+    targetCustomer: input.location ? `Customers in ${input.location}` : "Your target buyers",
+    painPoints: [],
+    differentiators: [],
+    proofPoints: [],
+    geography: input.location || "",
     goal: input.goal || "Conversions",
-    tone: "Professional & Persuasive",
+    tone: "Clear & direct",
     restrictions: [],
-    missingQuestions: [],
+    missingQuestions: ["What specific outcome do you want from this campaign?"],
   }
 
   return NextResponse.json({ ok: true, enhanced: fallbackBrief.enhancedText, brief: fallbackBrief })

@@ -309,6 +309,19 @@ export async function POST(req: Request) {
       "";
     if (!apiKey) return new Response("AI is not configured yet.", { status: 500 });
 
+    // CSRF guard: reject cross-origin requests that aren't same-site
+    const requestOrigin = req.headers.get("origin");
+    if (requestOrigin) {
+      try {
+        const originUrl = new URL(requestOrigin);
+        if (originUrl.origin !== new URL(req.url).origin) {
+          return new Response("Forbidden", { status: 403 });
+        }
+      } catch {
+        return new Response("Forbidden", { status: 403 });
+      }
+    }
+
     // Auth check
     const { auth } = await import("@/lib/auth");
     const session = await auth();
