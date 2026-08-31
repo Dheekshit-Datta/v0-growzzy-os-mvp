@@ -12,12 +12,22 @@ import {
   generateAdImage,
 } from "@/lib/ai-gateway.server";
 import { BANNED_FILLER_PHRASES } from "@/lib/google-plan-quality";
+import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit";
 
 export const maxDuration = 120;
 
 const SYSTEM = `You are Growzzy, the AI Chief Media Buyer inside Growzzy OS — a senior performance marketer with 12+ years scaling $50M+ across B2B SaaS and DTC. You think like a strategist, write like a direct-response copywriter, and never give a textbook answer when a worked example grounded in the user's actual business is possible.
 
 You can read the user's account (campaigns, leads, analytics, recommendations) via the internal tools. You can also search the live web for benchmarks, competitor intelligence, and current CPC data.
+
+============================================================
+WORKFLOW DISCIPLINE (read carefully — these are enforced server-side)
+============================================================
+- NEVER re-call askUser after the user has already submitted answers. If you missed a detail, infer it from context or move on.
+- ALWAYS call previewExecution exactly ONCE after the user answers askUser and BEFORE calling research. Do not skip it.
+- The "So What?" test is mandatory on every headline. A headline is banned if its meaning could apply verbatim to a competitor.
+- Every Google Search RSA requires 10-15 headlines (cap is 15) and 3-4 descriptions. The 30-char headline cap and 90-char description cap are HARD limits — count your characters.
+- A campaign without a landingPage URL will be rejected at launch. Always include one.
 
 ============================================================
 STEP 0: INTENT ROUTING (mandatory before any other action)
@@ -182,7 +192,15 @@ function validateDeliverCampaignInput(input: Record<string, unknown>): string[] 
   const primaryText = String(input.primaryText || "");
   const allCopy = [...headlines, ...descriptions, primaryText];
 
-  // 1. Banned phrase check across all copy
+  // 1. Landing page URL is required (ad account will reject without it)
+  const landingPage = String(input.landingPage || "").trim();
+  if (!landingPage) {
+    issues.push(`Landing page URL is required. A campaign without a destination URL will be rejected at launch.`);
+  } else if (!/^https?:\/\//i.test(landingPage)) {
+    issues.push(`Landing page must be a valid http:// or https:// URL. Got: "${landingPage}"`);
+  }
+
+  // 2. Banned phrase check (exact)
   for (const phrase of BANNED_FILLER_PHRASES) {
     for (const line of allCopy) {
       if (line.toLowerCase().includes(phrase)) {
@@ -192,53 +210,80 @@ function validateDeliverCampaignInput(input: Record<string, unknown>): string[] 
     }
   }
 
-  // 2. Generic verb openers that look like banned phrases
-  const GENERIC_OPENERS = [
-    /^(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform|empower|revolutionize|revitalize|discover|explore|introducing)\s/i,
+  // 3. Semantic banned phrase detection (catches rephrasings)
+  const SEMANTIC_BANS = [
+    { pattern: /\b(seamless|flawless|smooth)\s+(experience|integration|solution|process|workflow)\b/i, label: "seamless experience" },
+    { pattern: /\b(comprehensive|holistic|all-in-one|end-to-end)\s+(approach|solution|platform)\b/i, label: "comprehensive approach" },
+    { pattern: /\b(state-of-the-art|cutting-edge|next-gen|next generation)\s+(technology|platform|solution|tool)\b/i, label: "state-of-the-art" },
+    { pattern: /\b(world-class|best-in-class|industry-leading|industry-standard)\s+/i, label: "world-class" },
+    { pattern: /\b(revolutionary|game-chang(?:ing|er)|disrupt(?:ing|ive))\s+/i, label: "revolutionary" },
+    { pattern: /\btransform(?:s|ing)?\s+(your|business|enterprise|workflow)/i, label: "transform your business" },
+    { pattern: /\b(empower|enable|unlock)\s+(your|team|business|enterprise)/i, label: "empower your team" },
+    { pattern: /\b(optimize|maximise|maximize)\s+(your|efficiency|workflows|operations)/i, label: "optimize efficiency" },
+    { pattern: /\bdrive\s+(growth|results|value|success|revenue)/i, label: "drive growth" },
+    { pattern: /\b(leverage|utilise|utilize)\s+ai\b/i, label: "leverage AI" },
+    { pattern: /\b(ai-powered|ai-driven|ai-enabled)\s+(solution|platform|tool)/i, label: "AI-powered solution" },
   ];
+  for (const line of allCopy) {
+    for (const ban of SEMANTIC_BANS) {
+      if (ban.pattern.test(line)) {
+        issues.push(`Generic filler "${ban.label}" in: "${line.trim()}" — rewrite with specific numbers, mechanisms, or named outcomes.`);
+        break;
+      }
+    }
+  }
+
+  // 4. Generic verb openers
+  const GENERIC_OPENERS = /^(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform|empower|revolutionize|revitalize|discover|explore|introducing)\s/i;
   for (const h of headlines) {
-    if (GENERIC_OPENERS.some(rx => rx.test(h.trim()))) {
+    if (GENERIC_OPENERS.test(h.trim())) {
       issues.push(`HEADLINE uses generic opener verb: "${h}" — rewrite with a specific number, mechanism, or named outcome.`);
     }
   }
 
-  // 3. "So What?" test — at least 5 of 15 headlines must contain specificity
-  //    (a number, $, %, a time, or a named mechanism). Only applies to Search RSA (10-15 headlines).
+  // 5. "So What?" test — at least 5 of 15 headlines must contain specificity
   if (isGoogle && headlines.length >= 10) {
-    const SPECIFIC = /(\$|\d|%|x faster|hours?|days?|weeks?|months?|\bin\b.*\bin\b|cut|ship|build|audit|free\b|save|deadline|miss|break|scale|ship|launch)/i;
+    const SPECIFIC = /(\$|\d|%|x faster|hours?|days?|weeks?|months?|cut|ship|build|audit|save|deadline|miss|break|scale|launch|free|now|today|book|hire|deploy)/i;
     const specificCount = headlines.filter(h => SPECIFIC.test(h)).length;
     if (specificCount < 5) {
-      issues.push(`Only ${specificCount}/${headlines.length} headlines pass the "So What?" test. At least 5 must include a number, dollar amount, percent, time, or specific mechanism (e.g. "Cut $150K Manual Ops", "48-Hour Audit", "60% Faster Pipeline").`);
+      issues.push(`Only ${specificCount}/${headlines.length} headlines pass the "So What?" test. At least 5 must include a number, dollar amount, percent, time, or specific mechanism.`);
     }
   }
 
-  // 4. Headline char limits per platform
-  const maxHeadline = isGoogle ? 30 : isMeta ? 40 : 40;
+  // 6. Char limits (defensive — schema enforces, but verify)
+  const maxHeadline = isGoogle ? 30 : 40;
   for (const h of headlines) {
     if (h.length > maxHeadline) {
       issues.push(`HEADLINE "${h}" is ${h.length} chars — max ${maxHeadline} for ${platform || "platform"}.`);
     }
   }
-
-  // 5. Description char limit
   for (const d of descriptions) {
     if (d.length > 90) {
       issues.push(`DESCRIPTION "${d}" is ${d.length} chars — max 90.`);
     }
   }
 
-  // 6. Primary text must be at least 80 chars and contain a real CTA
-  if (isMeta && primaryText.length < 80) {
-    issues.push(`PRIMARY TEXT is too short (${primaryText.length} chars). Meta primary text needs >= 80 chars across 2-3 paragraphs (Hook -> Agitation -> CTA).`);
-  }
-  if (primaryText && !/(book|learn|get|try|sign|request|schedule|see|watch|discover|start|download|claim)/i.test(primaryText)) {
-    issues.push(`PRIMARY TEXT is missing a CTA verb (book, learn, get, try, sign, request, schedule, etc.).`);
+  // 7. Primary text must contain a CTA verb
+  if (primaryText && !/(book|learn|get|try|sign|request|schedule|see|watch|discover|start|download|claim|call|contact)/i.test(primaryText)) {
+    issues.push(`PRIMARY TEXT is missing a CTA verb (book, learn, get, try, request, schedule, etc.).`);
   }
 
-  // 7. Headline count for Google Search RSA — at least 10. Google Display/Discovery image
-  //    ads only need 1 short headline. Heuristic: < 5 headlines = Display image ad.
+  // 8. Near-duplicate headlines
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const seen = new Map<string, number>();
+  headlines.forEach((h, i) => {
+    const key = normalize(h);
+    if (key.length < 8) return;
+    if (seen.has(key)) {
+      issues.push(`Near-duplicate headlines: "${h}" and "${headlines[seen.get(key)!]}". Use distinct angles.`);
+    } else {
+      seen.set(key, i);
+    }
+  });
+
+  // 9. Headline count: Google Search RSA needs 10-15
   if (isGoogle && headlines.length >= 5 && headlines.length < 10) {
-    issues.push(`Google Search RSA needs 10-15 headlines for proper rotation. Only ${headlines.length} provided. (If this is a Display/Discovery image ad, set headlines to a single short line and let generateCreative handle the visual.)`);
+    issues.push(`Google Search RSA needs 10-15 headlines. Only ${headlines.length} provided.`);
   }
   if (isGoogle && headlines.length < 5 && descriptions.length < 1) {
     issues.push(`A Google Ads campaign needs at least 1 headline and 1 description.`);
@@ -263,6 +308,15 @@ export async function POST(req: Request) {
       process.env["OPENAI_API_KEY"] ||
       "";
     if (!apiKey) return new Response("AI is not configured yet.", { status: 500 });
+
+    // Auth check
+    const { auth } = await import("@/lib/auth");
+    const session = await auth();
+    if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
+
+    // Rate limit: prevent abuse of the chat endpoint
+    const limit = await rateLimitPolicy(session.user.id, "chatMessage");
+    if (!limit.allowed) return rateLimitResponse(limit);
 
     const { webSearch, fetchPageText } = await import("@/lib/research.server");
 
@@ -338,12 +392,73 @@ export async function POST(req: Request) {
               .filter(Boolean)
               .join("\n\n");
 
+            // Quality gate: require real evidence. If searches returned nothing
+            // (network issue, query mismatch, blocked), return a structured
+            // failure so the agent falls back to internal knowledge rather
+            // than hallucinating competitor names and CPCs.
+            if (searches.every((s) => s.results.length === 0)) {
+              return {
+                focus,
+                notes: "**No live research available.**\n\nLive web research returned no results. Use internal knowledge to draft a high-quality, honest strategy. Mark all numbers as 'industry typical' rather than specific competitor figures, and note in the brief that benchmarks should be verified by the user before launch.",
+                sources: [],
+                citations: [],
+                queries: searches.map((s) => s.q),
+                researchFailed: true,
+              };
+            }
+
             const { text } = await generateText({
               model,
               system:
-                "You are a performance-marketing research analyst. Ground every claim in the provided evidence. Return concise intelligence: audience buying triggers, competitor angles observed, 8-12 high-intent keywords, direct-response hooks, and realistic CPC/CTR ranges. End with '**Sources**'.",
-              prompt: `Focus: ${focus}\nTopics:\n${topics.map((t) => `- ${t}`).join("\n")}\n\nEVIDENCE:\n${evidence.slice(0, 50000)}`,
+                "You are a senior performance-marketing research analyst with 12+ years of experience. You write for a $50M+ media buyer who needs sharp, specific intelligence — not generic definitions. " +
+                "\n\nRULES: " +
+                "(1) Every claim MUST cite the source URL it came from. If you can't ground a claim in the provided evidence, do NOT include it. " +
+                "(2) Never invent competitor names, CPCs, CTRs, or market size numbers. If the evidence doesn't show it, say 'verify before launch'. " +
+                "(3) Use sharp, specific, direct-response language. BANNED: 'unlock', 'seamless', 'revolutionary', 'world-class', 'holistic', 'transform your business', 'drive growth', 'empower', 'comprehensive solution'. " +
+                "(4) For CPC/CTR/range estimates, use the ranges implied by the evidence (e.g. 'Based on the [source]'s industry overview, B2B SaaS CPCs typically run $5-15 for high-intent terms'). " +
+                "(5) End with a '**Sources**' section listing every URL you drew from.",
+              prompt: `Focus: ${focus}\nTopics:\n${topics.map((t) => `- ${t}`).join("\n")}\n\nEVIDENCE (cite specific URLs when making claims):\n${evidence.slice(0, 50000)}`,
             });
+
+            // Reject the research output if it contains banned phrases —
+            // the model gets auto-corrected so the proposePlan step that
+            // follows has clean material to work with.
+            const issues: string[] = [];
+            const lower = text.toLowerCase();
+            for (const phrase of BANNED_FILLER_PHRASES) {
+              if (lower.includes(phrase)) {
+                issues.push(`BANNED PHRASE "${phrase}" found in research output. Rewrite with specific numbers, named mechanisms, or quantified outcomes.`);
+                break;
+              }
+            }
+            if (issues.length > 0) {
+              const { text: retry } = await generateText({
+                model,
+                system:
+                  "You are a performance-marketing research analyst. Rewrite the previous research notes, removing ALL generic corporate filler. Replace any 'seamless', 'revolutionary', 'world-class', 'comprehensive', 'holistic', 'transform', 'empower', 'drive growth' phrases with specific, quantified observations grounded in the evidence. " +
+                  "Every claim must cite a source URL. If you cannot ground a number, write 'verify before launch' instead.",
+                prompt: `PREVIOUS (REJECTED):\n${text}\n\nORIGINAL EVIDENCE:\n${evidence.slice(0, 50000)}`,
+              });
+              const citations = urls.map((u) => {
+                const hit = searches.flatMap((s) => s.results).find((r) => r.url === u);
+                let site = u;
+                try {
+                  site = new URL(u).hostname.replace(/^www\./, "");
+                } catch {
+                  /* keep raw */
+                }
+                return { url: u, site, title: hit?.title ?? site, snippet: hit?.snippet ?? "" };
+              });
+              return {
+                focus,
+                notes: retry,
+                sources: urls,
+                citations,
+                queries: searches.map((s) => s.q),
+                qualityRewritten: true,
+              };
+            }
+
             const citations = urls.map((u) => {
               const hit = searches.flatMap((s) => s.results).find((r) => r.url === u);
               let site = u;
@@ -501,29 +616,64 @@ export async function POST(req: Request) {
           }),
           execute: async (input) => {
             // Server-side quality gate: reject any strategy document that
-            // contains banned filler phrases in the prose (not just in ad
-            // copy). The model gets auto-corrected in the same turn.
+            // contains banned filler phrases in the prose. The model gets
+            // auto-corrected in the same turn.
             const issues: string[] = [];
             const md = String(input.markdownPlan || "").toLowerCase();
+            const mdRaw = String(input.markdownPlan || "");
+
+            // 1. Exact banned phrase matches
             for (const phrase of BANNED_FILLER_PHRASES) {
               if (md.includes(phrase)) {
-                issues.push(`BANNED PHRASE "${phrase}" found inside the strategy document. Rewrite that section with specific numbers, named mechanisms, or quantified outcomes — never generic corporate filler.`);
+                issues.push(`BANNED PHRASE "${phrase}" found in strategy. Rewrite with specific numbers, named mechanisms, or quantified outcomes.`);
                 break;
               }
             }
-            // Same generic-opener verb check on any bolded creative angles
-            const GENERIC_OPENERS = /\*\*(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform(?:ative)?|empower|revolutionize|revitalize|seamless|discover|explore|introducing|holistic|world-class)\b[^*]*\*\*/i;
-            if (GENERIC_OPENERS.test(String(input.markdownPlan || ""))) {
-              issues.push(`The strategy document bolds generic-opener creative angles (e.g. "**Transformative Efficiency**", "**Seamless Integration**"). Replace with specific, quantified angles ("**Cut 4-Hour Audit Cycles**", "**48-Hour AI Agent Deployment**").`);
+
+            // 2. Semantic banned phrases — common rephrasings of banned copy
+            const SEMANTIC_BANS = [
+              { pattern: /\b(seamless|flawless|smooth)\s+(experience|integration|solution|process)\b/i, label: "seamless/flawless experience" },
+              { pattern: /\b(comprehensive|holistic|all-in-one|end-to-end)\s+(approach|solution|platform)\b/i, label: "comprehensive/holistic approach" },
+              { pattern: /\b(state-of-the-art|cutting-edge|next-gen|next generation)\s+(technology|platform|solution)\b/i, label: "state-of-the-art" },
+              { pattern: /\b(world-class|best-in-class|industry-leading|industry-standard)\s+/i, label: "world-class" },
+              { pattern: /\b(revolutionary|game-chang(?:ing|er)|disrupt(?:ing|ive))\s+/i, label: "revolutionary" },
+              { pattern: /\btransform(?:s|ing)?\s+(your|business|enterprise)/i, label: "transform your business" },
+              { pattern: /\b(empower|enable|unlock)\s+(your|team|business)/i, label: "empower your team" },
+              { pattern: /\b(optimize|maximise|maximize)\s+(your|efficiency)/i, label: "optimize/maximize efficiency" },
+              { pattern: /\bdrive\s+(growth|results|value|success)/i, label: "drive growth" },
+              { pattern: /\b(reduce|slash|cut)\s+cost/i, label: "reduce costs" },
+              { pattern: /\b(leverage|utilise|utilize)\s+ai\b/i, label: "leverage AI" },
+              { pattern: /\b(ai-powered|ai-driven|ai-enabled)\s+(solution|platform)/i, label: "AI-powered solution" },
+            ];
+            for (const ban of SEMANTIC_BANS) {
+              if (ban.pattern.test(mdRaw)) {
+                issues.push(`Generic filler "${ban.label}" found. Replace with a specific, quantified angle (e.g., "Cut 4-Hour Audit Cycles", "60% Fewer Pipeline Failures", "Ship in 48 Hours").`);
+                break;
+              }
             }
+
+            // 3. Bolded generic-opener creative angles (headlines/angles shown in bold)
+            const BOLDED_GENERIC = /\*{2}(unlock|unleash|elevate|maximize|boost|enhance|streamline|transform(?:ative)?|empower|revolutionize|revitalize|seamless|discover|explore|introducing|holistic|world-class|comprehensive|seamless)\b[^*]*\*{2}/i;
+            if (BOLDED_GENERIC.test(mdRaw)) {
+              issues.push(`Strategy bolded generic creative angles (e.g. "**Transformative Efficiency**"). Replace with specific, quantified angles.`);
+            }
+
+            // 4. Check that landing page URL exists
+            const LANDING_URL = /(?:final\s*url|landing\s*page|landing\s*url)[:\s]+https?:\/\//i;
+            if (!LANDING_URL.test(mdRaw) && md.length > 500) {
+              issues.push(`No landing page URL found in the strategy. Always include a specific destination URL.`);
+            }
+
             if (issues.length > 0) {
               return {
                 approved: false,
                 qualityIssues: issues,
                 retryGuidance:
-                  "Your previous strategy document was REJECTED for copywriting violations. Rewrite it now, fixing every issue. " +
-                  "BANNED PHRASES in prose: 'unlock ai efficiency', 'seamless', 'revolutionary', 'world-class', 'holistic', 'transform your business', 'reduce costs with ai', 'empower your team', 'drive growth', 'get more leads', 'revitalize operations', 'transformative efficiency', 'seamless integration'. " +
-                  "Creative angles must be SPECIFIC and QUANTIFIED, not generic verbs. Examples: '48-Hour AI Agent Deployment', '60% Reduction in Pipeline Failures', 'Free Architecture Audit in 72 Hours'.",
+                  "Your strategy was REJECTED for quality issues. Rewrite fixing all issues above. " +
+                  "Rules: (1) No generic corporate filler — use specific numbers, mechanisms, named outcomes. " +
+                  "(2) Bolded creative angles must be quantified or they get rejected. " +
+                  "(3) Always include a landing page URL. " +
+                  "Good examples: '48-Hour AI Agent Deployment', '60% Reduction in Pipeline Failures', 'Free Architecture Audit in 72 Hours', 'Cut $150K in Manual Ops'.",
               };
             }
             return { approved: true, title: input.title };
@@ -555,29 +705,35 @@ export async function POST(req: Request) {
         deliverCampaign: tool({
           description: "Deliver the complete, launch-ready campaign package. Platform is locked to GOOGLE (Search RSA text-only OR Display/Discovery image ad).",
           inputSchema: z.object({
-            name: z.string(),
+            name: z.string().min(1).max(120),
             platform: z.literal("GOOGLE").describe("Always 'GOOGLE' — Growzzy only ships to Google Ads. Use 15 RSA headlines + 4 descriptions for Search, or 1 short headline + 1 description for a Display/Discovery image ad."),
-            objective: z.string(),
-            budgetDaily: z.number(),
-            currency: z.string(),
-            bidding: z.string(),
-            schedule: z.string(),
-            landingPage: z.string(),
-            offer: z.string().optional().describe("Core value proposition or lead magnet"),
-            targetAudience: z.string().optional().describe("Decision-maker title and profile"),
-            headlines: z.array(z.string()).describe("High-converting headlines (15 headlines strictly <= 30 chars for Google Search, <= 40 chars for Meta)"),
-            headlineStrategy: z.string().optional().describe("Which headline to lead with for cold vs retargeting"),
-            primaryText: z.string().describe("Persuasive direct-response ad copy (Hook -> Problem/Agitation -> Unique Mechanism & Proof -> CTA)"),
-            cta: z.string().describe("Primary high-converting CTA button (e.g. 'Book Architecture Review', 'Request Demo')"),
-            ctaAlternative: z.string().optional().describe("Alternative CTA option"),
-            targeting: z.array(z.object({ setting: z.string(), value: z.string() })).describe("Accurate channel targeting setup"),
-            exclusions: z.array(z.string()).optional().describe("Negative exclusions or negative keywords"),
-            sitelinks: z.array(z.object({ title: z.string(), description: z.string() })).optional().describe("Sitelink extensions for Google Ads"),
-            keyCaveat: z.string().optional().describe("Key media-buying execution watch-out"),
-            creativeNotes: z.string().optional().describe("Art-direction description of the ad visual"),
-            variantOptions: z.array(z.string()).optional().describe("Proactive creative variant angles"),
-            keywords: z.array(z.string()).optional().describe("High-intent keywords with [exact] and \"phrase\" match types"),
-            descriptions: z.array(z.string()).optional().describe("Ad descriptions (4 descriptions strictly <= 90 chars for Google Search)"),
+            objective: z.string().min(1).max(40),
+            budgetDaily: z.number().min(1).max(100000),
+            currency: z.string().min(1).max(8).default("USD"),
+            bidding: z.string().min(1),
+            schedule: z.string().optional(),
+            landingPage: z.string().url("Must be a valid https:// URL").describe("Required — ad will be rejected at launch without a destination URL."),
+            offer: z.string().optional(),
+            targetAudience: z.string().optional(),
+            headlines: z
+              .array(z.string().min(1).max(30))
+              .min(10).max(15)
+              .describe("10-15 headlines, each <= 30 chars for Google Search"),
+            headlineStrategy: z.string().optional(),
+            primaryText: z.string().min(40).describe("Hook -> Agitation -> Mechanism & Proof -> CTA"),
+            cta: z.string().min(1).max(25).describe("High-converting CTA button label"),
+            ctaAlternative: z.string().optional(),
+            targeting: z.array(z.object({ setting: z.string(), value: z.string() })).optional().default([]),
+            exclusions: z.array(z.string()).optional().default([]),
+            sitelinks: z.array(z.object({ title: z.string().min(1).max(25), description: z.string().min(1).max(35) })).optional(),
+            keyCaveat: z.string().optional(),
+            creativeNotes: z.string().optional(),
+            variantOptions: z.array(z.string()).optional(),
+            keywords: z.array(z.string()).optional().default([]),
+            descriptions: z
+              .array(z.string().min(1).max(90))
+              .min(3).max(4)
+              .describe("3-4 descriptions, each <= 90 chars"),
             kpis: z.array(z.object({ metric: z.string(), target: z.string() })).optional(),
             risks: z.array(z.string()).optional(),
           }),
@@ -590,11 +746,14 @@ export async function POST(req: Request) {
                 delivered: false,
                 qualityIssues: issues,
                 retryGuidance:
-                  "Your previous output was REJECTED for copywriting violations. Rewrite the campaign package now, fixing every issue. " +
-                  "BANNED PHRASES: 'unlock ai efficiency', 'seamless', 'revolutionary', 'world-class', 'holistic', 'transform your business', 'reduce costs with ai', 'empower your team', 'drive growth', 'get more leads', 'revitalize operations'. " +
-                  "BANNED OPENER VERBS in headlines: unlock, unleash, elevate, maximize, boost, enhance, streamline, transform, empower, revolutionize, revitalize, discover, explore, introducing. " +
-                  "REQUIRED: At least 5 of 15 Google headlines must contain a specific number ($150K, 48 hours, 60%), a named mechanism, or a quantified outcome. Every headline must pass the 'So What?' test — if a competitor could say the same thing, it's banned. " +
-                  "Primary text must follow Hook -> Agitation -> Unique Mechanism & Proof -> CTA structure with a real CTA verb (book, learn, get, try, request, schedule).",
+                  "Your campaign was REJECTED for quality violations. Rewrite fixing ALL issues listed above. " +
+                  "Rules: (1) No generic filler — specific numbers, mechanisms, named outcomes only. " +
+                  "(2) No banned opener verbs in headlines (unlock, unleash, elevate, maximize, boost, streamline, empower, etc.). " +
+                  "(3) At least 5 of 15 headlines must have a number, dollar amount, percent, time, or named mechanism. " +
+                  "(4) Primary text needs a CTA verb (book, learn, get, try, request, schedule, etc.). " +
+                  "(5) Include a valid https:// landing page URL. " +
+                  "(6) No near-duplicate headlines — use distinct angles per slot. " +
+                  "Good headlines: 'Cut $150K Manual Ops', '48-Hour AI Audit', '60% Fewer Pipeline Failures', 'Free Architecture Review'."
               };
             }
             return { delivered: true, name: input.name };
@@ -609,12 +768,13 @@ export async function POST(req: Request) {
         const err = error as { statusCode?: number; message?: string; responseBody?: string };
         const status = err?.statusCode;
         if (status === 402)
-          return "402 — your workspace is out of AI credits. Add credits and retry.";
+          return "Your workspace is out of AI credits. Add credits and retry.";
         if (status === 403)
-          return "403 — AI access is blocked by a workspace limit or policy.";
-        if (status === 429) return "429 — rate limited, retry in a few seconds.";
+          return "AI access is blocked by a workspace limit or policy.";
+        if (status === 429) return "Rate limited — wait a few seconds and retry.";
+        if (status === 529) return "AI provider is overloaded. Retry in a moment.";
         console.error("[growzzy] chat error", status, err?.message);
-        return err?.message ?? "Growzzy hit an unexpected error.";
+        return "Growzzy hit an unexpected error. Please try again or simplify your request.";
       },
     });
   } catch (error: any) {

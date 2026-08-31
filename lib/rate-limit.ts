@@ -13,6 +13,7 @@ export type RateLimitOptions = {
 
 export const RATE_LIMIT_POLICIES = {
   aiUtility: { burst: [20, 60_000], day: 100, month: 1_000 },
+  chatMessage: { burst: [15, 60_000], day: 80, month: 800 },
   campaignPlan: { burst: [5, 60_000], day: 20, month: 200 },
   creativeText: { burst: [10, 60_000], day: 20, month: 200 },
   imageGeneration: { burst: [3, 60_000], day: 10, month: 100 },
