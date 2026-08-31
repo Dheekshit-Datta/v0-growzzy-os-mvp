@@ -88,6 +88,7 @@ import {
   Save,
   Copy,
   FileText,
+  X,
 } from "lucide-react";
 
 /* ------------------------------- tool payloads ------------------------------ */
@@ -1163,9 +1164,13 @@ function PlanCard({
   brandName?: string;
 }) {
   const input = part.input as PlanInput | undefined;
-  const output = part.output as { approved?: boolean } | undefined;
+  const output = part.output as
+    | { approved?: boolean; qualityIssues?: string[]; retryGuidance?: string }
+    | undefined;
   if (!input) return null;
   const decided = part.state === "output-available";
+  const wasRejected = decided && output?.approved === false;
+  const wasApproved = decided && output?.approved === true;
 
   const strategyArtifact: ArtifactData = {
     title: input.title || "Campaign Strategy Architecture",
@@ -1182,7 +1187,12 @@ function PlanCard({
         />
       )}
 
-      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+      <div
+        className={cn(
+          "rounded-[16px] border bg-card overflow-hidden shadow-2xs",
+          wasRejected ? "border-amber-500/60" : "border-border",
+        )}
+      >
         {/* Header: Strategy Plan & Platform Pill */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3.5 bg-muted/20">
           <div className="flex items-center gap-2.5">
@@ -1206,11 +1216,33 @@ function PlanCard({
                 {input.platform}
               </span>
             )}
-            <StatusPill variant={decided && output?.approved ? "success" : "warn"}>
-              {decided && output?.approved ? "Approved" : "Awaiting Approval"}
+            <StatusPill variant={wasRejected ? "warn" : wasApproved ? "success" : "warn"}>
+              {wasRejected ? "Quality Rejected" : wasApproved ? "Approved" : "Awaiting Approval"}
             </StatusPill>
           </div>
         </div>
+
+        {/* Quality rejection banner — surfaces what was wrong so the user
+            understands why the model is rewriting. */}
+        {wasRejected && Array.isArray(output?.qualityIssues) && output.qualityIssues.length > 0 && (
+          <div className="border-b border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-[12px]">
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-amber-500 text-white">
+                <X className="h-3 w-3" />
+              </span>
+              <div className="flex-1 min-w-0 space-y-1">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  Strategy needs revision — Growzzy is rewriting it now.
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                  {output.qualityIssues.map((issue, i) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Strategy Highlights Pills */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-muted/10 border-b border-border text-[11.5px]">
@@ -1267,7 +1299,34 @@ function PlanCard({
         )}
       </div>
 
-      {/* Confirmation action */}
+      {/* Confirmation action — adjust based on decision state */}
+      {decided && output?.approved === false && (
+        <div className="flex items-center justify-between pt-1 px-1">
+          <p className="text-[12px] text-muted-foreground">
+            Review this strategic architecture. Click below to resubmit after fixing the issues above.
+          </p>
+          <Button
+            className="gap-1.5 bg-[#1F57F5] hover:bg-[#1845C4] text-white rounded-full px-5 text-[13px] font-medium shadow-sm cursor-pointer"
+            onClick={() =>
+              addToolResult({
+                tool: "proposePlan",
+                toolCallId: part.toolCallId,
+                output: { approved: true },
+              })
+            }
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Resubmit
+          </Button>
+        </div>
+      )}
+      {decided && output?.approved && (
+        <div className="flex items-center justify-between pt-1 px-1">
+          <p className="text-[12px] text-muted-foreground">
+            Approved — generating creative assets & launch setup.
+          </p>
+        </div>
+      )}
       {!decided && (
         <div className="flex items-center justify-between pt-1 px-1">
           <p className="text-[12px] text-muted-foreground">
@@ -1782,10 +1841,16 @@ function CampaignCard({
       </div>
 
       {/* Campaign card container */}
-      <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+      <div className={cn(
+        "rounded-[16px] border bg-card overflow-hidden shadow-2xs",
+        rejected ? "border-amber-500/60" : "border-border",
+      )}>
         <header className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/20">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary shrink-0">
+            <span className={cn(
+              "grid h-7 w-7 place-items-center rounded-lg shrink-0",
+              rejected ? "bg-amber-500/10 text-amber-600" : "bg-primary-tint text-primary",
+            )}>
               <Megaphone className="h-3.5 w-3.5" />
             </span>
             <div className="min-w-0">
@@ -1807,9 +1872,32 @@ function CampaignCard({
               <span className="text-muted-foreground font-mono">MD</span>
               <DownloadIcon className="h-3 w-3" />
             </Button>
-            <StatusPill variant="success">Launch Ready</StatusPill>
+            <StatusPill variant={rejected ? "warn" : "success"}>
+              {rejected ? "Quality Rejected" : "Launch Ready"}
+            </StatusPill>
           </div>
         </header>
+
+        {/* Quality rejection banner */}
+        {rejected && Array.isArray(out?.qualityIssues) && out.qualityIssues.length > 0 && (
+          <div className="border-b border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-[12px]">
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-amber-500 text-white">
+                <X className="h-3 w-3" />
+              </span>
+              <div className="flex-1 min-w-0 space-y-1">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  Campaign needs revision — Growzzy is rewriting it now.
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                  {out.qualityIssues.map((issue, i) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-2 text-[12.5px]">
           <div>
