@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
-import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export const dynamic = "force-dynamic"
 
@@ -33,10 +32,9 @@ export async function GET(
     const userId = await resolveUserId(session.user.id)
     const limit = await rateLimitPolicy(userId, "aiUtility")
     if (!limit.allowed) return rateLimitResponse(limit)
-    const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const conv = await prisma.conversation.findFirst({
-      where: { id, userId, workspaceId },
+      where: { id, userId },
       select: { id: true, title: true, messages: true, createdAt: true, updatedAt: true },
     })
     if (!conv) {
@@ -62,7 +60,6 @@ export async function PUT(
     const userId = await resolveUserId(session.user.id)
     const limit = await rateLimitPolicy(userId, "aiUtility")
     if (!limit.allowed) return rateLimitResponse(limit)
-    const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const body = await req.json().catch(() => ({}))
     const parsed = SaveSchema.safeParse(body)
@@ -77,7 +74,7 @@ export async function PUT(
     })()
 
     // Verify ownership before writing
-    const existing = await prisma.conversation.findFirst({ where: { id, userId, workspaceId }, select: { id: true } })
+    const existing = await prisma.conversation.findFirst({ where: { id, userId }, select: { id: true } })
     if (existing) {
       await prisma.conversation.update({
         where: { id },
@@ -88,7 +85,6 @@ export async function PUT(
         data: {
           id,
           userId,
-          workspaceId,
           title,
           messages: parsed.data.messages as any,
         },
@@ -114,9 +110,8 @@ export async function DELETE(
     const userId = await resolveUserId(session.user.id)
     const limit = await rateLimitPolicy(userId, "aiUtility")
     if (!limit.allowed) return rateLimitResponse(limit)
-    const workspaceId = await getRequestWorkspaceId(userId, req)
 
-    const existing = await prisma.conversation.findFirst({ where: { id, userId, workspaceId }, select: { id: true } })
+    const existing = await prisma.conversation.findFirst({ where: { id, userId }, select: { id: true } })
     if (!existing) {
       return NextResponse.json({ ok: false, error: "Conversation not found" }, { status: 404 })
     }

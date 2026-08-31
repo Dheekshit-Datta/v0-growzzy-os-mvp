@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
 import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
-import { getRequestWorkspaceId } from "@/lib/workspace"
 
 export const dynamic = "force-dynamic"
 
@@ -17,10 +16,9 @@ export async function GET(req: NextRequest) {
     const userId = await resolveUserId(session.user.id)
     const limit = await rateLimitPolicy(userId, "aiUtility")
     if (!limit.allowed) return rateLimitResponse(limit)
-    const workspaceId = await getRequestWorkspaceId(userId, req)
 
     const conversations = await prisma.conversation.findMany({
-      where: { userId, workspaceId },
+      where: { userId },
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: { id: true, title: true, createdAt: true, updatedAt: true },

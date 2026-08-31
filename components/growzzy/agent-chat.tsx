@@ -280,7 +280,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
   const lastSubmission = useRef<Submission | null>(null);
 
-  const { messages, sendMessage, addToolResult, status, stop } = useChat({
+  const { messages, sendMessage, addToolResult, status, stop, setMessages } = useChat({
     id: threadId,
     transport: new DefaultChatTransport({
       api: "/api/chat",
@@ -295,7 +295,53 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       if (last?.kind === "answer-question") setInput((cur) => cur || last.freeform);
       toast.error(info.message);
     },
+    onFinish: (message) => {
+      // Persist conversation to DB
+      const storeMessages = messages.map((m) => ({
+        role: m.role,
+        content: (m.parts ?? []).map((p) => {
+          if (p.type === "text") return { role: m.role as "user" | "assistant" | "system", content: p.text };
+          if (p.type === "tool-call") return { role: m.role as "user" | "assistant" | "system", content: JSON.stringify({ tool: (p as any).toolCallId, input: p.input }) };
+          return null;
+        }).filter(Boolean) as any,
+      }));
+      const convId = threadId === "growzzy-agent" ? crypto.randomUUID() : threadId;
+      fetch(`/api/ai/conversations/${convId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: storeMessages }),
+      }).catch(() => {}); // fire-and-forget
+    },
   });
+
+  // Load existing conversation from DB on mount (when threadId is a real UUID)
+  const conversationLoaded = useRef(false);
+  useEffect(() => {
+    if (conversationLoaded.current) return;
+    if (!threadId || threadId === "growzzy-agent") return;
+    conversationLoaded.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/ai/conversations/${encodeURIComponent(threadId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.ok || !data?.conversation) return;
+        const stored: any[] = Array.isArray(data.conversation.messages) ? data.conversation.messages : [];
+        if (!stored.length) return;
+        const hydrated = stored.map((m: any, i: number) => ({
+          id: `${threadId}-${i}`,
+          role: m.role || "user",
+          content: "",
+          parts: Array.isArray(m.parts) && m.parts.length
+            ? m.parts
+            : [{ type: "text" as const, text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
+        }));
+        setMessages(hydrated as any);
+      } catch {
+        // silent — start with empty chat
+      }
+    })();
+  }, [threadId, setMessages]);
 
   /* When the agent analyses a website in-chat, persist it as the brand context. */
   const savedAnalysis = useRef<string | null>(null);

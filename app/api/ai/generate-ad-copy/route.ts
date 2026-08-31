@@ -247,7 +247,7 @@ Return ONLY JSON:
     if (/(guarantee|refund|risk-free|warranty)/i.test(h)) angleCounts["risk_reversal"] = (angleCounts["risk_reversal"] || 0) + 1
   })
 
-  const missingAngles = [...new Set(["pain_point", "solution", "urgency", "cta", "social_proof", "risk_reversal"])].filter(a => !uniqueAngles.has(a))
+  const missingAngles = [...new Set(["pain_point", "solution", "urgency", "cta", "social_proof", "risk_reversal"])].filter(a => !uniqueAngles.has(a as any))
   if (missingAngles.length > 0) {
     return NextResponse.json({
       ok: false,
