@@ -5,7 +5,7 @@ import { UTILITY_MODEL } from "@/lib/ai-utility"
 import { prisma } from "@/lib/prisma"
 import { verifiedMetricCampaignWhere } from "@/lib/data-trust"
 
-export const REPORT_TYPES = ["monthly-performance", "campaign-efficiency", "roas-analysis"] as const
+export const REPORT_TYPES = ["monthly-performance", "campaign-efficiency"] as const
 
 export type ReportType = (typeof REPORT_TYPES)[number]
 
@@ -42,12 +42,6 @@ export const REPORT_TEMPLATES: TemplateDefinition[] = [
     name: "Campaign Efficiency Review",
     description: "Efficiency review using verified CTR, CPC, CPM, CPA, conversion rate, and benchmark gaps.",
     filename: "campaign-efficiency-report.html",
-  },
-  {
-    id: "roas-analysis",
-    name: "ROAS Recovery Report",
-    description: "ROAS target gap, platform performance, trend view, and revenue-focused recovery plan.",
-    filename: "roas-analysis-report.html",
   },
 ]
 

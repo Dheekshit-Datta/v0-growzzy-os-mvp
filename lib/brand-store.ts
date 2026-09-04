@@ -1,4 +1,16 @@
 /** Brand context persisted in this browser and fed to the AI on every campaign. */
+export type UserRole =
+  | "founder"
+  | "marketing_manager"
+  | "growth_lead"
+  | "agency_owner"
+  | "performance_marketer"
+  | "brand_marketer"
+  | "content_creator"
+  | "sales_lead"
+  | "consultant"
+  | "other";
+
 export interface BrandCompetitor {
   name: string;
   url: string;
@@ -30,7 +42,24 @@ export interface BrandProfile {
   defaultLandingPage: string;
   analyzedAt?: string;
   sources?: string[];
+  /** The user's role in the business. Drives how the AI frames answers. */
+  userRole?: UserRole;
+  /** Optional context about what the user is responsible for. */
+  userResponsibility?: string;
 }
+
+export const USER_ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
+  { value: "founder", label: "Founder / CEO", description: "Owns the business end-to-end. Wants growth, P&L, and ROI." },
+  { value: "marketing_manager", label: "Marketing Manager", description: "Runs the marketing function. Needs to execute campaigns and report results." },
+  { value: "growth_lead", label: "Growth Lead", description: "Owns acquisition funnel and experiments. Lives in conversion data." },
+  { value: "agency_owner", label: "Agency Owner", description: "Runs the agency. Builds campaigns for multiple clients and needs client-ready output." },
+  { value: "performance_marketer", label: "Performance Marketer", description: "Hands-on with ad platforms. Wants tactical depth on bidding, audiences, and creative." },
+  { value: "brand_marketer", label: "Brand Marketer", description: "Focused on positioning, creative, and brand storytelling over direct response." },
+  { value: "content_creator", label: "Content Creator", description: "Produces organic and paid content. Wants creative hooks and angles." },
+  { value: "sales_lead", label: "Sales Lead", description: "Drives pipeline and revenue. Wants lead quality and conversion, not impressions." },
+  { value: "consultant", label: "Consultant / Advisor", description: "Advises clients on strategy. Needs frameworks and decision support." },
+  { value: "other", label: "Other", description: "Pick this if none of the above fit and add a note in the responsibility field." },
+];
 
 export const emptyBrand: BrandProfile = {
   businessName: "",
@@ -86,7 +115,9 @@ export function brandIsReady(p: BrandProfile): boolean {
 /** Compact, model-readable brand brief. Empty string when nothing is known. */
 export function brandContextText(p: BrandProfile): string {
   if (!p || !brandIsReady(p)) return "";
+  const roleLabel = USER_ROLE_OPTIONS.find((r) => r.value === p.userRole)?.label;
   const lines = [
+    roleLabel && `User role: ${roleLabel}${p.userResponsibility ? ` (${p.userResponsibility})` : ""}`,
     p.businessName && `Business: ${p.businessName}`,
     p.website && `Website: ${p.website}`,
     p.industry && `Industry: ${p.industry}`,

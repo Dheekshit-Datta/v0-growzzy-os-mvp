@@ -25,7 +25,9 @@ import {
   saveBrand,
   brandIsReady,
   emptyBrand,
+  USER_ROLE_OPTIONS,
   type BrandProfile,
+  type UserRole,
 } from "@/lib/brand-store";
 
 const palettes = [
@@ -292,6 +294,46 @@ export default function BrandPage() {
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
+            <SectionCard
+              title="Your role"
+            >
+              <p className="mb-3 text-[12.5px] text-muted-foreground">
+                Growzzy tailors every answer to who is asking. Pick the role that best describes you and add a one-line note about what you own.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {USER_ROLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set("userRole")(opt.value as UserRole)}
+                    className={cn(
+                      "rounded-[10px] border p-2.5 text-left transition-colors cursor-pointer",
+                      brand.userRole === opt.value
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/30",
+                    )}
+                  >
+                    <div className="text-[12.5px] font-semibold">{opt.label}</div>
+                    <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                      {opt.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3">
+                <Label className="text-[12px]">What you own (optional)</Label>
+                <Input
+                  value={brand.userResponsibility || ""}
+                  onChange={(e) => set("userResponsibility")(e.target.value)}
+                  className="mt-1"
+                  placeholder="e.g. Pipeline for 5L+ revenue SMBs across EdTech and Healthcare"
+                />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  This helps the agent skip questions you already have answers to.
+                </p>
+              </div>
+            </SectionCard>
+
             <SectionCard title="Website analysis">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">

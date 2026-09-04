@@ -5,7 +5,7 @@ import { Shell } from "@/components/dashboard-v2/shell"
 import { Calendar, Download, Eye, FileText, Plus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-type ReportType = "monthly-performance" | "campaign-efficiency" | "roas-analysis"
+type ReportType = "monthly-performance" | "campaign-efficiency"
 
 type ReportTemplate = {
   id: ReportType
@@ -37,7 +37,6 @@ type ReportHistoryItem = {
 const filenameByType: Record<ReportType, string> = {
   "monthly-performance": "growzzy-monthly-performance",
   "campaign-efficiency": "growzzy-campaign-efficiency",
-  "roas-analysis": "growzzy-roas-analysis",
 }
 
 export default function ReportsPage() {

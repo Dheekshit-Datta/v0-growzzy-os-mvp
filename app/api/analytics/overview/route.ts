@@ -108,11 +108,17 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => b.spend - a.spend)
 
-    const chartMap: Record<string, { spend: number; revenue: number }> = {}
+    const chartMap: Record<string, { spend: number; revenue: number; clicks: number; conversions: number; impressions: number }> = {}
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      chartMap[d.toLocaleDateString("en-US", { month: "short", day: "numeric" })] = { spend: 0, revenue: 0 }
+      chartMap[d.toLocaleDateString("en-US", { month: "short", day: "numeric" })] = {
+        spend: 0,
+        revenue: 0,
+        clicks: 0,
+        conversions: 0,
+        impressions: 0,
+      }
     }
 
     for (const campaign of summarizedCampaigns) {
@@ -121,6 +127,9 @@ export async function GET(request: Request) {
         if (!chartMap[dayLabel]) continue
         chartMap[dayLabel].spend += Number(metric.spend || 0)
         chartMap[dayLabel].revenue += Number(metric.revenue || 0)
+        chartMap[dayLabel].clicks += Number(metric.clicks || 0)
+        chartMap[dayLabel].conversions += Number(metric.conversions || 0)
+        chartMap[dayLabel].impressions += Number(metric.impressions || 0)
       }
     }
 
@@ -128,6 +137,9 @@ export async function GET(request: Request) {
       date,
       spend: Math.round(vals.spend),
       revenue: Math.round(vals.revenue),
+      clicks: vals.clicks,
+      conversions: vals.conversions,
+      impressions: vals.impressions,
     }))
 
     const sortedByRoas = [...summarizedCampaigns]

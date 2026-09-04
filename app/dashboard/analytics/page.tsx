@@ -27,13 +27,28 @@ import {
 type Overview = {
   kpis: {
     totalSpend: number;
+    totalRevenue: number;
     totalClicks: number;
+    totalImpressions: number;
+    totalConversions: number;
     ctr: number;
     roas: number;
+    activeCampaigns: number;
+    totalCampaigns: number;
+    newLeads: number;
     connectedPlatforms: number;
   };
-  chartData: { date: string; spend: number; revenue: number }[];
+  chartData: { date: string; spend: number; revenue: number; clicks: number; conversions: number; impressions: number }[];
   topCampaigns: {
+    id: string;
+    name: string;
+    platform: string;
+    status: string;
+    spend: number;
+    revenue: number;
+    roas: number;
+  }[];
+  bottomCampaigns: {
     id: string;
     name: string;
     platform: string;
@@ -50,6 +65,8 @@ type Overview = {
     campaigns: number;
     percentOfSpend: number;
   }[];
+  platforms: { name: string; accountName: string | null; lastSynced: string | null; adAccountId: string | null }[];
+  period: { days: number; from: string; to: string };
 };
 
 function money(n: number) {
@@ -128,7 +145,7 @@ export default function AnalyticsPage() {
           </div>
         </SectionCard>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
           <KpiCard
             label="Spend"
             value={data?.kpis ? money(data.kpis.totalSpend) : "$0"}
@@ -136,21 +153,33 @@ export default function AnalyticsPage() {
             icon={<DollarSign className="h-4 w-4" />}
           />
           <KpiCard
+            label="Revenue"
+            value={data?.kpis ? money(data.kpis.totalRevenue || 0) : "$0"}
+            caption={hasData ? undefined : "No data yet"}
+            icon={<DollarSign className="h-4 w-4" />}
+          />
+          <KpiCard
+            label="Conversions"
+            value={data?.kpis ? data.kpis.totalConversions.toLocaleString() : "0"}
+            caption={hasData && data ? `${data.kpis.newLeads} leads` : "No data yet"}
+            icon={<Target className="h-4 w-4" />}
+          />
+          <KpiCard
             label="Clicks"
             value={data?.kpis ? data.kpis.totalClicks.toLocaleString() : "0"}
-            caption={hasData ? undefined : "No data yet"}
+            caption={hasData && data ? `${data.kpis.totalImpressions.toLocaleString()} imp` : "No data yet"}
             icon={<MousePointer className="h-4 w-4" />}
           />
           <KpiCard
             label="CTR"
             value={data?.kpis ? `${(data.kpis.ctr * 100).toFixed(2)}%` : "0%"}
             caption={hasData ? undefined : "No data yet"}
-            icon={<Target className="h-4 w-4" />}
+            icon={<MousePointer className="h-4 w-4" />}
           />
           <KpiCard
             label="ROAS"
             value={data?.kpis?.roas ? `${data.kpis.roas.toFixed(2)}x` : "—"}
-            caption={hasData ? undefined : "No data yet"}
+            caption={hasData && data ? `${data.kpis.activeCampaigns} active` : "No data yet"}
             icon={<TrendingUp className="h-4 w-4" />}
           />
         </div>
@@ -193,15 +222,15 @@ export default function AnalyticsPage() {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fontSize: 12, fill: "#5A6577" }}
-                      tickFormatter={(v) => (metric === "spend" ? `$${v}` : v)}
+                      tickFormatter={(v) => (metric === "spend" || metric === "revenue" ? `$${v}` : v)}
                     />
                     <Tooltip
                       contentStyle={{ borderRadius: 10, border: "1px solid #E9EBEF" }}
-                      formatter={(v: any) => (metric === "spend" ? [`$${v}`, "Spend"] : [v, metric])}
+                      formatter={(v: any) => (metric === "spend" || metric === "revenue" ? [`$${v}`, metric] : [v, metric])}
                     />
                     <Line
                       type="monotone"
-                      dataKey={metric === "spend" ? "spend" : "revenue"}
+                      dataKey={metric}
                       stroke="#1F57F5"
                       strokeWidth={2}
                       dot={false}
@@ -225,26 +254,81 @@ export default function AnalyticsPage() {
                   <TabsTrigger value="campaign">By campaign</TabsTrigger>
                   <TabsTrigger value="keyword">By keyword</TabsTrigger>
                   <TabsTrigger value="device">By device / geo</TabsTrigger>
+                  <TabsTrigger value="platform">By platform</TabsTrigger>
                 </TabsList>
                 <TabsContent value="campaign">
                   {(data?.topCampaigns ?? []).length > 0 ? (
-                    <div className="divide-y divide-border mt-3">
-                      {data!.topCampaigns.map((c) => (
-                        <div key={c.id} className="py-2.5 flex items-center justify-between text-sm">
-                          <span className="font-medium">{c.name}</span>
-                          <span className="text-muted-foreground">{money(c.spend)}</span>
-                        </div>
-                      ))}
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-[12.5px]">
+                        <thead>
+                          <tr className="text-left text-muted-foreground border-b border-border">
+                            <th className="py-2 pr-2 font-medium">Campaign</th>
+                            <th className="py-2 px-2 font-medium">Platform</th>
+                            <th className="py-2 px-2 font-medium text-right">Spend</th>
+                            <th className="py-2 px-2 font-medium text-right">Revenue</th>
+                            <th className="py-2 pl-2 font-medium text-right">ROAS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data!.topCampaigns.map((c) => (
+                            <tr key={c.id} className="border-b border-border/50 last:border-0">
+                              <td className="py-2 pr-2 font-medium truncate max-w-[200px]">{c.name}</td>
+                              <td className="py-2 px-2 text-muted-foreground">{c.platform}</td>
+                              <td className="py-2 px-2 text-right">{money(c.spend)}</td>
+                              <td className="py-2 px-2 text-right">{money(c.revenue)}</td>
+                              <td className="py-2 pl-2 text-right font-semibold">{c.roas.toFixed(2)}x</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
                     <EmptyState title="No campaigns yet" className="py-6" />
                   )}
                 </TabsContent>
                 <TabsContent value="keyword">
-                  <EmptyState title="No keyword data yet" className="py-6" />
+                  <EmptyState
+                    title="No keyword data yet"
+                    description="Search-term breakdowns from Google Ads appear here once you have impression-share data."
+                    className="py-6"
+                  />
                 </TabsContent>
                 <TabsContent value="device">
-                  <EmptyState title="No device data yet" className="py-6" />
+                  <EmptyState
+                    title="No device / geo data yet"
+                    description="Breakdowns by device (mobile/desktop) and geography arrive after your first sync."
+                    className="py-6"
+                  />
+                </TabsContent>
+                <TabsContent value="platform">
+                  {(data?.platformBreakdown ?? []).length > 0 ? (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-[12.5px]">
+                        <thead>
+                          <tr className="text-left text-muted-foreground border-b border-border">
+                            <th className="py-2 pr-2 font-medium">Platform</th>
+                            <th className="py-2 px-2 font-medium text-right">Spend</th>
+                            <th className="py-2 px-2 font-medium text-right">Revenue</th>
+                            <th className="py-2 px-2 font-medium text-right">% of spend</th>
+                            <th className="py-2 pl-2 font-medium text-right">ROAS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data!.platformBreakdown.map((p) => (
+                            <tr key={p.name} className="border-b border-border/50 last:border-0">
+                              <td className="py-2 pr-2 font-medium">{p.name}</td>
+                              <td className="py-2 px-2 text-right">{money(p.spend)}</td>
+                              <td className="py-2 px-2 text-right">{money(p.revenue)}</td>
+                              <td className="py-2 px-2 text-right text-muted-foreground">{p.percentOfSpend}%</td>
+                              <td className="py-2 pl-2 text-right font-semibold">{p.roas.toFixed(2)}x</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <EmptyState title="No platform data yet" className="py-6" />
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

@@ -199,7 +199,7 @@ export default function AdStudioPage() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  rows={5}
+                  rows={10}
                   placeholder="A luxury jewelry ad showing a woman at a festive wedding event, warm gold tones, premium and elegant feel..."
                   className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
                 />
