@@ -6,8 +6,9 @@ import { Sparkles, Grid, RefreshCw, Copy, Check, ImageIcon, Loader2, Maximize2 }
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 
-const AD_STYLES = ["Luxury", "Bold", "Minimal", "Festive", "Corporate", "Playful"]
+const AD_STYLES = ["Auto", "Luxury", "Bold", "Minimal", "Festive", "Corporate", "Playful"]
 const ASPECT_RATIOS = [
+  { label: "Auto", desc: "Best for platform" },
   { label: "1:1", desc: "Square" },
   { label: "4:5", desc: "Portrait" },
   { label: "16:9", desc: "Landscape" },
@@ -184,51 +185,46 @@ export default function AdStudioPage() {
         </div>
 
         {activeTab === "generate" && (
-          <div className="grid grid-cols-2 gap-5" style={{ height: 'calc(100vh - 200px)', minHeight: 500 }}>
+          <div className="grid grid-cols-[1fr_1.2fr] gap-5" style={{ height: 'calc(100vh - 200px)', minHeight: 500 }}>
             <div
               className="rounded-[14px] p-5 flex flex-col gap-4 overflow-y-auto"
               style={{ background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fb 100%)', boxShadow: '0 1px 0 rgba(255,255,255,0.9) inset, 0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.06)' }}
             >
               <div className="flex items-center gap-2">
                 <Sparkles size={15} className="text-[#1F57F5]" />
-                <p className="text-[14px] font-semibold text-[#111827]">Generate Ad Creative</p>
+                <p className="text-[14px] font-semibold text-[#111827]">Ad Creative</p>
+                <span className="text-[11px] text-[#9CA3AF] ml-1">— describe it, we generate it</span>
               </div>
 
               <div>
-                <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Describe the ad visual</label>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  rows={10}
-                  placeholder="A luxury jewelry ad showing a woman at a festive wedding event, warm gold tones, premium and elegant feel..."
-                  className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[8px] sku-input"
+                  rows={14}
+                  placeholder="A luxury jewelry ad showing a woman at a festive wedding event, warm gold tones, premium and elegant feel. Headline: 'Crafted for your forever'. Offer: 20% off this weekend."
+                  className="w-full px-4 py-3 text-[13.5px] text-[#111827] placeholder-[#9CA3AF] resize-none outline-none leading-relaxed rounded-[10px] sku-input"
                 />
+                <p className="mt-1.5 text-[11px] text-[#9CA3AF]">
+                  Tip: include the product, the audience, the mood, and the offer. The more specific, the better the result.
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Format</label>
-                  <select value={format} onChange={(e) => setFormat(e.target.value)} className="w-full h-9 px-3 text-[12.5px] text-[#111827] outline-none rounded-[8px] sku-input">
-                    <option>Social image</option>
-                    <option>Display banner</option>
-                    <option>Search ad</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Style</label>
-                  <select value={style} onChange={(e) => setStyle(e.target.value)} className="w-full h-9 px-3 text-[12.5px] text-[#111827] outline-none rounded-[8px] sku-input">
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <div className="flex-1 min-w-[140px]">
+                  <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Style</label>
+                  <select value={style} onChange={(e) => setStyle(e.target.value)} className="w-full h-8 px-2.5 text-[12px] text-[#111827] outline-none rounded-[8px] sku-input">
                     {AD_STYLES.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Aspect ratio</label>
-                  <select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full h-9 px-3 text-[12.5px] text-[#111827] outline-none rounded-[8px] sku-input">
+                <div className="flex-1 min-w-[140px]">
+                  <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Aspect</label>
+                  <select value={ratio} onChange={(e) => setRatio(e.target.value)} className="w-full h-8 px-2.5 text-[12px] text-[#111827] outline-none rounded-[8px] sku-input">
                     {ASPECT_RATIOS.map((r) => <option key={r.label}>{r.label} {r.desc}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Variants</label>
-                  <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full h-9 px-3 text-[12.5px] text-[#111827] outline-none rounded-[8px] sku-input">
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Variants</label>
+                  <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full h-8 px-2.5 text-[12px] text-[#111827] outline-none rounded-[8px] sku-input">
                     {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>

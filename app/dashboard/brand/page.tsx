@@ -294,6 +294,43 @@ export default function BrandPage() {
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
+            <SectionCard title="Who's using Growzzy?">
+              <p className="text-[12px] text-muted-foreground mb-3">
+                Pick your role so Growzzy frames every answer for your specific job. This unlocks the full app for the right teams — founders see growth, marketing managers see execution, sales leads see pipeline.
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {USER_ROLE_OPTIONS.map((r) => {
+                  const selected = brand.userRole === r.value;
+                  return (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => set("userRole")(r.value as UserRole)}
+                      className={cn(
+                        "rounded-[10px] border p-2.5 text-left transition-colors cursor-pointer",
+                        selected
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/30",
+                      )}
+                    >
+                      <div className="text-[12.5px] font-semibold">{r.label}</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">
+                        {r.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3">
+                <Label className="text-[12px]">What are you responsible for? (optional)</Label>
+                <Input
+                  value={brand.userResponsibility || ""}
+                  onChange={(e) => set("userResponsibility")(e.target.value)}
+                  className="mt-1"
+                  placeholder="e.g. Paid social, SEO, lead qualification, monthly reporting"
+                />
+              </div>
+            </SectionCard>
             <SectionCard
               title="Your role"
             >

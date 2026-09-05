@@ -310,7 +310,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: storeMessages }),
-      }).catch(() => {}); // fire-and-forget
+      }).catch(() => { }); // fire-and-forget
     },
   });
 
@@ -478,10 +478,10 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       mode,
       pending: pendingQuestion
         ? {
-            toolName: "askUser",
-            toolCallId: pendingQuestion.toolCallId,
-            state: pendingQuestion.state,
-          }
+          toolName: "askUser",
+          toolCallId: pendingQuestion.toolCallId,
+          state: pendingQuestion.state,
+        }
         : null,
     });
     if (submission.kind === "ignore") return;
@@ -937,10 +937,10 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
   const input = part.input as { focus?: string; topics?: string[] } | undefined;
   const output = part.output as
     | {
-        notes?: string;
-        queries?: string[];
-        citations?: { url: string; site: string; title: string }[];
-      }
+      notes?: string;
+      queries?: string[];
+      citations?: { url: string; site: string; title: string }[];
+    }
     | undefined;
   const running = part.state !== "output-available" && part.state !== "output-error";
 
@@ -1406,10 +1406,10 @@ function ExecutionPlanCard({
 }) {
   const input = part.input as
     | {
-        title?: string;
-        summary?: string;
-        steps?: { activity: string; description: string }[];
-      }
+      title?: string;
+      summary?: string;
+      steps?: { activity: string; description: string }[];
+    }
     | undefined;
   const decided = part.state === "output-available";
   const [secondsLeft, setSecondsLeft] = useState(10);
