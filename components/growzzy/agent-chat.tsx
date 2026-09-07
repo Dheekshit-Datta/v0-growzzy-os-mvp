@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -284,22 +284,30 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const stableConvIdRef = useRef<string | null>(null);
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { messages, sendMessage, addToolResult, status, stop, setMessages } = useChat({
-    id: threadId,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign" }),
-    }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onError: (e: Error) => {
-      const info = classifyChatError(e);
-      setChatError(info);
-      const last = lastSubmission.current;
-      if (last?.kind === "send") setInput((cur) => cur || last.text);
-      if (last?.kind === "answer-question") setInput((cur) => cur || last.freeform);
-      toast.error(info.message);
-    },
-    onFinish: (message) => {
+  // Memoize the transport so the AI SDK doesn't see a new transport on
+  // every render — recreating the transport every render is what causes
+  // useChat to constantly re-subscribe, which keeps the React reconciler
+  // in a long task and trips the "Page Unresponsive" warning.
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign" }),
+      }),
+    [],
+  )
+
+  const onError = useCallback((e: Error) => {
+    const info = classifyChatError(e)
+    setChatError(info)
+    const last = lastSubmission.current
+    if (last?.kind === "send") setInput((cur) => cur || last.text)
+    if (last?.kind === "answer-question") setInput((cur) => cur || last.freeform)
+    toast.error(info.message)
+  }, [])
+
+  const onFinish = useCallback(
+    (message: any) => {
       // Persist conversation to DB.
       // We debounce writes — onFinish fires after every tool call / streaming
       // tick, and a full PUT with the entire growing messages array on each
@@ -307,21 +315,21 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       // We also pin the conversation id to a stable one for the lifetime of
       // this component instance, so the first turn doesn't churn UUIDs and
       // the page reload can find the same row.
-      const snapshot = messages.map((m) => ({
+      const snapshot = messagesRef.current.map((m: any) => ({
         role: m.role,
-        content: (m.parts ?? []).map((p) => {
-          if (p.type === "text") return { role: m.role as "user" | "assistant" | "system", content: p.text };
-          if (p.type === "tool-call") return { role: m.role as "user" | "assistant" | "system", content: JSON.stringify({ tool: (p as any).toolCallId, input: p.input }) };
-          return null;
+        content: (m.parts ?? []).map((p: any) => {
+          if (p.type === "text") return { role: m.role, content: p.text }
+          if (p.type === "tool-call") return { role: m.role, content: JSON.stringify({ tool: p.toolCallId, input: p.input }) }
+          return null
         }).filter(Boolean) as any,
-      }));
-      const stableId = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId);
+      }))
+      const stableId = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId)
       // Persist the stable id so reload (which sees threadId === "growzzy-agent")
       // can find the same conversation row.
       if (typeof window !== "undefined" && threadId === "growzzy-agent") {
-        try { window.localStorage.setItem("growzzy.agent.conv", stableId); } catch {}
+        try { window.localStorage.setItem("growzzy.agent.conv", stableId) } catch {}
       }
-      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
       saveDebounceRef.current = setTimeout(() => {
         fetch(`/api/ai/conversations/${encodeURIComponent(stableId)}`, {
           method: "PUT",
@@ -333,17 +341,33 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
               // Surface 429 / 401 / 5xx as a toast so the user knows their
               // chat didn't save — silently swallowing is what made it look
               // like "chats aren't saving".
-              if (res.status === 429) toast.error("Chat save throttled — your message is still in this session.");
-              else if (res.status === 401) toast.error("Chat save blocked — your session expired.");
-              else toast.error(`Chat save failed (${res.status})`);
+              if (res.status === 429) toast.error("Chat save throttled — your message is still in this session.")
+              else if (res.status === 401) toast.error("Chat save blocked — your session expired.")
+              else toast.error(`Chat save failed (${res.status})`)
             }
           })
           .catch(() => {
-            toast.error("Chat save failed — your message is still in this session.");
-          });
-      }, 1200);
+            toast.error("Chat save failed — your message is still in this session.")
+          })
+      }, 1200)
     },
-  });
+    [threadId],
+  )
+
+  const { messages, sendMessage, addToolResult, status, stop, setMessages } = useChat({
+    id: threadId,
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onError,
+    onFinish,
+  })
+
+  // Keep a ref of the latest messages so the memoized onFinish can read
+  // them without forcing a new onFinish callback on every render.
+  const messagesRef = useRef(messages)
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   // Load existing conversation from DB on mount. The default chat thread
   // ("growzzy-agent") is a UI placeholder — its real conversation id is the
@@ -661,7 +685,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         className={cn("w-full px-1 pb-6 mx-auto max-w-4xl")}
       >
         {(Array.isArray(messages) ? messages : []).map((m) => (
-          <AgentMessage
+          <MemoAgentMessage
             key={m.id}
             message={m}
             addToolResult={addToolResult}
@@ -791,6 +815,21 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 /* ------------------------------- message ---------------------------------- */
 
 type AddToolResult = ReturnType<typeof useChat>["addToolResult"];
+
+// Memoize so individual messages don't re-render on every streaming tick of
+// unrelated messages. Without this, every streamed token of the current
+// assistant turn re-renders the entire conversation, which is what pushes
+// the main thread past the long-task threshold and triggers "Page
+// Unresponsive".
+const MemoAgentMessage = memo(AgentMessage, (prev, next) => {
+  return (
+    prev.message === next.message &&
+    prev.brand === next.brand &&
+    prev.addToolResult === next.addToolResult &&
+    prev.onStop === next.onStop &&
+    prev.onOpenArtifact === next.onOpenArtifact
+  )
+})
 
 function AgentMessage({
   message,
