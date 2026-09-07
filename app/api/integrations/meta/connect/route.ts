@@ -1,45 +1,33 @@
-import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { attachStateCookie, generateState } from "@/lib/oauth-state"
-import { log } from "@/lib/logger"
-import { MetaAdsService } from "@/services/integrations/meta"
+import { NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { log } from '@/lib/logger'
 
-export const dynamic = "force-dynamic"
-
-export async function GET(request: Request) {
+/**
+ * Meta Ads OAuth connect start endpoint.
+ *
+ * Real Meta OAuth requires an app id/secret and a long-lived token exchange
+ * against graph.facebook.com. The production wiring lives in
+ * `services/integrations/meta.ts` (to be built in Part 5 of the
+ * GROWZZY_COMPETITIVE_PARITY_SPEC). Until then, this stub returns a
+ * clear "not yet wired" response so the chat's connect card degrades
+ * gracefully instead of redirecting to a 404.
+ *
+ * When the service exists, the wire-up is identical to the Google one
+ * (see app/api/integrations/google/connect/route.ts).
+ */
+export async function GET() {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, { status: 401 })
-  }
-  if (!MetaAdsService.isEnabled()) {
-    return NextResponse.json({ ok: false, error: { code: "META_DISABLED", message: "Meta Ads is not enabled yet." } }, { status: 404 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
-    const requestUrl = new URL(request.url)
-    const redirectUri = `${requestUrl.origin}/api/auth/meta/callback`
-    const state = generateState()
-    const response = attachStateCookie(
-      NextResponse.redirect(MetaAdsService.getAuthUrl({ redirectUri, state })),
-      "meta",
-      state
-    )
-    const returnTo = requestUrl.searchParams.get("returnTo")
-    if (returnTo?.startsWith("/")) {
-      response.cookies.set("oauth_return_to", returnTo, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 600,
-        path: "/",
-      })
-    }
-    return response
-  } catch (error: any) {
-    log("error", "meta/oauth/connect", "Failed to create OAuth request", { message: error?.message })
-    return NextResponse.json(
-      { ok: false, error: { code: "META_CONFIGURATION_ERROR", message: "Meta Ads connection is not configured." } },
-      { status: 503 }
-    )
-  }
+  log("info", "meta/oauth/connect", "Connect requested but Meta OAuth is not yet wired in this build")
+
+  return NextResponse.json(
+    {
+      error: "Meta Ads connection is coming soon. Your campaign is saved as a draft — connect Meta in Settings → Integrations once it's available.",
+      code: "META_OAUTH_NOT_WIRED",
+    },
+    { status: 501 },
+  )
 }

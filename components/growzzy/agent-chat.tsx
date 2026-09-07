@@ -865,55 +865,128 @@ function AgentMessage({
               return part.text ? <MessageResponse key={i}>{part.text}</MessageResponse> : null;
             }
             if (!isToolUIPart(part)) return null;
-            const name = getToolName(part as ToolUIPart);
+            const p = part as ToolUIPart;
+            const name = getToolName(p);
 
             if (name === "askUser") {
               return (
-                <QuestionsCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
+                <ToolTimelineItem key={i} part={p}>
+                  <QuestionsCard part={p} addToolResult={addToolResult} />
+                </ToolTimelineItem>
               );
             }
             if (name === "proposePlan") {
               return (
-                <PlanCard
-                  key={i}
-                  part={part as ToolUIPart}
-                  addToolResult={addToolResult}
-                  onOpenArtifact={onOpenArtifact}
-                  brandName={brand?.businessName}
-                />
+                <ToolTimelineItem key={i} part={p}>
+                  <PlanCard
+                    part={p}
+                    addToolResult={addToolResult}
+                    onOpenArtifact={onOpenArtifact}
+                    brandName={brand?.businessName}
+                  />
+                </ToolTimelineItem>
               );
             }
             if (name === "previewExecution") {
               return (
-                <ExecutionPlanCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
+                <ToolTimelineItem key={i} part={p}>
+                  <ExecutionPlanCard part={p} addToolResult={addToolResult} />
+                </ToolTimelineItem>
               );
             }
             if (name === "generateCreative") {
-              return <CreativeCard key={i} part={part as ToolUIPart} onStop={onStop} brand={brand} />;
+              return (
+                <ToolTimelineItem key={i} part={p}>
+                  <CreativeCard part={p} onStop={onStop} brand={brand} />
+                </ToolTimelineItem>
+              );
             }
             if (name === "deliverCampaign") {
               return (
-                <CampaignCard
-                  key={i}
-                  part={part as ToolUIPart}
-                  onOpenArtifact={onOpenArtifact}
-                />
+                <ToolTimelineItem key={i} part={p}>
+                  <CampaignCard part={p} onOpenArtifact={onOpenArtifact} />
+                </ToolTimelineItem>
               );
             }
             if (name === "askBrandUrl") {
               return (
-                <BrandUrlCard key={i} part={part as ToolUIPart} addToolResult={addToolResult} />
+                <ToolTimelineItem key={i} part={p}>
+                  <BrandUrlCard part={p} addToolResult={addToolResult} />
+                </ToolTimelineItem>
               );
             }
             if (name === "analyzeWebsite") {
-              return <AnalyzeCard key={i} part={part as ToolUIPart} />;
+              return (
+                <ToolTimelineItem key={i} part={p}>
+                  <AnalyzeCard part={p} />
+                </ToolTimelineItem>
+              );
+            }
+            if (name === "connectIntegrationPrompt") {
+              return (
+                <ToolTimelineItem key={i} part={p}>
+                  <ConnectIntegrationCard part={p} addToolResult={addToolResult} />
+                </ToolTimelineItem>
+              );
             }
             // research + anything else
-            return <ResearchCard key={i} part={part as ToolUIPart} />;
+            return (
+              <ToolTimelineItem key={i} part={p}>
+                <ResearchCard part={p} />
+              </ToolTimelineItem>
+            );
           })}
         </div>
       </MessageContent>
     </Message>
+  );
+}
+
+/* ------------------------------- Tool Timeline ------------------------------- */
+/** Live tool chip: shows the tool's name + running state or finished duration. */
+function ToolTimelineItem({ part, children }: { part: ToolUIPart; children: React.ReactNode }) {
+  const startTimeRef = useRef<number | null>(null);
+  if (startTimeRef.current == null && (part.state === "input-available" || part.state === "input-streaming")) {
+    startTimeRef.current = Date.now();
+  }
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+  const running = part.state === "input-available" || part.state === "input-streaming";
+  const done = part.state === "output-available" || part.state === "output-error";
+  const elapsed = startTimeRef.current
+    ? Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000))
+    : 0;
+  const elapsedStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
+  const name = getToolName(part);
+  const labelMap: Record<string, string> = {
+    askUser: "Ask user",
+    proposePlan: "Strategy document",
+    previewExecution: "Execution plan",
+    generateCreative: "Ad creative",
+    deliverCampaign: "Campaign package",
+    askBrandUrl: "Brand site",
+    analyzeWebsite: "Site analysis",
+    research: "Market research",
+  };
+  const displayName = labelMap[name] || "Working on it";
+  return (
+    <div className="my-2">
+      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground pl-0.5 pb-1">
+        <span
+          className={cn(
+            "inline-block h-[7px] w-[7px] rounded-full shrink-0",
+            running ? "bg-amber-400 animate-pulse" : done ? "bg-emerald-500" : "bg-muted-foreground/40",
+          )}
+        />
+        <span className="font-medium text-foreground">{displayName}</span>
+        {running && <span>· {elapsedStr}</span>}
+        {!running && done && elapsed > 0 && <span>· {elapsedStr}</span>}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -971,6 +1044,81 @@ function BrandUrlCard({ part, addToolResult }: { part: ToolUIPart; addToolResult
         </Link>
         .
       </p>
+    </div>
+  );
+}
+
+/* ------------------------------- Connect Integration ------------------------------- */
+function ConnectIntegrationCard({
+  part,
+  addToolResult,
+}: {
+  part: ToolUIPart;
+  addToolResult: AddToolResult;
+}) {
+  const input = part.input as
+    | {
+        platform?: string;
+        reason?: string;
+        missingCapabilities?: string[];
+      }
+    | undefined;
+  const platform = String(input?.platform || "META").toUpperCase();
+  const reason = input?.reason || "This network isn't connected yet.";
+  const capabilities = Array.isArray(input?.missingCapabilities) ? input.missingCapabilities : ["publish campaigns", "sync metrics"];
+
+  return (
+    <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
+      <div className="flex items-center gap-3 px-4 py-3 bg-muted/20 border-b border-border">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#1F57F5]/10 text-[#1F57F5]">
+          <Link className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-semibold truncate">{platform} Ads isn't connected yet</div>
+          <div className="text-[11.5px] text-muted-foreground truncate">{reason}</div>
+        </div>
+      </div>
+      <div className="p-4 space-y-3">
+        <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+          Once connected, you can publish the campaign directly from here — creative, copy, and targeting are already set up.
+        </p>
+        <ul className="text-[12px] text-foreground space-y-1 pl-4 list-disc">
+          {capabilities.map((c) => (
+            <li key={c}>{c}</li>
+          ))}
+        </ul>
+        <div className="flex gap-3 pt-1">
+          <Button
+            size="sm"
+            onClick={() => {
+              const connectUrl = platform === "META" ? "/api/integrations/meta/connect" : "/api/integrations/google/connect";
+              window.open(connectUrl, "_blank", "noopener,noreferrer");
+              addToolResult({
+                tool: "connectIntegrationPrompt",
+                toolCallId: part.toolCallId,
+                output: { action: "connect_started", platform },
+              });
+            }}
+            className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-[12.5px] cursor-pointer"
+          >
+            Connect {platform} Ads
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              addToolResult({
+                tool: "connectIntegrationPrompt",
+                toolCallId: part.toolCallId,
+                output: { action: "skipped", platform },
+              });
+            }}
+            className="text-[12.5px] cursor-pointer"
+          >
+            Skip
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1491,6 +1639,39 @@ function PlanCard({
   );
 }
 
+type ExecutionPlanStepInput = {
+  activity: string;
+  description: string;
+  agentRole?: string;
+  isParallel?: boolean;
+};
+
+/** Group steps into a sequence of either single "solo" steps or parallel "agents" groups. */
+function groupPlanSteps(steps: ExecutionPlanStepInput[]) {
+  const groups: Array<
+    | { kind: "solo"; step: ExecutionPlanStepInput }
+    | { kind: "parallel"; steps: ExecutionPlanStepInput[] }
+  > = [];
+  let i = 0;
+  while (i < steps.length) {
+    const s = steps[i];
+    if (s.isParallel) {
+      const parallel: ExecutionPlanStepInput[] = [s];
+      let j = i + 1;
+      while (j < steps.length && steps[j].isParallel) {
+        parallel.push(steps[j]);
+        j += 1;
+      }
+      groups.push({ kind: "parallel", steps: parallel });
+      i = j;
+    } else {
+      groups.push({ kind: "solo", step: s });
+      i += 1;
+    }
+  }
+  return groups;
+}
+
 function ExecutionPlanCard({
   part,
   addToolResult,
@@ -1502,7 +1683,7 @@ function ExecutionPlanCard({
     | {
       title?: string;
       summary?: string;
-      steps?: { activity: string; description: string }[];
+      steps?: ExecutionPlanStepInput[];
     }
     | undefined;
   const decided = part.state === "output-available";
@@ -1575,11 +1756,80 @@ function ExecutionPlanCard({
           </div>
         </div>
         <ol className="divide-y divide-border">
-          {(input.steps || []).map((s, i) => {
+          {groupPlanSteps(input.steps || []).map((group, gi) => {
             const isDone = proceeded || decided;
-            const isActive = !isDone && i === 0;
+            if (group.kind === "parallel") {
+              const total = group.steps.length;
+              const doneCount = isDone ? total : 0;
+              const activeCount = isDone ? 0 : total;
+              return (
+                <li key={`g-${gi}`} className="px-4 py-3 bg-muted/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                      <span className="grid h-5 w-5 place-items-center rounded-md bg-primary-tint text-primary">
+                        <Sparkles className="h-3 w-3" />
+                      </span>
+                      {total} agents in parallel
+                      <span className="text-muted-foreground font-normal">
+                        — {doneCount}/{total} done
+                      </span>
+                    </div>
+                    {!isDone && (
+                      <span className="text-[10.5px] font-mono text-muted-foreground">
+                        running…
+                      </span>
+                    )}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {group.steps.map((s, si) => {
+                      const isActive = !isDone;
+                      return (
+                        <li
+                          key={si}
+                          className="flex items-start gap-2.5 rounded-md bg-card border border-border px-2.5 py-1.5"
+                        >
+                          <div
+                            className={cn(
+                              "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                              isDone
+                                ? "border-emerald-500 bg-emerald-500 text-white"
+                                : isActive
+                                  ? "border-primary text-primary"
+                                  : "border-muted-foreground/40 text-muted-foreground/40",
+                            )}
+                          >
+                            {isDone ? (
+                              <Check className="h-2.5 w-2.5" />
+                            ) : isActive ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : null}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11.5px] font-medium text-foreground">
+                              {s.agentRole ? (
+                                <span className="text-primary">{s.agentRole}</span>
+                              ) : null}
+                              {s.agentRole ? " · " : ""}
+                              {s.activity}
+                            </div>
+                            {s.description && (
+                              <p className="text-[10.5px] text-muted-foreground leading-snug">
+                                {s.description}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              );
+            }
+            // solo step
+            const s = group.step;
+            const isActive = !isDone;
             return (
-              <li key={i} className="flex items-start gap-3 px-4 py-2.5">
+              <li key={`s-${gi}`} className="flex items-start gap-3 px-4 py-2.5">
                 <div
                   className={cn(
                     "mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0",
@@ -1595,11 +1845,17 @@ function ExecutionPlanCard({
                   ) : isActive ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    <span className="text-[10px] font-mono">{i + 1}</span>
+                    <span className="text-[10px] font-mono">{gi + 1}</span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12.5px] font-medium text-foreground">{s.activity}</div>
+                  <div className="text-[12.5px] font-medium text-foreground">
+                    {s.agentRole ? (
+                      <span className="text-primary">{s.agentRole}</span>
+                    ) : null}
+                    {s.agentRole ? " · " : ""}
+                    {s.activity}
+                  </div>
                   {s.description && (
                     <p className="text-[11.5px] text-muted-foreground leading-snug">
                       {s.description}

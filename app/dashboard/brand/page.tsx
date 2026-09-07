@@ -18,6 +18,8 @@ import {
   X,
   Trash2,
   Download,
+  Pencil,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -120,6 +122,13 @@ export default function BrandPage() {
   const [brand, setBrand] = useState<BrandProfile>(emptyBrand);
   const [urlInput, setUrlInput] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [tab, setTab] = useState<"edit" | "memory">("edit");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "memory") setTab("memory");
+  }, []);
 
   useEffect(() => {
     const loaded = loadBrand();
@@ -293,6 +302,40 @@ export default function BrandPage() {
             </div>
           }
         />
+
+        <div className="flex items-center gap-1 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setTab("edit")}
+            className={cn(
+              "px-3 py-2 text-[12.5px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
+              tab === "edit"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Pencil className="inline h-3.5 w-3.5 mr-1.5" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("memory")}
+            className={cn(
+              "px-3 py-2 text-[12.5px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
+              tab === "memory"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Sparkles className="inline h-3.5 w-3.5 mr-1.5" />
+            Memory
+          </button>
+        </div>
+
+        {tab === "memory" ? (
+          <MemoryView brand={brand} />
+        ) : (
+          <>
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
@@ -792,7 +835,186 @@ export default function BrandPage() {
             ) : null}
           </aside>
         </div>
+      </>
+        )}
       </div>
     </Shell>
+  );
+}
+
+/* ──────────────────────────── Memory View ──────────────────────────── */
+/** Read-only card grid of every fact the AI has on file for this brand. */
+function MemoryView({ brand }: { brand: BrandProfile }) {
+  const isAnalyzed = Boolean(brand.analyzedAt);
+  const source = isAnalyzed ? "Site analysis" : "Manual entry";
+  const updated = brand.analyzedAt
+    ? new Date(brand.analyzedAt).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  type Fact = {
+    label: string;
+    value: React.ReactNode;
+    icon?: React.ReactNode;
+    span?: 1 | 2;
+  };
+  const facts: Fact[] = [];
+
+  if (brand.businessName) {
+    facts.push({ label: "Business name", value: brand.businessName, icon: <Briefcase className="h-3.5 w-3.5" />, span: 2 });
+  }
+  if (brand.website) {
+    facts.push({ label: "Website", value: <a href={brand.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">{brand.website}</a>, icon: <Globe className="h-3.5 w-3.5" /> });
+  }
+  if (brand.industry) facts.push({ label: "Industry", value: brand.industry });
+  if (brand.businessModel) facts.push({ label: "Business model", value: brand.businessModel });
+  if (brand.whatTheySell) facts.push({ label: "What they sell", value: brand.whatTheySell, span: 2 });
+  if (brand.positioning) facts.push({ label: "Positioning", value: brand.positioning, span: 2 });
+  if (brand.differentiators?.length) {
+    facts.push({
+      label: "Differentiators",
+      value: (
+        <div className="flex flex-wrap gap-1.5">
+          {brand.differentiators.map((d) => (
+            <span key={d} className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px]">{d}</span>
+          ))}
+        </div>
+      ),
+      span: 2,
+    });
+  }
+  if (brand.audience) facts.push({ label: "Audience", value: brand.audience, span: 2 });
+  if (brand.segments?.length) {
+    facts.push({
+      label: "Audience segments",
+      value: (
+        <div className="space-y-1.5">
+          {brand.segments.map((s) => (
+            <div key={s.segment} className="rounded-md bg-muted/30 border border-border p-2 text-[11.5px]">
+              <div className="font-medium text-foreground">{s.segment}</div>
+              {s.pains && <div className="text-muted-foreground">Pains: {s.pains}</div>}
+              {s.triggers && <div className="text-muted-foreground">Triggers: {s.triggers}</div>}
+            </div>
+          ))}
+        </div>
+      ),
+      span: 2,
+    });
+  }
+  if (brand.competitors?.length) {
+    facts.push({
+      label: "Competitors",
+      value: (
+        <div className="space-y-1.5">
+          {brand.competitors.map((c) => (
+            <div key={c.name} className="rounded-md bg-muted/30 border border-border p-2 text-[11.5px]">
+              <div className="font-medium text-foreground">{c.name}{c.url ? <a href={c.url} target="_blank" rel="noreferrer" className="ml-1.5 text-primary hover:underline text-[10.5px]">↗</a> : null}</div>
+              {c.angle && <div className="text-muted-foreground">Angle: {c.angle}</div>}
+            </div>
+          ))}
+        </div>
+      ),
+      span: 2,
+    });
+  }
+  if (brand.keywords?.length) {
+    facts.push({
+      label: "High-intent keywords",
+      value: (
+        <div className="flex flex-wrap gap-1.5">
+          {brand.keywords.map((k) => (
+            <span key={k} className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px]">{k}</span>
+          ))}
+        </div>
+      ),
+      span: 2,
+    });
+  }
+  if (brand.creativeAngles?.length) {
+    facts.push({
+      label: "Creative angles",
+      value: (
+        <div className="flex flex-wrap gap-1.5">
+          {brand.creativeAngles.map((k) => (
+            <span key={k} className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px]">{k}</span>
+          ))}
+        </div>
+      ),
+      span: 2,
+    });
+  }
+  if (brand.tone) {
+    facts.push({ label: "Tone of voice", value: brand.tone });
+  }
+  if (brand.palette?.name) {
+    facts.push({
+      label: "Color palette",
+      value: (
+        <div className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded-md border border-border" style={{ background: brand.palette.primary }} />
+          <span className="h-5 w-5 rounded-md border border-border" style={{ background: brand.palette.accent }} />
+          <span className="text-[11.5px]">{brand.palette.name}</span>
+        </div>
+      ),
+    });
+  }
+  if (brand.userRole) {
+    facts.push({ label: "User role", value: brand.userRole.replace(/_/g, " ") });
+  }
+
+  if (!facts.length) {
+    return (
+      <SectionCard title="Brand memory">
+        <div className="rounded-[12px] border border-dashed border-border bg-muted/20 p-8 text-center">
+          <Sparkles className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
+          <p className="text-[13px] font-medium text-foreground">No brand memory yet</p>
+          <p className="mt-1 text-[12px] text-muted-foreground max-w-sm mx-auto">
+            Tell Growzzy about your brand — analyse your site or fill the form in the Edit tab. Every fact you give us will appear here as a browseable memory unit.
+          </p>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[16px] font-semibold text-foreground">Brand memory</h2>
+          <p className="text-[12px] text-muted-foreground">
+            Every fact Growzzy has on file about {brand.businessName || "your brand"}. The chat uses these to ground every answer.
+          </p>
+        </div>
+        {updated && (
+          <div className="text-right">
+            <div className="text-[11.5px] text-muted-foreground">Last updated</div>
+            <div className="text-[12px] font-medium text-foreground">{updated}</div>
+            <div className="text-[10.5px] text-muted-foreground mt-0.5">Source: {source}</div>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {facts.map((f) => (
+          <div
+            key={f.label}
+            className={cn(
+              "rounded-[12px] border border-border bg-card p-3.5 shadow-2xs",
+              f.span === 2 && "sm:col-span-2",
+            )}
+          >
+            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {f.icon}
+              {f.label}
+            </div>
+            <div className="mt-1.5 text-[12.5px] text-foreground">{f.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

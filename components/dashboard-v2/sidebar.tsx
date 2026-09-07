@@ -22,6 +22,8 @@ import {
   Settings,
   FileText,
   Trash2,
+  BookOpen,
+  Library,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { loadSavedChats, deleteSavedChat, getDeletedChatIds } from "@/lib/chat-store"
@@ -36,6 +38,8 @@ interface NavItem {
 const CREATE_NAV: NavItem[] = [
   { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
   { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
+  { href: "/dashboard/brand?tab=memory", label: "Memory",       icon: BookOpen },
+  { href: "/dashboard/creatives/library", label: "Library",     icon: Library },
   { href: "/dashboard/prompts",       label: "Recent Chats",   icon: History },
 ]
 
