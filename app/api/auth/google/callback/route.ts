@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma"
 import { GoogleAdsService } from "@/services/integrations/google"
 import { getPrimaryWorkspaceId, getRequestWorkspaceId } from "@/lib/workspace"
 import { getStateCookieName, verifyState } from "@/lib/oauth-state"
+import { googleOAuthRedirectUri } from "@/lib/app-url"
 import { log } from "@/lib/logger"
 
 function resolveAppUrlFromRequest(request: Request) {
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
       workspaceId = await getPrimaryWorkspaceId(userId)
     }
 
-    const redirectUri = `${new URL(request.url).origin}/api/auth/google/callback`
+    const redirectUri = googleOAuthRedirectUri(request)
     log("info", "google/oauth/callback", "Exchanging OAuth code", {
       clientId: GoogleAdsService.getOAuthClientId(),
       redirectUri,

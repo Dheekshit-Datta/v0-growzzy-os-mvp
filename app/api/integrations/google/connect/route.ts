@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { GoogleAdsService } from '@/services/integrations/google'
 import { attachStateCookie, generateState } from '@/lib/oauth-state'
+import { googleOAuthRedirectUri } from '@/lib/app-url'
 import { log } from '@/lib/logger'
 
 export async function GET(request: Request) {
@@ -11,8 +12,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const requestUrl = new URL(request.url)
-    const redirectUri = `${requestUrl.origin}/api/auth/google/callback`
+    const redirectUri = googleOAuthRedirectUri(request)
     log("info", "google/oauth/connect", "Creating OAuth request", {
       clientId: GoogleAdsService.getOAuthClientId(),
       redirectUri,
@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     // Remember where to send the user back to (e.g. mid-onboarding vs Settings)
     // so the callback doesn't dump them on a page the onboarding gate will
     // immediately bounce them away from, losing the "connected" state.
+    const requestUrl = new URL(request.url)
     const returnTo = requestUrl.searchParams.get("returnTo")
     if (returnTo && returnTo.startsWith("/")) {
       response.cookies.set("oauth_return_to", returnTo, {

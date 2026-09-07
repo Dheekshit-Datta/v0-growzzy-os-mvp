@@ -281,6 +281,8 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
 
   const [chatError, setChatError] = useState<{ kind: ChatErrorKind; message: string } | null>(null);
   const lastSubmission = useRef<Submission | null>(null);
+  const stableConvIdRef = useRef<string | null>(null);
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { messages, sendMessage, addToolResult, status, stop, setMessages } = useChat({
     id: threadId,
@@ -298,8 +300,14 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       toast.error(info.message);
     },
     onFinish: (message) => {
-      // Persist conversation to DB
-      const storeMessages = messages.map((m) => ({
+      // Persist conversation to DB.
+      // We debounce writes — onFinish fires after every tool call / streaming
+      // tick, and a full PUT with the entire growing messages array on each
+      // tick is what made the page go unresponsive and hammered the DB.
+      // We also pin the conversation id to a stable one for the lifetime of
+      // this component instance, so the first turn doesn't churn UUIDs and
+      // the page reload can find the same row.
+      const snapshot = messages.map((m) => ({
         role: m.role,
         content: (m.parts ?? []).map((p) => {
           if (p.type === "text") return { role: m.role as "user" | "assistant" | "system", content: p.text };
@@ -307,47 +315,75 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           return null;
         }).filter(Boolean) as any,
       }));
-      const convId = threadId === "growzzy-agent" ? crypto.randomUUID() : threadId;
-      fetch(`/api/ai/conversations/${convId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: storeMessages }),
-      }).catch(() => { }); // fire-and-forget
+      const stableId = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId);
+      // Persist the stable id so reload (which sees threadId === "growzzy-agent")
+      // can find the same conversation row.
+      if (typeof window !== "undefined" && threadId === "growzzy-agent") {
+        try { window.localStorage.setItem("growzzy.agent.conv", stableId); } catch {}
+      }
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = setTimeout(() => {
+        fetch(`/api/ai/conversations/${encodeURIComponent(stableId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: snapshot }),
+        })
+          .then((res) => {
+            if (!res.ok) {
+              // Surface 429 / 401 / 5xx as a toast so the user knows their
+              // chat didn't save — silently swallowing is what made it look
+              // like "chats aren't saving".
+              if (res.status === 429) toast.error("Chat save throttled — your message is still in this session.");
+              else if (res.status === 401) toast.error("Chat save blocked — your session expired.");
+              else toast.error(`Chat save failed (${res.status})`);
+            }
+          })
+          .catch(() => {
+            toast.error("Chat save failed — your message is still in this session.");
+          });
+      }, 1200);
     },
   });
 
-  // Load existing conversation from DB on mount (when threadId is a real UUID).
-  // We use a per-threadId flag set in the effect itself so a previous unmount
-  // (navigation, tab close) doesn't permanently disable the load — the
-  // previous version set conversationLoaded.current = true BEFORE the fetch
-  // resolved, so a mid-fetch unmount left the ref true forever and remount
-  // never retried.
+  // Load existing conversation from DB on mount. The default chat thread
+  // ("growzzy-agent") is a UI placeholder — its real conversation id is the
+  // stable id we generate on first save, persisted in localStorage so it
+  // survives a page reload. Without this, every save churned a new UUID and
+  // nothing ever came back.
   const inFlightLoadRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!threadId || threadId === "growzzy-agent") return;
-    if (inFlightLoadRef.current === threadId) return;
-    inFlightLoadRef.current = threadId;
+    let active = true;
+    if (!threadId) return;
+    const loadId = threadId === "growzzy-agent"
+      ? (typeof window !== "undefined" ? localStorage.getItem("growzzy.agent.conv") : null)
+      : threadId;
+    if (!loadId) return;
+    if (inFlightLoadRef.current === loadId) return;
+    inFlightLoadRef.current = loadId;
     (async () => {
       try {
-        const res = await fetch(`/api/ai/conversations/${encodeURIComponent(threadId)}`);
+        const res = await fetch(`/api/ai/conversations/${encodeURIComponent(loadId)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data?.ok || !data?.conversation) return;
         const stored: any[] = Array.isArray(data.conversation.messages) ? data.conversation.messages : [];
         if (!stored.length) return;
         const hydrated = stored.map((m: any, i: number) => ({
-          id: `${threadId}-${i}`,
+          id: `${loadId}-${i}`,
           role: m.role || "user",
           content: "",
           parts: Array.isArray(m.parts) && m.parts.length
             ? m.parts
             : [{ type: "text" as const, text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
         }));
-        setMessages(hydrated as any);
+        if (active) setMessages(hydrated as any);
       } catch {
         // silent — start with empty chat
+      } finally {
+        inFlightLoadRef.current = "";
       }
     })();
+    return () => { active = false; };
   }, [threadId, setMessages]);
 
   /* When the agent analyses a website in-chat, persist it as the brand context. */
