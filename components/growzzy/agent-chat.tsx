@@ -1769,7 +1769,7 @@ function ExecutionPlanCard({
                       <span className="grid h-5 w-5 place-items-center rounded-md bg-primary-tint text-primary">
                         <Sparkles className="h-3 w-3" />
                       </span>
-                      {total} agents in parallel
+                      {total} agents working on this
                       <span className="text-muted-foreground font-normal">
                         — {doneCount}/{total} done
                       </span>
@@ -2090,6 +2090,7 @@ function CampaignCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [launchedId, setLaunchedId] = useState<string | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
   const [editedHeadlines, setEditedHeadlines] = useState<string[] | null>(null);
   const [editedPrimaryText, setEditedPrimaryText] = useState<string | null>(null);
   const [editedBudget, setEditedBudget] = useState<number | null>(null);
@@ -2120,7 +2121,9 @@ function CampaignCard({
   const handleSaveDraft = async (isDeploy = false) => {
     setIsSaving(true);
     if (isDeploy) {
-      // Real launch path — pushes to the user's connected Google / Meta ad account
+      // Real launch path — pushes to the user's connected Google / Meta ad account.
+      // If no ad account is connected, surface the inline connect card instead of
+      // a toast so the user can finish the flow right here.
       try {
         const res = await fetch("/api/chat/launch", {
           method: "POST",
@@ -2156,7 +2159,10 @@ function CampaignCard({
           const code = data?.error?.code || "LAUNCH_FAILED";
           const message = data?.error?.message || "Ad account rejected the launch.";
           if (code === "INTEGRATION_REQUIRED" || code === "AD_ACCOUNT_REQUIRED") {
-            toast.error(message, { duration: 6000 });
+            // Don't toast — show the connect card inline so the user can
+            // finish connecting and retry without losing the draft.
+            setShowConnect(true);
+            return;
           } else if (code === "QUALITY_BLOCK") {
             toast.error(message, { duration: 6000 });
           } else {
@@ -2171,7 +2177,7 @@ function CampaignCard({
       return;
     }
 
-    // Save Draft path — local-only persistence
+    // Save Draft path — persists to the workspace so it can be published later.
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
@@ -2195,6 +2201,16 @@ function CampaignCard({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleConnectAndRetry = async () => {
+    // Open the OAuth flow in a popup; the user returns here once connected.
+    const platform = c.platform?.toUpperCase().includes("META") ? "META" : "GOOGLE";
+    const connectUrl =
+      platform === "META"
+        ? "/api/integrations/meta/connect"
+        : "/api/integrations/google/connect";
+    window.open(connectUrl, "_blank", "noopener,noreferrer");
   };
 
   const copyAdCopy = () => {
@@ -2471,41 +2487,110 @@ function CampaignCard({
                   </span>
                   {launchedId && <span className="text-[11px] text-muted-foreground font-mono">{launchedId}</span>}
                 </span>
+              ) : showConnect ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    PUBLISH
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">account not connected</span>
+                </span>
               ) : (
                 <>Launch-ready for <span className="font-semibold text-foreground">{c.platform}</span></>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!launchedId && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isSaving}
-                onClick={() => handleSaveDraft(false)}
-                className="text-xs gap-1 cursor-pointer"
-              >
-                {isSaving ? "Saving..." : "Save Draft"}
-              </Button>
+            {!launchedId && !showConnect && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isSaving}
+                  onClick={() => handleSaveDraft(false)}
+                  className="text-xs gap-1 cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {isSaving ? "Saving..." : "Save as Draft"}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={isSaving}
+                  onClick={() => handleSaveDraft(true)}
+                  className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  {isSaving ? "Pushing..." : `Publish to ${c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}`}
+                </Button>
+              </>
+            )}
+            {showConnect && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isSaving}
+                  onClick={() => handleSaveDraft(false)}
+                  className="text-xs gap-1 cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Save as Draft
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={isSaving}
+                  onClick={handleConnectAndRetry}
+                  className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Link className="h-3.5 w-3.5" />
+                  Connect {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"} & Publish
+                </Button>
+              </>
             )}
             {launchedId ? (
               <span className="text-[11.5px] text-emerald-600 font-medium flex items-center gap-1">
                 <Check className="h-3.5 w-3.5" />
                 Live in {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"}
               </span>
-            ) : (
-              <Button
-                size="sm"
-                disabled={isSaving}
-                onClick={() => handleSaveDraft(true)}
-                className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Rocket className="h-3.5 w-3.5" />
-                {isSaving ? "Pushing..." : `Launch to ${c.platform?.includes("Google") ? "Google Ads" : c.platform?.includes("Meta") ? "Meta Ads" : "Ad Account"}`}
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
+
+        {/* Inline connect card — shown when Publish was attempted but no ad
+            account is connected yet. Lets the user finish connecting without
+            losing the campaign they just built. */}
+        {showConnect && (
+          <div className="border-t border-border px-4 py-3 bg-muted/20">
+            <div className="rounded-lg border border-border bg-card p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-medium text-foreground">
+                  {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"} isn't connected yet
+                </p>
+                <p className="text-[11.5px] text-muted-foreground leading-snug">
+                  Connect your account and this campaign publishes straight from here — no need to rebuild it.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowConnect(false)}
+                  className="text-xs cursor-pointer"
+                >
+                  Not now
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleConnectAndRetry}
+                  className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1 cursor-pointer"
+                >
+                  <Link className="h-3.5 w-3.5" />
+                  Connect
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
