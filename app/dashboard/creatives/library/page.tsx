@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import DashboardLayout from "@/components/dashboard-layout"
+import { Shell } from "@/components/dashboard-v2/shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -205,7 +205,7 @@ export default function CreativesLibraryPage() {
   if (!user) return null
 
   return (
-    <DashboardLayout>
+    <Shell>
       <div className="p-8 bg-white min-h-screen">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6">
@@ -400,7 +400,7 @@ export default function CreativesLibraryPage() {
           )}
         </div>
       </div>
-    </DashboardLayout>
+    </Shell>
   )
 }
 

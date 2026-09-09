@@ -259,6 +259,27 @@ type AttachedFile = {
   content?: string;
 };
 
+function storedMessageText(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) || (parsed && typeof parsed === "object" && ("content" in parsed || "text" in parsed))) {
+          return storedMessageText(parsed);
+        }
+      } catch {}
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(storedMessageText).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    const message = value as { content?: unknown; text?: unknown };
+    return storedMessageText(message.content ?? message.text ?? "");
+  }
+  return "";
+}
+
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("standard");
@@ -317,12 +338,8 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       // the page reload can find the same row.
       const snapshot = messagesRef.current.map((m: any) => ({
         role: m.role,
-        content: (m.parts ?? []).map((p: any) => {
-          if (p.type === "text") return { role: m.role, content: p.text }
-          if (p.type === "tool-call") return { role: m.role, content: JSON.stringify({ tool: p.toolCallId, input: p.input }) }
-          return null
-        }).filter(Boolean) as any,
-      }))
+        content: (m.parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n"),
+      })).filter((m: any) => m.content.trim())
       const stableId = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId)
       // Persist the stable id so reload (which sees threadId === "growzzy-agent")
       // can find the same conversation row.
@@ -398,7 +415,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           content: "",
           parts: Array.isArray(m.parts) && m.parts.length
             ? m.parts
-            : [{ type: "text" as const, text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
+            : [{ type: "text" as const, text: storedMessageText(m.content) }],
         }));
         if (active) setMessages(hydrated as any);
       } catch {
