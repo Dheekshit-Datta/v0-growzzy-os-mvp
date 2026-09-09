@@ -423,7 +423,9 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           parts: Array.isArray(m.parts) && m.parts.length
             ? m.parts
             : [{ type: "text" as const, text: storedMessageText(m.content) }],
-        }));
+        })).filter((message: any, index: number, all: any[]) =>
+          index === 0 || message.role !== all[index - 1].role || message.parts[0]?.text !== all[index - 1].parts[0]?.text
+        );
         if (active) setMessages(hydrated as any);
       } catch {
         // silent — start with empty chat

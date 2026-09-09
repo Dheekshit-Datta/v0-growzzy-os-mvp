@@ -914,6 +914,8 @@ export async function POST(req: Request) {
       onError: (error) => {
         const err = error as { statusCode?: number; message?: string; responseBody?: string };
         const status = err?.statusCode;
+        if (status === 401)
+          return "The AI provider key is invalid or expired. Replace OPENAI_API_KEY in Vercel, then retry.";
         if (status === 402)
           return "Your workspace is out of AI credits. Add credits and retry.";
         if (status === 403)
@@ -924,8 +926,12 @@ export async function POST(req: Request) {
         return "Growzzy hit an unexpected error. Please try again or simplify your request.";
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const failure = error as { statusCode?: number; message?: string };
     console.error("Agent chat route error:", error);
-    return new Response(error?.message || "Failed to process chat", { status: 500 });
+    if (failure.statusCode === 401 || /invalid api key|incorrect api key|authentication/i.test(failure.message || "")) {
+      return new Response("The AI provider key is invalid or expired. Replace OPENAI_API_KEY in Vercel, then retry.", { status: 500 });
+    }
+    return new Response(failure.message || "Failed to process chat", { status: 500 });
   }
 }
