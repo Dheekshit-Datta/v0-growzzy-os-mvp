@@ -47,6 +47,12 @@ export function classifyChatError(error: unknown): { kind: ChatErrorKind; messag
   const text = raw.toLowerCase();
   const status = Number(/\b(4\d\d|5\d\d)\b/.exec(raw)?.[1] ?? 0);
 
+  if (text.includes("openai") && (text.includes("no credits") || text.includes("insufficient_quota"))) {
+    return {
+      kind: "credits",
+      message: "OpenAI API credits are exhausted. Add billing credits to the OpenAI account, then hit Retry.",
+    };
+  }
   if (status === 402 || text.includes("credit") || text.includes("payment required")) {
     return {
       kind: "credits",
