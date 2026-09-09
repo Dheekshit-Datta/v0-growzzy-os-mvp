@@ -73,7 +73,7 @@ export function deleteSavedChat(id: string) {
   } catch {}
 
   // 4. Try deleting from backend if it exists there
-  fetch(`/api/ai/campaign-plans?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+  fetch(`/api/ai/conversations/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
 
   window.dispatchEvent(new Event(EVENT_NAME));
   window.dispatchEvent(new Event("growzzy:prompt-history-updated"));

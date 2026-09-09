@@ -3,7 +3,6 @@ import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId } from "@/lib/resolve-user"
-import { rateLimitPolicy, rateLimitResponse } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -30,9 +29,6 @@ export async function GET(
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
-    const limit = await rateLimitPolicy(userId, "aiUtility")
-    if (!limit.allowed) return rateLimitResponse(limit)
-
     const conv = await prisma.conversation.findFirst({
       where: { id, userId },
       select: { id: true, title: true, messages: true, createdAt: true, updatedAt: true },
@@ -58,9 +54,6 @@ export async function PUT(
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
-    const limit = await rateLimitPolicy(userId, "aiUtility")
-    if (!limit.allowed) return rateLimitResponse(limit)
-
     const body = await req.json().catch(() => ({}))
     const parsed = SaveSchema.safeParse(body)
     if (!parsed.success) {
@@ -108,9 +101,6 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
     }
     const userId = await resolveUserId(session.user.id)
-    const limit = await rateLimitPolicy(userId, "aiUtility")
-    if (!limit.allowed) return rateLimitResponse(limit)
-
     const existing = await prisma.conversation.findFirst({ where: { id, userId }, select: { id: true } })
     if (!existing) {
       return NextResponse.json({ ok: false, error: "Conversation not found" }, { status: 404 })

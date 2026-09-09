@@ -194,6 +194,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <Link
         key={item.href}
         href={item.href}
+        prefetch={false}
         className={cn(
           "flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-[13px] transition-colors",
           active
@@ -271,6 +272,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <div className="flex items-center gap-0.5">
                   <Link
                     href={item.href}
+                    prefetch={false}
                     className={cn(
                       "flex-1 flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-[13px] transition-colors",
                       active
@@ -296,6 +298,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       </button>
                       <Link
                         href="/dashboard/campaigns/new"
+                        prefetch={false}
                         className="p-1.5 rounded text-[#9CA3AF] hover:text-[#1F57F5] transition-colors cursor-pointer inline-flex"
                         aria-label="New chat"
                       >
@@ -315,6 +318,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                           >
                             <Link
                               href={{ pathname: "/dashboard/campaigns/new", query: { threadId: prompt.id, reuse: prompt.id } }}
+                              prefetch={false}
                               className="flex-1 text-[11.5px] truncate leading-tight font-medium"
                               title={prompt.campaignName}
                             >
@@ -385,6 +389,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         {/* User card */}
         <Link
           href="/dashboard/settings?tab=profile"
+          prefetch={false}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[9px] hover:bg-white/60 cursor-pointer transition-colors"
           aria-label="Account menu"
         >

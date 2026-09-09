@@ -914,6 +914,8 @@ export async function POST(req: Request) {
       onError: (error) => {
         const err = error as { statusCode?: number; message?: string; responseBody?: string };
         const status = err?.statusCode;
+        if (/no credits remaining|insufficient_quota/i.test(err?.message || ""))
+          return "The OpenAI account has no API credits remaining. Add billing credits, then retry.";
         if (status === 401)
           return "The AI provider key is invalid or expired. Replace OPENAI_API_KEY in Vercel, then retry.";
         if (status === 402)
