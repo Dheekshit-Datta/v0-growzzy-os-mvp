@@ -19,6 +19,7 @@ import {
   type ChatErrorKind,
 } from "@/lib/chat-routing";
 import { buildTranscript, downloadTranscript, type TranscriptMessage } from "@/lib/transcript";
+import { saveChatSession } from "@/lib/chat-store";
 
 import { useChat } from "@ai-sdk/react";
 import {
@@ -305,6 +306,14 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const stableConvIdRef = useRef<string | null>(null);
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const ensureConversationId = () => {
+    const id = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId);
+    if (typeof window !== "undefined" && threadId === "growzzy-agent") {
+      try { window.localStorage.setItem("growzzy.agent.conv", id) } catch {}
+    }
+    return id;
+  };
+
   // Memoize the transport so the AI SDK doesn't see a new transport on
   // every render — recreating the transport every render is what causes
   // useChat to constantly re-subscribe, which keeps the React reconciler
@@ -340,12 +349,9 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         role: m.role,
         content: (m.parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n"),
       })).filter((m: any) => m.content.trim())
-      const stableId = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId)
-      // Persist the stable id so reload (which sees threadId === "growzzy-agent")
-      // can find the same conversation row.
-      if (typeof window !== "undefined" && threadId === "growzzy-agent") {
-        try { window.localStorage.setItem("growzzy.agent.conv", stableId) } catch {}
-      }
+      const stableId = ensureConversationId()
+      const title = snapshot.find((m: any) => m.role === "user")?.content.slice(0, 80) || "New Campaign Chat"
+      saveChatSession({ id: stableId, title, lastMessage: snapshot.at(-1)?.content })
       if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
       saveDebounceRef.current = setTimeout(() => {
         fetch(`/api/ai/conversations/${encodeURIComponent(stableId)}`, {
@@ -400,6 +406,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       : threadId;
     if (!loadId) return;
     if (inFlightLoadRef.current === loadId) return;
+    stableConvIdRef.current = loadId;
     inFlightLoadRef.current = loadId;
     (async () => {
       try {
@@ -481,7 +488,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     return undefined;
   }, [messages]);
 
-  const run = (submission: Submission) => {
+  const run = async (submission: Submission) => {
     if (submission.kind === "ignore") return;
     lastSubmission.current = submission;
     setChatError(null);
@@ -493,6 +500,14 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       });
       return;
     }
+    const id = ensureConversationId();
+    const title = submission.text.slice(0, 80);
+    saveChatSession({ id, title, lastMessage: submission.text });
+    await fetch(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, messages: [{ role: "user", content: submission.text }] }),
+    }).catch(() => {});
     void sendMessage({ text: submission.text });
   };
 

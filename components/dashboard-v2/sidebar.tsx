@@ -23,7 +23,6 @@ import {
   FileText,
   Trash2,
   BookOpen,
-  Library,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { loadSavedChats, deleteSavedChat, getDeletedChatIds } from "@/lib/chat-store"
@@ -39,7 +38,6 @@ const CREATE_NAV: NavItem[] = [
   { href: "/dashboard/campaigns/new", label: "New Campaign", icon: Megaphone },
   { href: "/dashboard/brand",         label: "My Brand",       icon: Sparkles },
   { href: "/dashboard/brand?tab=memory", label: "Memory",       icon: BookOpen },
-  { href: "/dashboard/creatives/library", label: "Library",     icon: Library },
   { href: "/dashboard/prompts",       label: "Recent Chats",   icon: History },
 ]
 
@@ -139,13 +137,13 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         .filter((c) => c && !deleted.has(c.id))
         .map((c) => ({ id: c.id, campaignName: c.title || "Untitled" }))
 
-      fetch("/api/ai/campaign-plans", { cache: "no-store" })
+      fetch("/api/ai/conversations", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
-          const items = Array.isArray(json?.plans) ? json.plans : []
+          const items = Array.isArray(json?.conversations) ? json.conversations : []
           const apiPrompts = items
             .filter((item: { id: string }) => item && !deleted.has(item.id))
-            .map((item: { id: string; campaignName: string }) => ({ id: item.id, campaignName: item.campaignName || "Untitled" }))
+            .map((item: { id: string; title: string }) => ({ id: item.id, campaignName: item.title || "Untitled" }))
           const merged = [...local, ...apiPrompts]
           const unique = Array.from(new Map(merged.map((m) => [m.id, m])).values()).slice(0, 10)
           setRecentPrompts(unique)
