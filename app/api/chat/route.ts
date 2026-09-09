@@ -112,7 +112,7 @@ PLATFORM POLICY: Growzzy currently supports **Google Ads only** (Search + Displa
 3. EXECUTION PLAN PREVIEW (previewExecution):
 Call previewExecution when the user asks to build/run/launch a campaign and you have enough info to start. The card lists 3-5 activity steps SPECIFIC to this campaign's actual work. Derive the activity labels from the real work (e.g. for a B2B SaaS lead-gen campaign, the activities might be 'Researching your B2B SaaS competitors', 'Building keyword lists for enterprise buyers', 'Drafting your direct response copy'). The card has a 'Proceed with plan' button and a 10s auto-proceed countdown. The model continues only after the user clicks Proceed or the countdown fires.
 
-PARALLEL ACTIVITIES: When two or more activities can run at the same time (e.g. copy-writing and image-generation, or research across two topics), set `isParallel: true` on each and give them a short `agentRole` (e.g. 'Performance Marketer', 'Creative Director', 'Researcher', 'Strategist'). The chat groups them under a 'N agents in parallel — 0/N done' card so the user sees real concurrency. Use 2-3 parallel activities max; the remaining steps are sequential.
+PARALLEL ACTIVITIES: When two or more activities can run at the same time (e.g. copy-writing and image-generation, or research across two topics), set 'isParallel: true' on each and give them a short agentRole (e.g. 'Performance Marketer', 'Creative Director', 'Researcher', 'Strategist'). The chat groups them under a '2 agents working on this — 0/N done' card so the user sees real concurrency. Use 2-3 parallel activities max; the remaining steps are sequential.
 
 4. RESEARCH (research):
 When building a campaign, call the research tool with 3-5 real queries specific to this industry, competitors, high-intent keywords, and CPC benchmarks. Ground every claim and benchmark in the research findings. NEVER hallucinate benchmarks. If research returns nothing, use internal knowledge but mark numbers as 'industry typical' and note that the user should verify.
@@ -171,7 +171,7 @@ After calling deliverCampaign, DO NOT output any markdown recaps or bulleted sum
 INTEGRATION CONNECT PROMPT
 ============================================================
 When the user asks to publish or sync to a network they have not connected (e.g. Meta Ads, TikTok, LinkedIn), do NOT silently fail. Call the connectIntegrationPrompt tool with the platform and a one-line reason. The chat renders an inline 'Connect / Skip' card. If the user picks Skip, fall back to Google Ads (or note that the campaign stays in draft) — do not retry publishing on the disconnected network. If the user picks Connect, return a one-line confirmation and continue building the campaign in draft state.
-
+`;
 
 const questionSchema = z.object({
   questions: z
@@ -646,7 +646,7 @@ export async function POST(req: Request) {
                   agentRole: z
                     .string()
                     .optional()
-                    .describe("When this step runs in parallel with one or more siblings, give the role a short, human-readable name (e.g. 'Performance Marketer', 'Creative Director', 'Researcher'). The UI groups parallel steps under a 'N agents in parallel' card."),
+                    .describe("When this step runs in parallel with one or more siblings, give the role a short, human-readable name (e.g. 'Performance Marketer', 'Creative Director', 'Researcher'). The UI groups parallel steps under a 'N agents working on this' card."),
                   isParallel: z
                     .boolean()
                     .optional()
