@@ -78,7 +78,6 @@ import {
   Link2,
   Loader2,
   Megaphone,
-  MessageCircleQuestion,
   Paperclip,
   Rocket,
   Search,
@@ -207,42 +206,6 @@ function buildSuggestions(brand: BrandProfile) {
   ];
 }
 
-type Artifacts = {
-  plan?: PlanInput;
-  planApproved?: boolean;
-  creative?: CreativeOutput;
-  campaign?: CampaignInput;
-  citations: { url: string; site: string; title: string }[];
-};
-
-function deriveArtifacts(messages: UIMessage[]): Artifacts {
-  const out: Artifacts = { citations: [] };
-  const seen = new Set<string>();
-  for (const m of messages ?? []) {
-    if (!m?.parts || !Array.isArray(m.parts)) continue;
-    for (const part of m.parts) {
-      if (!part || !isToolUIPart(part)) continue;
-      const name = getToolName(part as ToolUIPart);
-      const p = part as ToolUIPart;
-      if (name === "proposePlan" && p.input) {
-        out.plan = p.input as PlanInput;
-        out.planApproved = (p.output as { approved?: boolean } | undefined)?.approved;
-      }
-      if (name === "generateCreative" && p.output) out.creative = p.output as CreativeOutput;
-      if (name === "deliverCampaign" && p.input) out.campaign = p.input as CampaignInput;
-      if (name === "research") {
-        const cites = (p.output as { citations?: Artifacts["citations"] } | undefined)?.citations;
-        for (const c of cites ?? []) {
-          if (!c?.url || seen.has(c.url)) continue;
-          seen.add(c.url);
-          out.citations.push(c);
-        }
-      }
-    }
-  }
-  return out;
-}
-
 const modes = [
   { value: "standard", label: "Standard" },
   { value: "deep", label: "Deep research" },
@@ -259,6 +222,12 @@ type AttachedFile = {
   type: string;
   url?: string;
   content?: string;
+};
+
+type StoredMessage = {
+  role?: UIMessage["role"];
+  content?: unknown;
+  parts?: UIMessage["parts"];
 };
 
 function storedMessageText(value: unknown): string {
@@ -280,6 +249,11 @@ function storedMessageText(value: unknown): string {
     return storedMessageText(message.content ?? message.text ?? "");
   }
   return "";
+}
+
+function firstTextPart(message: UIMessage): string {
+  const part = message.parts[0];
+  return part?.type === "text" && "text" in part ? part.text : "";
 }
 
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
@@ -309,13 +283,13 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const stableConvIdRef = useRef<string | null>(null);
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const ensureConversationId = () => {
+  const ensureConversationId = useCallback(() => {
     const id = (stableConvIdRef.current ||= threadId === "growzzy-agent" ? crypto.randomUUID() : threadId);
     if (typeof window !== "undefined" && threadId === "growzzy-agent") {
       try { window.localStorage.setItem("growzzy.agent.conv", id) } catch {}
     }
     return id;
-  };
+  }, [threadId]);
 
   // Memoize the transport so the AI SDK doesn't see a new transport on
   // every render — recreating the transport every render is what causes
@@ -340,7 +314,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   }, [])
 
   const onFinish = useCallback(
-    (message: any) => {
+    () => {
       // Persist conversation to DB.
       // We debounce writes — onFinish fires after every tool call / streaming
       // tick, and a full PUT with the entire growing messages array on each
@@ -348,15 +322,15 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       // We also pin the conversation id to a stable one for the lifetime of
       // this component instance, so the first turn doesn't churn UUIDs and
       // the page reload can find the same row.
-      const snapshot = messagesRef.current.map((m: any) => ({
+      const snapshot = messagesRef.current.map((m) => ({
         role: m.role,
-        content: (m.parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n"),
+        content: m.parts.map((p) => p.type === "text" && "text" in p ? p.text : "").filter(Boolean).join("\n"),
         // Keep saved chats small. Image files are sent to the model for the
         // current turn, but their base64 payload is not stored in the DB.
-        parts: (m.parts ?? []).filter((p: any) => p.type !== "file"),
-      })).filter((m: any) => m.content.trim() || m.parts.length)
+        parts: m.parts.filter((p) => p.type !== "file"),
+      })).filter((m) => m.content.trim() || m.parts.length)
       const stableId = ensureConversationId()
-      const title = snapshot.find((m: any) => m.role === "user")?.content.slice(0, 80) || "New Campaign Chat"
+      const title = snapshot.find((m) => m.role === "user")?.content.slice(0, 80) || "New Campaign Chat"
       saveChatSession({ id: stableId, title, lastMessage: snapshot.at(-1)?.content })
       if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
       saveDebounceRef.current = setTimeout(() => {
@@ -380,7 +354,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
           })
       }, 1200)
     },
-    [threadId],
+    [ensureConversationId],
   )
 
   const { messages, sendMessage, addToolResult, status, stop, setMessages } = useChat({
@@ -406,7 +380,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     if (!firstUserText) return;
     const id = ensureConversationId();
     saveChatSession({ id, title: firstUserText.slice(0, 80), lastMessage: firstUserText });
-  }, [messages, threadId]);
+  }, [messages, ensureConversationId]);
 
   // Load existing conversation from DB on mount. The default chat thread
   // ("growzzy-agent") is a UI placeholder — its real conversation id is the
@@ -428,21 +402,21 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       try {
         const res = await fetch(`/api/ai/conversations/${encodeURIComponent(loadId)}`);
         if (!res.ok) return;
-        const data = await res.json();
+        const data = await res.json() as { ok?: boolean; conversation?: { messages?: unknown } };
         if (!data?.ok || !data?.conversation) return;
-        const stored: any[] = Array.isArray(data.conversation.messages) ? data.conversation.messages : [];
+        const stored = Array.isArray(data.conversation.messages) ? data.conversation.messages as StoredMessage[] : [];
         if (!stored.length) return;
-        const hydrated = stored.map((m: any, i: number) => ({
+        const hydrated = stored.map<UIMessage>((m, i) => ({
           id: `${loadId}-${i}`,
           role: m.role || "user",
           content: "",
           parts: Array.isArray(m.parts) && m.parts.length
             ? m.parts
             : [{ type: "text" as const, text: storedMessageText(m.content) }],
-        })).filter((message: any, index: number, all: any[]) =>
-          index === 0 || message.role !== all[index - 1].role || message.parts[0]?.text !== all[index - 1].parts[0]?.text
+        })).filter((message, index, all) =>
+          index === 0 || message.role !== all[index - 1].role || firstTextPart(message) !== firstTextPart(all[index - 1])
         );
-        if (active) setMessages(hydrated as any);
+        if (active) setMessages(hydrated);
       } catch {
         // silent — start with empty chat
       } finally {
@@ -1005,7 +979,7 @@ function ToolTimelineItem({ part, children }: { part: ToolUIPart; children: Reac
   if (startTimeRef.current == null && (part.state === "input-available" || part.state === "input-streaming")) {
     startTimeRef.current = Date.now();
   }
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 500);
     return () => clearInterval(id);
@@ -1058,7 +1032,7 @@ function BrandUrlCard({ part, addToolResult }: { part: ToolUIPart; addToolResult
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
           <Globe className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-medium text-foreground">What's your website?</span>
+        <span className="text-[13px] font-medium text-foreground">What&apos;s your website?</span>
       </div>
       <p className="mt-1.5 text-[12.5px] text-muted-foreground">
         {input?.reason ??
@@ -1130,7 +1104,7 @@ function ConnectIntegrationCard({
           <Link2 className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold truncate">{platform} Ads isn't connected yet</div>
+          <div className="text-[13.5px] font-semibold truncate">{platform} Ads isn&apos;t connected yet</div>
           <div className="text-[11.5px] text-muted-foreground truncate">{reason}</div>
         </div>
       </div>
@@ -2004,9 +1978,12 @@ Rendering high-resolution commercial ad creative mockup...`}
 
         <div className="mt-3 overflow-hidden rounded-[12px] border border-border bg-muted/40 max-w-sm">
           {output?.imageUrl ? (
-            <img
+            <Image
               src={output.imageUrl}
               alt={output.caption ?? "Generated ad creative"}
+              width={640}
+              height={640}
+              unoptimized
               className="aspect-square w-full object-cover rounded-[10px]"
               onError={(e) => {
                 const el = e.currentTarget
@@ -2234,7 +2211,7 @@ function CampaignCardContent({
             toast.error(message);
           }
         }
-      } catch (err) {
+      } catch {
         toast.error("Network error. Could not reach the launch service.");
       } finally {
         setIsSaving(false);
@@ -2300,6 +2277,14 @@ function CampaignCardContent({
             className="h-8 gap-1.5 text-[12px] cursor-pointer"
           >
             <Copy className="h-3.5 w-3.5" /> Copy Copy
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenArtifact?.(artifactData)}
+            className="h-8 gap-1.5 text-[12px] cursor-pointer"
+          >
+            <FileText className="h-3.5 w-3.5" /> Open campaign
           </Button>
           <Button
             variant={isEditing ? "default" : "outline"}
@@ -2636,7 +2621,7 @@ function CampaignCardContent({
             <div className="rounded-lg border border-border bg-card p-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[12.5px] font-medium text-foreground">
-                  {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"} isn't connected yet
+                  {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"} isn&apos;t connected yet
                 </p>
                 <p className="text-[11.5px] text-muted-foreground leading-snug">
                   Connect your account and this campaign publishes straight from here — no need to rebuild it.
