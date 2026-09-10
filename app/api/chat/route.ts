@@ -330,9 +330,10 @@ function validateDeliverCampaignInput(input: Record<string, unknown>): string[] 
 
 export async function POST(req: Request) {
   try {
-    const { messages, brandContext } = (await req.json()) as {
+    const { messages, brandContext, mode } = (await req.json()) as {
       messages?: UIMessage[];
       brandContext?: string;
+      mode?: "standard" | "deep";
     };
     if (!Array.isArray(messages)) return new Response("Messages are required", { status: 400 });
 
@@ -408,7 +409,9 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model,
-      system: SYSTEM + brandBlock,
+      system: SYSTEM + brandBlock + (mode === "deep"
+        ? "\n\n=== RESEARCH MODE ===\nUse 5-8 focused searches when research is needed. Cite sources and distinguish verified facts from estimates."
+        : ""),
       messages: await convertToModelMessages(stripCreativeImages(messages)),
       abortSignal: req.signal,
       stopWhen: stepCountIs(50),

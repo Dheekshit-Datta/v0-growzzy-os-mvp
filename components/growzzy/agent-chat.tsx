@@ -70,12 +70,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Download as DownloadIcon,
+  History,
+  Plus,
   RefreshCw,
   CircleStop,
   Gauge,
   Globe,
   Image as ImageIcon,
   ListChecks,
+  Link2,
   Loader2,
   Megaphone,
   MessageCircleQuestion,
@@ -243,8 +246,8 @@ function deriveArtifacts(messages: UIMessage[]): Artifacts {
 }
 
 const modes = [
-  { value: "standard", label: "Mid-level marketer" },
-  { value: "deep", label: "Senior performance marketer" },
+  { value: "standard", label: "Standard" },
+  { value: "deep", label: "Deep research" },
 ];
 
 export interface AgentChatProps {
@@ -284,6 +287,8 @@ function storedMessageText(value: unknown): string {
 export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("standard");
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const [brand, setBrand] = useState<BrandProfile>(emptyBrand);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -322,7 +327,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign" }),
+        body: () => ({ brandContext: brandContextText(loadBrand()), source: "nextjs-campaign", mode: modeRef.current }),
       }),
     [],
   )
@@ -348,7 +353,8 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       const snapshot = messagesRef.current.map((m: any) => ({
         role: m.role,
         content: (m.parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n"),
-      })).filter((m: any) => m.content.trim())
+        parts: m.parts ?? [],
+      })).filter((m: any) => m.content.trim() || m.parts.length)
       const stableId = ensureConversationId()
       const title = snapshot.find((m: any) => m.role === "user")?.content.slice(0, 80) || "New Campaign Chat"
       saveChatSession({ id: stableId, title, lastMessage: snapshot.at(-1)?.content })
@@ -391,6 +397,16 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+
+  // Keep the sidebar useful even if a server write is temporarily unavailable.
+  useEffect(() => {
+    const firstUserText = messages
+      .find((message) => message.role === "user")
+      ?.parts?.find((part) => part.type === "text" && "text" in part)?.text;
+    if (!firstUserText) return;
+    const id = ensureConversationId();
+    saveChatSession({ id, title: firstUserText.slice(0, 80), lastMessage: firstUserText });
+  }, [messages, threadId]);
 
   // Load existing conversation from DB on mount. The default chat thread
   // ("growzzy-agent") is a UI placeholder — its real conversation id is the
@@ -576,7 +592,6 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     const submission = resolveSubmission({
       text: fullText,
       busy,
-      mode,
       pending: pendingQuestion
         ? {
           toolName: "askUser",
@@ -693,7 +708,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
               type="button"
               onClick={() => setMode((m) => (m === "standard" ? "deep" : "standard"))}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted cursor-pointer"
-              title={mode === "standard" ? "Uses fewer AI credits for quick campaign guidance" : "Uses more AI credits for deeper research and senior-level campaign guidance"}
+              title={mode === "standard" ? "Quick campaign guidance" : "Uses a broader live-research brief; it does not switch AI models."}
             >
               <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
               {modes.find((m) => m.value === mode)?.label}
@@ -799,6 +814,20 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         {started && (
           <div className="flex items-center justify-end gap-2 px-1 pb-1">
+            <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer" onClick={() => window.location.assign("/dashboard/prompts")}>
+              <History className="h-3.5 w-3.5" /> Recent chats
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 cursor-pointer"
+              onClick={() => {
+                window.localStorage.removeItem("growzzy.agent.conv");
+                window.location.assign("/dashboard/campaigns/new");
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" /> New chat
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer" onClick={transcript}>
               <DownloadIcon className="h-3.5 w-3.5" /> Download transcript
             </Button>
@@ -1110,7 +1139,7 @@ function ConnectIntegrationCard({
     <div className="rounded-[16px] border border-border bg-card overflow-hidden shadow-2xs">
       <div className="flex items-center gap-3 px-4 py-3 bg-muted/20 border-b border-border">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#1F57F5]/10 text-[#1F57F5]">
-          <Link className="h-4 w-4" />
+          <Link2 className="h-4 w-4" />
         </span>
         <div className="min-w-0">
           <div className="text-[13.5px] font-semibold truncate">{platform} Ads isn't connected yet</div>
@@ -2278,6 +2307,12 @@ function CampaignCard({
         </div>
       </div>
 
+      {c.platform?.toUpperCase().includes("GOOGLE") && (
+        <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+          This is a Google Search campaign, so the creative is the text ad copy below. Choose a Google Display campaign when you need an image creative.
+        </p>
+      )}
+
       {/* Campaign card container */}
       <div className={cn(
         "rounded-[16px] border bg-card overflow-hidden shadow-2xs",
@@ -2573,7 +2608,7 @@ function CampaignCard({
                   onClick={handleConnectAndRetry}
                   className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1.5 cursor-pointer shadow-xs"
                 >
-                  <Link className="h-3.5 w-3.5" />
+                  <Link2 className="h-3.5 w-3.5" />
                   Connect {c.platform?.includes("Google") ? "Google Ads" : "Meta Ads"} & Publish
                 </Button>
               </>
@@ -2615,7 +2650,7 @@ function CampaignCard({
                   onClick={handleConnectAndRetry}
                   className="bg-[#1F57F5] hover:bg-[#1845C4] text-white text-xs gap-1 cursor-pointer"
                 >
-                  <Link className="h-3.5 w-3.5" />
+                  <Link2 className="h-3.5 w-3.5" />
                   Connect
                 </Button>
               </div>

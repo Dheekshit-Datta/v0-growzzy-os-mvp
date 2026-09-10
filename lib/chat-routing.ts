@@ -20,7 +20,6 @@ export function resolveSubmission(args: {
   text: string;
   busy: boolean;
   pending?: PendingTool;
-  mode?: string;
 }): Submission {
   const value = args.text.trim();
   if (!value) return { kind: "ignore", reason: "empty" };
@@ -33,8 +32,7 @@ export function resolveSubmission(args: {
 
   return {
     kind: "send",
-    text:
-      args.mode === "deep" ? `${value}\n\n(Run deep live research before answering.)` : value,
+    text: value,
   };
 }
 
