@@ -353,7 +353,9 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       const snapshot = messagesRef.current.map((m: any) => ({
         role: m.role,
         content: (m.parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n"),
-        parts: m.parts ?? [],
+        // Keep saved chats small. Image files are sent to the model for the
+        // current turn, but their base64 payload is not stored in the DB.
+        parts: (m.parts ?? []).filter((p: any) => p.type !== "file"),
       })).filter((m: any) => m.content.trim() || m.parts.length)
       const stableId = ensureConversationId()
       const title = snapshot.find((m: any) => m.role === "user")?.content.slice(0, 80) || "New Campaign Chat"
@@ -506,7 +508,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     return undefined;
   }, [messages]);
 
-  const run = async (submission: Submission) => {
+  const run = async (submission: Submission, files: AttachedFile[] = []) => {
     if (submission.kind === "ignore") return;
     lastSubmission.current = submission;
     setChatError(null);
@@ -526,7 +528,12 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, messages: [{ role: "user", content: submission.text }] }),
     }).catch(() => {});
-    void sendMessage({ text: submission.text });
+    void sendMessage({
+      text: submission.text,
+      files: files
+        .filter((file) => file.url)
+        .map((file) => ({ type: "file" as const, mediaType: file.type, filename: file.name, url: file.url! })),
+    });
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,7 +590,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       const attachmentsContext = attachedFiles
         .map((f) => {
           if (f.content) return `[Attached File: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]:\n${f.content}`;
-          return `[Attached Image / Asset: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]`;
+          return `[Attached image: ${f.name} (${(f.size / 1024).toFixed(1)} KB). Inspect the image itself before answering.]`;
         })
         .join("\n\n");
       fullText = fullText ? `${fullText}\n\n${attachmentsContext}` : attachmentsContext;
@@ -601,9 +608,10 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
         : null,
     });
     if (submission.kind === "ignore") return;
+    const imageFiles = attachedFiles.filter((file) => file.url);
     setInput("");
     setAttachedFiles([]);
-    run(submission);
+    run(submission, imageFiles);
   };
 
   const retry = () => {
@@ -997,6 +1005,13 @@ function AgentMessage({
                 </ToolTimelineItem>
               );
             }
+            if (["getMyAnalytics", "getMyCampaigns", "getMyLeads", "getMyRecommendations"].includes(name)) {
+              return (
+                <ToolTimelineItem key={i} part={p}>
+                  <AccountDataCard part={p} />
+                </ToolTimelineItem>
+              );
+            }
             // research + anything else
             return (
               <ToolTimelineItem key={i} part={p}>
@@ -1238,6 +1253,37 @@ function AnalyzeCard({ part }: { part: ToolUIPart }) {
 }
 
 /* ------------------------------- tool cards -------------------------------- */
+
+function AccountDataCard({ part }: { part: ToolUIPart }) {
+  const name = getToolName(part);
+  const labels: Record<string, string> = {
+    getMyAnalytics: "Account performance",
+    getMyCampaigns: "Campaign data",
+    getMyLeads: "Lead data",
+    getMyRecommendations: "Optimization recommendations",
+  };
+  const output = part.output as { error?: string } | undefined;
+  const running = part.state !== "output-available" && part.state !== "output-error";
+  const failed = Boolean(output?.error) || part.state === "output-error";
+
+  return (
+    <div className="rounded-[12px] border border-border bg-card p-4">
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-tint text-primary">
+          <Search className="h-3.5 w-3.5" />
+        </span>
+        <span className="text-[13px] font-medium text-foreground">
+          {running ? `Checking ${labels[name] ?? "account data"}…` : failed ? `Could not read ${labels[name] ?? "account data"}` : `Checked ${labels[name] ?? "account data"}`}
+        </span>
+      </div>
+      <p className="mt-2 text-[11.5px] text-muted-foreground">
+        {failed
+          ? output?.error || "The connected account data could not be read."
+          : "This uses the saved/synced data in Growzzy, not web market research."}
+      </p>
+    </div>
+  );
+}
 
 function ResearchCard({ part }: { part: ToolUIPart }) {
   const input = part.input as { focus?: string; topics?: string[] } | undefined;

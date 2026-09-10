@@ -568,7 +568,7 @@ export async function POST(req: Request) {
         // -----------------------------------------------------------------
         getMyAnalytics: tool({
           description:
-            "Pull the user's live account analytics (total spend, revenue, ROAS, CTR, clicks, impressions, conversions, leads, top/bottom campaigns, platform breakdown, daily chart) for the last N days. Use this whenever the user asks about account performance, asks for an audit, or wants to know how their ads are doing.",
+            "Pull the user's synced Growzzy account analytics (total spend, revenue, ROAS, CTR, clicks, impressions, conversions, leads, top/bottom campaigns, platform breakdown, daily chart) for the last N days. Use this whenever the user asks about account performance, asks for an audit, or wants to know how their ads are doing. Be clear if no data has been synced.",
           inputSchema: z.object({
             days: z
               .number()
