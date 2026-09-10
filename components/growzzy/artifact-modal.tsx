@@ -141,7 +141,7 @@ export function ArtifactPill({
     link.download = `${(data.brandName || "campaign").toLowerCase()}-campaign-brief.md`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success("Downloaded markdown brief");
+    toast.success("Downloaded strategy as a Markdown file");
   };
 
   return (
@@ -171,7 +171,7 @@ export function ArtifactPill({
           onClick={downloadFile}
           className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted cursor-pointer"
         >
-          <span>Download</span>
+          <span>Download .md</span>
         </button>
         <div className="grid h-7 w-7 place-items-center rounded-full bg-foreground text-background transition-transform group-hover:scale-105">
           <ChevronRight className="h-4 w-4" />

@@ -725,6 +725,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
             message={m}
             addToolResult={addToolResult}
             onStop={stop}
+            onPlanAction={(text) => run({ kind: "send", text })}
             onOpenArtifact={setActiveArtifact}
             brand={brand}
           />
@@ -862,6 +863,7 @@ const MemoAgentMessage = memo(AgentMessage, (prev, next) => {
     prev.brand === next.brand &&
     prev.addToolResult === next.addToolResult &&
     prev.onStop === next.onStop &&
+    prev.onPlanAction === next.onPlanAction &&
     prev.onOpenArtifact === next.onOpenArtifact
   )
 })
@@ -870,12 +872,14 @@ function AgentMessage({
   message,
   addToolResult,
   onStop,
+  onPlanAction,
   onOpenArtifact,
   brand,
 }: {
   message: UIMessage;
   addToolResult: AddToolResult;
   onStop: () => void;
+  onPlanAction: (text: string) => void;
   onOpenArtifact?: (data: ArtifactData) => void;
   brand?: BrandProfile;
 }) {
@@ -915,7 +919,7 @@ function AgentMessage({
                 <ToolTimelineItem key={i} part={p}>
                   <PlanCard
                     part={p}
-                    addToolResult={addToolResult}
+                    onPlanAction={onPlanAction}
                     onOpenArtifact={onOpenArtifact}
                     brandName={brand?.businessName}
                   />
@@ -1473,23 +1477,23 @@ function QuestionsCard({
 
 function PlanCard({
   part,
-  addToolResult,
+  onPlanAction,
   onOpenArtifact,
   brandName,
 }: {
   part: ToolUIPart;
-  addToolResult: AddToolResult;
+  onPlanAction: (text: string) => void;
   onOpenArtifact?: (data: ArtifactData) => void;
   brandName?: string;
 }) {
   const input = part.input as PlanInput | undefined;
   const output = part.output as
-    | { approved?: boolean; qualityIssues?: string[]; retryGuidance?: string }
+    | { approved?: boolean; valid?: boolean; qualityIssues?: string[]; retryGuidance?: string }
     | undefined;
   if (!input) return null;
-  const decided = part.state === "output-available";
-  const wasRejected = decided && output?.approved === false;
-  const wasApproved = decided && output?.approved === true;
+  const userDecided = typeof output?.approved === "boolean";
+  const needsRevision = output?.valid === false;
+  const wasApproved = userDecided && output?.approved === true;
 
   const strategyArtifact: ArtifactData = {
     title: input.title || "Campaign Strategy Architecture",
@@ -1509,7 +1513,7 @@ function PlanCard({
       <div
         className={cn(
           "rounded-[16px] border bg-card overflow-hidden shadow-2xs",
-          wasRejected ? "border-amber-500/60" : "border-border",
+          needsRevision ? "border-amber-500/60" : "border-border",
         )}
       >
         {/* Header: Strategy Plan & Platform Pill */}
@@ -1535,15 +1539,15 @@ function PlanCard({
                 {input.platform}
               </span>
             )}
-            <StatusPill variant={wasRejected ? "warn" : wasApproved ? "success" : "warn"}>
-              {wasRejected ? "Quality Rejected" : wasApproved ? "Approved" : "Awaiting Approval"}
+            <StatusPill variant={needsRevision ? "warn" : wasApproved ? "success" : "warn"}>
+              {needsRevision ? "Needs revision" : wasApproved ? "Approved" : "Awaiting approval"}
             </StatusPill>
           </div>
         </div>
 
         {/* Quality rejection banner — surfaces what was wrong so the user
             understands why the model is rewriting. */}
-        {wasRejected && Array.isArray(output?.qualityIssues) && output.qualityIssues.length > 0 && (
+        {needsRevision && Array.isArray(output?.qualityIssues) && output.qualityIssues.length > 0 && (
           <div className="border-b border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-[12px]">
             <div className="flex items-start gap-2">
               <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-amber-500 text-white">
@@ -1551,7 +1555,7 @@ function PlanCard({
               </span>
               <div className="flex-1 min-w-0 space-y-1">
                 <p className="font-semibold text-amber-900 dark:text-amber-200">
-                  Strategy needs revision — Growzzy is rewriting it now.
+                  Strategy needs correction before it can be approved.
                 </p>
                 <ul className="list-disc list-inside space-y-0.5 text-amber-800 dark:text-amber-300/90 leading-relaxed">
                   {output.qualityIssues.map((issue, i) => (
@@ -1595,12 +1599,12 @@ function PlanCard({
                 <div
                   className={cn(
                     "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 text-[10px]",
-                    decided && output?.approved
+                    wasApproved
                       ? "border-emerald-500 bg-emerald-500 text-white"
                       : "border-muted-foreground/60 text-transparent"
                   )}
                 >
-                  {decided && output?.approved && <Check className="h-2.5 w-2.5" />}
+                  {wasApproved && <Check className="h-2.5 w-2.5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium text-foreground">
@@ -1619,23 +1623,17 @@ function PlanCard({
       </div>
 
       {/* Confirmation action — adjust based on decision state */}
-      {decided && output?.approved === false && (
+      {needsRevision && (
         <div className="flex items-center justify-between pt-1 px-1">
           <p className="text-[12px] text-muted-foreground">
-            Review this strategic architecture. Click below to ask the agent to revise it.
+            The strategy has format issues. Revise sends those requirements back to the agent.
           </p>
           <Button
             className="gap-1.5 bg-[#1F57F5] hover:bg-[#1845C4] text-white rounded-full px-5 text-[13px] font-medium shadow-sm cursor-pointer"
             onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: {
-                  approved: false,
-                  userAction: "revise",
-                  message: "User asked to revise. Address all listed issues and call proposePlan again with a corrected strategy.",
-                },
-              })
+              onPlanAction(
+                `Revise the strategy document you just proposed. Correct these issues: ${(output?.qualityIssues || []).join(" ")}. Keep the useful content, then submit one replacement strategy document with proposePlan.`,
+              )
             }
           >
             <Sparkles className="h-3.5 w-3.5" />
@@ -1643,14 +1641,14 @@ function PlanCard({
           </Button>
         </div>
       )}
-      {decided && output?.approved && (
+      {wasApproved && (
         <div className="flex items-center justify-between pt-1 px-1">
           <p className="text-[12px] text-muted-foreground">
             Approved — generating creative assets & launch setup.
           </p>
         </div>
       )}
-      {!decided && (
+      {!needsRevision && !userDecided && (
         <div className="flex items-center justify-between pt-1 px-1">
           <p className="text-[12px] text-muted-foreground">
             Review this strategic architecture. Click approve to generate creative visual assets & launch setup.
@@ -1658,11 +1656,9 @@ function PlanCard({
           <Button
             className="gap-1.5 bg-[#1F57F5] hover:bg-[#1845C4] text-white rounded-full px-5 text-[13px] font-medium shadow-sm cursor-pointer"
             onClick={() =>
-              addToolResult({
-                tool: "proposePlan",
-                toolCallId: part.toolCallId,
-                output: { approved: true },
-              })
+              onPlanAction(
+                "I approve the strategy document you just proposed. Continue with the campaign package now; do not create another strategy document.",
+              )
             }
           >
             <Sparkles className="h-3.5 w-3.5" />

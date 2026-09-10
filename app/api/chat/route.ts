@@ -129,10 +129,10 @@ FORMATTING RULES:
 - Bold **CRITICAL:** callouts go immediately after the relevant section.
 - Tables for settings, bullet lists for actions, prose only to explain WHY a setting exists.
 
-Call proposePlan EXACTLY ONCE with the full markdownPlan. Do NOT dump the strategy as raw markdown text in the conversation. The tool renders a proper strategy document card with an Approve button.
+Call proposePlan exactly once for each new or revised strategy document. Do NOT dump the strategy as raw markdown text in the conversation. The tool renders a proper strategy document card with an Approve button. If the user explicitly approves an existing strategy, do not propose it again: continue with the campaign package.
 
 6. ASSET GENERATION & LAUNCH PACKAGE (generateCreative & deliverCampaign):
-Once approved (approved=true):
+Once the user explicitly approves a strategy in a follow-up message:
 - GOOGLE SEARCH CAMPAIGN (text-only RSA): Do NOT call generateCreative. Immediately call deliverCampaign with 15 headlines (<= 30 chars), 4 descriptions (<= 90 chars), 4 Sitelink extensions, negative keywords, targeting setup.
 - GOOGLE DISPLAY / DISCOVERY IMAGE AD: Call generateCreative ONCE for the 1:1 image, then call deliverCampaign with 1 short headline (<= 40 chars), 1 description (<= 90 chars), Final URL, CTA, targeting setup.
 
@@ -744,7 +744,9 @@ export async function POST(req: Request) {
             for (let i = 0; i < lines.length - 1; i += 1) {
               const headerLine = lines[i].trim();
               const nextLine = lines[i + 1].trim();
-              if (/^\s*\|.+\|\s*$/.test(headerLine) && !/^\s*\|.+\|\s*$/.test(nextLine) && !/^\s*\|[\s\-:|]+\|\s*$/.test(nextLine)) {
+              const previousLine = lines[i - 1]?.trim() || "";
+              const startsTable = i === 0 || !/^\s*\|.+\|\s*$/.test(previousLine);
+              if (startsTable && /^\s*\|.+\|\s*$/.test(headerLine) && !/^\s*\|[\s\-:|]+\|\s*$/.test(nextLine)) {
                 issues.push(`Malformed markdown table on line ${i + 1}: a table header row "${headerLine.slice(0, 60)}…" must be followed by a separator row like "|---|---|---|". Without it, the entire table renders as plain text. Re-emit the table with the separator row.`);
                 break;
               }
@@ -791,7 +793,7 @@ export async function POST(req: Request) {
 
             if (hardIssues.length > 0) {
               return {
-                approved: false,
+                valid: false,
                 qualityIssues: hardIssues,
                 warnings,
                 retryGuidance:
@@ -800,7 +802,7 @@ export async function POST(req: Request) {
               };
             }
             return {
-              approved: true,
+              valid: true,
               title: input.title,
               warnings: warnings.length > 0 ? warnings : undefined,
             };
