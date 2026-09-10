@@ -39,6 +39,10 @@ export async function GET(req: NextRequest) {
     },
     take: 20,
   })
+  const connectedElsewhere = await prisma.integration.findFirst({
+    where: { userId, platform: "GOOGLE", workspaceId: { not: workspaceId } },
+    select: { workspace: { select: { name: true } } },
+  })
 
   const campaignCountsByIntegrationId = new Map<string, number>()
   const integrationIds = integrations.map((integration) => integration.id)
@@ -51,11 +55,12 @@ export async function GET(req: NextRequest) {
     for (const row of grouped) campaignCountsByIntegrationId.set(row.integrationId, row._count._all)
   }
 
-  const result: Record<string, any> = {
+  const result: Record<string, unknown> = {
     google: null,
     meta: null,
     hasAnyAdsAccess: false,
   }
+  if (connectedElsewhere) result.google = { connected: false, connectedElsewhere: connectedElsewhere.workspace.name }
 
   for (const integration of integrations) {
     if (integration.platform !== "GOOGLE" && integration.platform !== "META") continue

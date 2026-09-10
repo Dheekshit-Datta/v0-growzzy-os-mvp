@@ -40,6 +40,13 @@ export interface BrandProfile {
   tone: string;
   palette: { name: string; primary: string; accent: string };
   defaultLandingPage: string;
+  instagramUrl?: string;
+  linkedinUrl?: string;
+  additionalLandingPages?: string[];
+  ageGroup?: string;
+  demographics?: string;
+  preferredLocations?: string;
+  lookalikeData?: string;
   analyzedAt?: string;
   sources?: string[];
   /** The user's role in the business. Drives how the AI frames answers. */
@@ -78,6 +85,13 @@ export const emptyBrand: BrandProfile = {
   tone: "friendly",
   palette: { name: "Blue", primary: "#1F57F5", accent: "#EAF0FE" },
   defaultLandingPage: "",
+  instagramUrl: "",
+  linkedinUrl: "",
+  additionalLandingPages: [],
+  ageGroup: "",
+  demographics: "",
+  preferredLocations: "",
+  lookalikeData: "",
 };
 
 const KEY = "growzzy.brand.v1";
@@ -96,6 +110,7 @@ export function loadBrand(): BrandProfile {
       competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
       keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
       creativeAngles: Array.isArray(parsed.creativeAngles) ? parsed.creativeAngles : [],
+      additionalLandingPages: Array.isArray(parsed.additionalLandingPages) ? parsed.additionalLandingPages : [],
     };
   } catch {
     return emptyBrand;
@@ -127,6 +142,10 @@ export function brandContextText(p: BrandProfile): string {
     p.positioning && `Positioning: ${p.positioning}`,
     p.differentiators?.length ? `Differentiators: ${p.differentiators.join("; ")}` : null,
     p.audience && `Ideal customer: ${p.audience}`,
+    p.ageGroup && `Age group: ${p.ageGroup}`,
+    p.demographics && `Demographics: ${p.demographics}`,
+    p.preferredLocations && `Preferred locations: ${p.preferredLocations}`,
+    p.lookalikeData && `Lookalike source data: ${p.lookalikeData}`,
     Array.isArray(p.segments) && p.segments.length
       ? `Audience segments:\n${p.segments
           .map((s) => `- ${s?.segment ?? ""} — pains: ${s?.pains ?? ""} | triggers: ${s?.triggers ?? ""}`)
@@ -139,6 +158,9 @@ export function brandContextText(p: BrandProfile): string {
     Array.isArray(p.creativeAngles) && p.creativeAngles.length ? `Creative angles that fit: ${p.creativeAngles.join("; ")}` : null,
     p.tone && `Tone of voice: ${p.tone}`,
     p.defaultLandingPage && `Default landing page: ${p.defaultLandingPage}`,
+    p.instagramUrl && `Instagram: ${p.instagramUrl}`,
+    p.linkedinUrl && `LinkedIn: ${p.linkedinUrl}`,
+    p.additionalLandingPages?.length ? `Additional landing pages: ${p.additionalLandingPages.join(", ")}` : null,
   ].filter(Boolean);
   return lines.join("\n");
 }

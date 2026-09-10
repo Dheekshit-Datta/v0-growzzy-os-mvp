@@ -243,8 +243,8 @@ function deriveArtifacts(messages: UIMessage[]): Artifacts {
 }
 
 const modes = [
-  { value: "standard", label: "Standard" },
-  { value: "deep", label: "Deep research" },
+  { value: "standard", label: "Mid-level marketer" },
+  { value: "deep", label: "Senior performance marketer" },
 ];
 
 export interface AgentChatProps {
@@ -693,6 +693,7 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
               type="button"
               onClick={() => setMode((m) => (m === "standard" ? "deep" : "standard"))}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted cursor-pointer"
+              title={mode === "standard" ? "Uses fewer AI credits for quick campaign guidance" : "Uses more AI credits for deeper research and senior-level campaign guidance"}
             >
               <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
               {modes.find((m) => m.value === mode)?.label}

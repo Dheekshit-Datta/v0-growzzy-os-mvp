@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Shell } from "@/components/dashboard-v2/shell"
-import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2, UserRound, Upload, LogOut } from "lucide-react"
+import { AlertTriangle, Check, Trash2, ChevronDown, Settings, Plug, Bell, ShieldAlert, Loader2, UserRound, Upload, LogOut, KeyRound } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CURATED_AVATARS } from "@/lib/profile-avatars"
 
@@ -14,7 +14,7 @@ type Tab = "profile" | "general" | "integrations" | "notifications" | "danger"
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "profile",       label: "Profile",       icon: UserRound   },
-  { id: "general",       label: "General",       icon: Settings    },
+  { id: "general",       label: "Workspace",     icon: Settings    },
   { id: "integrations",  label: "Integrations",  icon: Plug        },
   { id: "notifications", label: "Notifications", icon: Bell        },
   { id: "danger",        label: "Danger zone",   icon: ShieldAlert },
@@ -24,6 +24,8 @@ function ProfileTab() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [image, setImage] = useState("")
   const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [resettingPassword, setResettingPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -34,6 +36,7 @@ function ProfileTab() {
       .then((json) => {
         setImage(json?.user?.image || "")
         setName(json?.user?.name || json?.user?.email || "User")
+        setEmail(json?.user?.email || "")
       })
       .finally(() => setLoading(false))
   }, [])
@@ -62,11 +65,25 @@ function ProfileTab() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || "Could not save profile picture")
       window.dispatchEvent(new Event("growzzy:profile-updated"))
-    } catch (err: any) {
-      setError(err?.message || "Could not save profile picture")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not save profile picture")
       throw err
     } finally {
       setSaving(false)
+    }
+  }
+
+  const requestPasswordReset = async () => {
+    if (!email) return
+    setResettingPassword(true)
+    try {
+      const res = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })
+      if (!res.ok) throw new Error("Could not send password reset email")
+      setError("Password reset link sent. Check your inbox.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send password reset email")
+    } finally {
+      setResettingPassword(false)
     }
   }
 
@@ -103,6 +120,10 @@ function ProfileTab() {
     </SectionCard>
 
     <SectionCard title="Account session" description="Manage your current signed-in session.">
+      <div className="flex items-center justify-between gap-4 border-b border-[#DDE1E7] pb-4">
+        <div><p className="text-[13.5px] font-semibold text-[#111827]">Contact email</p><p className="mt-0.5 text-[12px] text-[#6B7280]">{email || "No email on file"}</p></div>
+        <button type="button" onClick={requestPasswordReset} disabled={!email || resettingPassword} className="inline-flex items-center gap-2 rounded-[8px] border border-[#DDE1E7] px-4 py-2 text-[12.5px] font-semibold text-[#374151] hover:bg-[#F4F5F7] disabled:opacity-60"><KeyRound size={14} />{resettingPassword ? "Sending…" : "Change password"}</button>
+      </div>
       <div className="flex items-center justify-between py-2">
         <div>
           <p className="text-[13.5px] font-semibold text-[#111827]">Sign out</p>
@@ -110,7 +131,7 @@ function ProfileTab() {
         </div>
         <button
           type="button"
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => signOut({ callbackUrl: "/auth" })}
           className="inline-flex items-center gap-2 px-4 py-2 text-[12.5px] font-semibold text-[#D3564C] bg-[#FDF2F2] hover:bg-[#FDE8E8] border border-[#F8B4B4] rounded-[8px] transition-colors cursor-pointer"
         >
           <LogOut size={14} /> Log out
@@ -132,6 +153,8 @@ type WorkspaceData = {
   productDescription: string | null
   monthlyCredits: number
   creditResetDay: number
+  logo: string | null
+  memberCount?: number
 }
 
 function CreditUsageCard() {
@@ -329,14 +352,11 @@ function GeneralTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: ws.name || undefined,
-          websiteUrl: ws.websiteUrl || "",
           primaryGoal: ws.primaryGoal || undefined,
           currencyCode: ws.currencyCode || undefined,
           timezone: ws.timezone || undefined,
           dailyBudgetCeiling: ws.dailyBudgetCeiling ?? undefined,
-          productDescription: ws.productDescription || "",
-          monthlyCredits: ws.monthlyCredits ?? undefined,
-          creditResetDay: ws.creditResetDay ?? undefined,
+          logo: ws.logo || "",
         }),
       })
     } finally {
@@ -351,10 +371,10 @@ function GeneralTab() {
   }
 
   return (
-    <SectionCard title="Workspace" description="Configure your workspace identity and AI context.">
+    <SectionCard title="Workspace" description="Workspace identity, regional preferences, and spending guardrails.">
       <div className="grid grid-cols-2 gap-4">
         <SkuInput label="Workspace name" placeholder="Your workspace name" value={ws.name || ""} onChange={(v) => set({ name: v })} />
-        <SkuInput label="Business website" type="url" placeholder="https://yourwebsite.com" value={ws.websiteUrl || ""} onChange={(v) => set({ websiteUrl: v })} />
+        <div className="space-y-1.5"><label className="block text-[12.5px] font-semibold text-[#374151]">Company logo URL</label><input value={ws.logo || ""} onChange={(e) => set({ logo: e.target.value || null })} placeholder="https://…" className="sku-input h-9 w-full rounded-[8px] px-3 text-[13px] text-[#111827] outline-none" /><p className="text-[11px] text-[#9CA3AF]">Shown to your team inside this workspace.</p></div>
         <SkuSelect label="Primary goal" options={GOAL_OPTIONS} value={ws.primaryGoal || ""} onChange={(v) => set({ primaryGoal: v })} />
         <SkuSelect label="Currency" options={CURRENCY_OPTIONS} value={ws.currencyCode || ""} onChange={(v) => set({ currencyCode: v })} />
         <SkuSelect label="Timezone" options={TIMEZONE_OPTIONS} value={ws.timezone || ""} onChange={(v) => set({ timezone: v })} />
@@ -367,19 +387,7 @@ function GeneralTab() {
           value={ws.dailyBudgetCeiling != null ? String(ws.dailyBudgetCeiling) : ""}
           onChange={(v) => set({ dailyBudgetCeiling: v ? Number(v) : null })}
         />
-        <SkuInput label="Monthly AI credits" type="number" placeholder="1000" helper="Shared by this workspace for AI features." value={ws.monthlyCredits != null ? String(ws.monthlyCredits) : ""} onChange={(v) => set({ monthlyCredits: v ? Number(v) : 0 })} />
-        <SkuInput label="Credit reset day" type="number" placeholder="1" helper="Day of month from 1 to 31." value={ws.creditResetDay != null ? String(ws.creditResetDay) : "1"} onChange={(v) => set({ creditResetDay: v ? Number(v) : 1 })} />
-        <div className="col-span-2 space-y-1.5">
-          <label className="block text-[12.5px] font-semibold text-[#374151]">Product description</label>
-          <textarea
-            rows={4}
-            placeholder="Describe your product, ideal customer, and what makes you different..."
-            value={ws.productDescription || ""}
-            onChange={(e) => set({ productDescription: e.target.value })}
-            className="w-full px-3 py-2.5 text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none resize-none leading-relaxed rounded-[8px] sku-input"
-          />
-          <p className="text-[11px] text-[#9CA3AF]">Used by the AI to write your campaigns. Be specific.</p>
-        </div>
+        <div className="col-span-2 rounded-[10px] border border-[#DDE1E7] bg-[#F8FAFF] p-4"><div className="flex items-center justify-between"><div><p className="text-[13px] font-semibold text-[#111827]">Plan & billing</p><p className="mt-0.5 text-[11.5px] text-[#6B7280]">Beta workspace · {ws.memberCount || 1} user{(ws.memberCount || 1) === 1 ? "" : "s"}</p></div><p className="text-[11.5px] font-medium text-[#6B7280]">Billing is not configured yet</p></div></div>
       </div>
       <div className="flex justify-end mt-5">
         <SaveButton onSave={save} saving={saving} />
@@ -392,8 +400,11 @@ function GeneralTab() {
 function IntegrationsTab() {
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
   const [google, setGoogle] = useState<{
     connected: boolean
+    hasAdsAccess?: boolean
+    connectedElsewhere?: string
     accountName?: string | null
     selectedAdAccountId?: string | null
     selectedAdAccountName?: string | null
@@ -427,6 +438,18 @@ function IntegrationsTab() {
     }
   }
 
+  const disconnectGoogle = async () => {
+    if (!google?.connected || disconnecting || !window.confirm("Disconnect Google Ads from this workspace? Existing campaign records will remain.")) return
+    setDisconnecting(true)
+    try {
+      const response = await fetch("/api/integrations", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "GOOGLE" }) })
+      if (!response.ok) throw new Error("Could not disconnect Google Ads")
+      load()
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <SectionCard title="Ad Platforms" description="Connect your advertising accounts to pull in live data and launch campaigns.">
@@ -451,19 +474,16 @@ function IntegrationsTab() {
                   <p className="text-[12px] text-[#9CA3AF]">
                     {google?.connected
                       ? (google.accountName || google.selectedAdAccountName || "Connected to Google")
-                      : "Connect to launch campaigns and see live data"}
+                      : google?.connectedElsewhere
+                        ? `Connected in ${google.connectedElsewhere}. Switch workspace or connect it here.`
+                        : "Connect to launch campaigns and see live data"}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 {google?.connected ? (
-                  <a
-                    href={`/api/integrations/google/connect?returnTo=${encodeURIComponent('/dashboard/settings?tab=integrations')}`}
-                    className="flex items-center gap-1.5 h-8 px-3 text-[#374151] text-[12px] font-medium rounded-[8px] sku-btn hover:bg-white"
-                  >
-                    Reconnect Account
-                  </a>
+                  <><a href={`/api/integrations/google/connect?returnTo=${encodeURIComponent('/dashboard/settings?tab=integrations')}`} className="flex items-center gap-1.5 h-8 px-3 text-[#374151] text-[12px] font-medium rounded-[8px] sku-btn hover:bg-white">Reconnect Account</a><button type="button" onClick={disconnectGoogle} disabled={disconnecting} className="h-8 px-3 text-[12px] font-medium text-[#D3564C] rounded-[8px] border border-[#F8B4B4] hover:bg-[#FDF2F2] disabled:opacity-60">{disconnecting ? "Disconnecting…" : "Disconnect"}</button></>
                 ) : (
                   <a
                     href={`/api/integrations/google/connect?returnTo=${encodeURIComponent('/dashboard/settings?tab=integrations')}`}
@@ -702,7 +722,7 @@ export default function SettingsPage() {
 
   const TAB_DESCRIPTIONS: Record<Tab, string> = {
     profile:       "Choose how your account appears.",
-    general:       "Configure your workspace identity and AI context.",
+    general:       "Manage your workspace identity, usage, plan, and operational preferences.",
     integrations:  "Connect your ad platforms to start running campaigns.",
     notifications: "Control which emails you receive.",
     danger:        "Irreversible actions — proceed with caution.",

@@ -57,6 +57,9 @@ export async function GET() {
           toneOfVoice: true,
           defaultLandingPageUrl: true,
           dailyBudgetCeiling: true,
+          monthlyCredits: true,
+          creditResetDay: true,
+          usedCreditsThisMonth: true,
           defaultAutomationMode: true,
           createdAt: true,
           updatedAt: true,
@@ -72,6 +75,7 @@ export async function GET() {
     ok: true,
     workspaces: memberships.map((membership) => ({
       ...membership.workspace,
+      memberCount: membership.workspace._count.members,
       role: membership.role,
     })),
   })

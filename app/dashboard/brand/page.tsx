@@ -20,6 +20,7 @@ import {
   Download,
   Pencil,
   Briefcase,
+  CircleHelp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -123,6 +124,7 @@ export default function BrandPage() {
   const [urlInput, setUrlInput] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [tab, setTab] = useState<"edit" | "memory">("edit");
+  const [showIcpGuide, setShowIcpGuide] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -456,6 +458,19 @@ export default function BrandPage() {
               )}
             </SectionCard>
 
+            <SectionCard title="Campaign links & audience data">
+              <p className="mb-3 text-[12px] text-muted-foreground">Optional details that help Growzzy target the right people and send each ad to the right page.</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div><Label className="text-[12px]">Your Instagram link</Label><Input value={brand.instagramUrl || ""} onChange={(e) => set("instagramUrl")(e.target.value)} className="mt-1" placeholder="https://instagram.com/yourbrand" /></div>
+                <div><Label className="text-[12px]">Your LinkedIn page link</Label><Input value={brand.linkedinUrl || ""} onChange={(e) => set("linkedinUrl")(e.target.value)} className="mt-1" placeholder="https://linkedin.com/company/yourbrand" /></div>
+                <div className="sm:col-span-2"><div className="mb-1.5 text-[12px] font-medium text-foreground">Other landing pages (if applicable)</div><ChipEditor items={brand.additionalLandingPages || []} onChange={set("additionalLandingPages")} placeholder="Paste a landing-page URL and press Enter" /></div>
+                <div><Label className="text-[12px]">Age group</Label><Input value={brand.ageGroup || ""} onChange={(e) => set("ageGroup")(e.target.value)} className="mt-1" placeholder="e.g. 25–44" /></div>
+                <div><Label className="text-[12px]">Preferred location</Label><Input value={brand.preferredLocations || ""} onChange={(e) => set("preferredLocations")(e.target.value)} className="mt-1" placeholder="e.g. India, US metros, or Mumbai" /></div>
+                <div className="sm:col-span-2"><Label className="text-[12px]">Demographics</Label><Textarea rows={2} value={brand.demographics || ""} onChange={(e) => set("demographics")(e.target.value)} className="mt-1" placeholder="e.g. founders, working parents, senior marketers, income or education level" /></div>
+                <div className="sm:col-span-2"><Label className="text-[12px]">Lookalike data (if available) — how much?</Label><Textarea rows={2} value={brand.lookalikeData || ""} onChange={(e) => set("lookalikeData")(e.target.value)} className="mt-1" placeholder="e.g. 2,400 past purchasers, 800 qualified leads, or 12 months of website visitors" /></div>
+              </div>
+            </SectionCard>
+
             <SectionCard title="Business">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
@@ -554,6 +569,10 @@ export default function BrandPage() {
                 </Button>
               }
             >
+              <div className="mb-3 rounded-[10px] border border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-[12.5px] font-semibold">Need help finding your first customer?</p><p className="mt-0.5 text-[11.5px] text-muted-foreground">Use the ICP Builder to turn your offer into a practical first audience hypothesis.</p></div><Button type="button" variant="outline" size="sm" onClick={() => setShowIcpGuide((open) => !open)} className="shrink-0 gap-1 cursor-pointer"><CircleHelp className="h-3.5 w-3.5" />ICP Builder</Button></div>
+                {showIcpGuide && <div className="mt-3 space-y-3 border-t border-primary/15 pt-3"><p className="text-[11.5px] text-muted-foreground">An ICP is the customer most likely to buy and succeed with your offer. Start with a hypothesis; refine it from real leads and customers.</p><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><Label className="text-[12px]">Who is most likely to buy?</Label><Input value={brand.audience} onChange={(e) => set("audience")(e.target.value)} className="mt-1" placeholder="e.g. B2B SaaS founders with 10–100 employees" /></div><div><Label className="text-[12px]">What urgent problem do they have?</Label><Input value={brand.segments[0]?.pains || ""} onChange={(e) => set("segments")([{ ...(brand.segments[0] || { segment: brand.audience || "Primary ICP", pains: "", triggers: "" }), pains: e.target.value }, ...brand.segments.slice(1)])} className="mt-1" placeholder="e.g. pipeline is inconsistent" /></div></div><Button type="button" size="sm" onClick={() => { const first = brand.segments[0] || { segment: brand.audience || "Primary ICP", pains: "", triggers: "" }; set("segments")([{ ...first, segment: first.segment || brand.audience || "Primary ICP", triggers: first.triggers || "Actively seeking a solution, new growth target, or recent funding" }, ...brand.segments.slice(1)]); setShowIcpGuide(false); toast.success("Your starter ICP was added. Refine it as you learn from real customers."); }} className="cursor-pointer">Create starter ICP</Button></div>}
+              </div>
               {brand.segments.length === 0 ? (
                 <p className="text-[12.5px] text-muted-foreground">
                   No segments yet — analyse your website or add one manually.
