@@ -38,17 +38,17 @@ export async function analyzeSite(
   if (!homepageHtml) throw new Error(`Couldn't reach ${site}. Check the URL and try again.`);
 
   const homepage = await fetchPageText(site, 10000);
-  const inner = pickInternalLinks(homepageHtml, site, 3);
+  const inner = pickInternalLinks(homepageHtml, site, 6);
   const innerTexts = await Promise.all(inner.map((u) => fetchPageText(u, 5000)));
 
   const host = new URL(site).hostname.replace(/^www\./, "");
   const brandGuess = host.split(".")[0];
   const [aboutSearch, competitorSearch] = await Promise.all([
-    webSearch(`${host} what they sell reviews`, 5),
-    webSearch(`${brandGuess} competitors alternatives`, 6),
+    webSearch(`${host} what they sell reviews`, 6),
+    webSearch(`${brandGuess} competitors alternatives`, 8),
   ]);
   const competitorPages = await Promise.all(
-    competitorSearch.slice(0, 2).map((r) => fetchPageText(r.url, 3500)),
+    competitorSearch.slice(0, 3).map((r) => fetchPageText(r.url, 3500)),
   );
 
   const sources = [
@@ -74,7 +74,7 @@ export async function analyzeSite(
   const { text } = await generateText({
     model: ai.provider(ai.chatModel),
     system:
-      "You are a senior brand + performance-marketing analyst. You are given REAL scraped page content and REAL web search results. Analyse them deeply and return ONLY a JSON object (no markdown fences) with exactly these keys: businessName, industry, businessModel, whatTheySell, productDescription, positioning, differentiators (array of strings), audience, segments (array of {segment, pains, triggers}), competitors (array of {name, url, angle}), keywords (array of high-intent search keywords), creativeAngles (array of strings), tone (one of friendly, professional, playful, premium). Ground every field in the supplied material; never invent a company. Keep 3-5 differentiators, 3 segments, 3-5 competitors, 10-14 keywords, 4-6 creative angles.",
+      "You are a senior brand + performance-marketing analyst. You are given REAL scraped page content and REAL web search results. Analyse them deeply and return ONLY a JSON object (no markdown fences) with exactly these keys: businessName, industry, businessModel, whatTheySell, productDescription, positioning, differentiators (array of strings), audience, segments (array of {segment, pains, triggers}), competitors (array of {name, url, angle}), keywords (array of high-intent search keywords), creativeAngles (array of strings), tone (one of friendly, professional, playful, premium). Ground every field in the supplied material; never use generic placeholder names, URLs, or claims. If a field cannot be supported, return an empty string or an empty array. Competitors must come from the competitor search results and retain their real URLs. Keep up to 5 differentiators, 3 segments, 5 competitors, 14 keywords, and 6 creative angles.",
     prompt: `Website: ${site}\n\n${corpus.slice(0, 60000)}`,
   });
 

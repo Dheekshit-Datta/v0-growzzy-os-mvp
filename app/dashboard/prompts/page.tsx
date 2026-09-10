@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Shell } from "@/components/dashboard-v2/shell"
 import { PenSquare, Plus, Loader2, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { loadSavedChats } from "@/lib/chat-store"
 
 type Chat = { id: string; title: string; updatedAt: string }
 
@@ -14,7 +15,12 @@ export default function PromptsPage() {
   useEffect(() => {
     fetch("/api/ai/conversations", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((json) => setChats(json?.conversations ?? []))
+      .then((json) => {
+        const server = Array.isArray(json?.conversations) ? json.conversations : []
+        const local = loadSavedChats().map((chat) => ({ id: chat.id, title: chat.title, updatedAt: chat.createdAt }))
+        setChats(Array.from(new Map([...server, ...local].map((chat) => [chat.id, chat])).values()))
+      })
+      .catch(() => setChats(loadSavedChats().map((chat) => ({ id: chat.id, title: chat.title, updatedAt: chat.createdAt }))))
       .finally(() => setLoading(false))
   }, [])
 

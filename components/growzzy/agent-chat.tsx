@@ -18,7 +18,6 @@ import {
   type Submission,
   type ChatErrorKind,
 } from "@/lib/chat-routing";
-import { buildTranscript, downloadTranscript, type TranscriptMessage } from "@/lib/transcript";
 import { saveChatSession } from "@/lib/chat-store";
 
 import { useChat } from "@ai-sdk/react";
@@ -70,8 +69,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download as DownloadIcon,
-  History,
-  Plus,
   RefreshCw,
   CircleStop,
   Gauge,
@@ -89,6 +86,7 @@ import {
   Wand2,
   Briefcase,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Pencil,
   Save,
@@ -621,27 +619,6 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
     run(last);
   };
 
-  /* Remembers when each turn appeared so the transcript can be timestamped. */
-  const turnTimes = useRef<Record<string, string>>({});
-  useEffect(() => {
-    (messages ?? []).forEach((m: UIMessage) => {
-      turnTimes.current[m.id] ??= new Date().toISOString();
-    });
-  }, [messages]);
-
-  const transcript = () =>
-    downloadTranscript(
-      buildTranscript(
-        (messages ?? []).map((m: UIMessage) => ({
-          role: m.role,
-          parts: m.parts as unknown as TranscriptMessage["parts"],
-          at: turnTimes.current[m.id],
-        })),
-        { title: `Growzzy transcript — ${brand.businessName || "workspace"}` },
-      ),
-      `growzzy-transcript-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.md`,
-    );
-
   const composer = (
     <div className={cn("w-full px-1 pb-2 mx-auto max-w-4xl")}>
       <input
@@ -822,22 +799,8 @@ export function AgentChat({ threadId = "growzzy-agent" }: AgentChatProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         {started && (
           <div className="flex items-center justify-end gap-2 px-1 pb-1">
-            <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer" onClick={() => window.location.assign("/dashboard/prompts")}>
-              <History className="h-3.5 w-3.5" /> Recent chats
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 cursor-pointer"
-              onClick={() => {
-                window.localStorage.removeItem("growzzy.agent.conv");
-                window.location.assign("/dashboard/campaigns/new");
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" /> New chat
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer" onClick={transcript}>
-              <DownloadIcon className="h-3.5 w-3.5" /> Download transcript
+            <Button variant="ghost" size="icon" className="cursor-pointer" onClick={() => window.location.assign("/dashboard/prompts")} title="Back to recent chats" aria-label="Back to recent chats">
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           </div>
         )}
@@ -922,6 +885,15 @@ function AgentMessage({
 }) {
   if (!message?.parts || !Array.isArray(message.parts)) return null;
 
+  // If a model incorrectly emits several unanswered question cards in one
+  // response, expose only the latest one. Older cards cannot be answered
+  // meaningfully and make the chat look stuck.
+  const latestPendingQuestionIndex = message.parts.reduce((latest, part, index) =>
+    isToolUIPart(part) && getToolName(part as ToolUIPart) === "askUser" && (part as ToolUIPart).state !== "output-available"
+      ? index
+      : latest,
+  -1);
+
   if (message.role === "user") {
     return (
       <Message from="user">
@@ -945,6 +917,7 @@ function AgentMessage({
             const name = getToolName(p);
 
             if (name === "askUser") {
+              if (part.state !== "output-available" && i !== latestPendingQuestionIndex) return null;
               return (
                 <ToolTimelineItem key={i} part={p}>
                   <QuestionsCard part={p} addToolResult={addToolResult} />

@@ -157,7 +157,10 @@ export default function BrandPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim(), websiteUrl: urlInput.trim() }),
       });
-      if (!res.ok) throw new Error("Analysis failed");
+      if (!res.ok) {
+        const failed = await res.json().catch(() => null);
+        throw new Error(failed?.error?.message || "Analysis failed");
+      }
       const data = await res.json();
       const profile = data.profile || data.data?.brandMemory || {};
       const site = data.site || urlInput.trim();
