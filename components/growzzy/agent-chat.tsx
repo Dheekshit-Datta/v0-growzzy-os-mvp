@@ -1252,7 +1252,7 @@ function AccountDataCard({ part }: { part: ToolUIPart }) {
       <p className="mt-2 text-[11.5px] text-muted-foreground">
         {failed
           ? output?.error || "The connected account data could not be read."
-          : "This uses the saved/synced data in Growzzy, not web market research."}
+          : "This uses the most recently synced account data in Growzzy, not web research or a guaranteed live Google Ads read."}
       </p>
     </div>
   );
@@ -1265,9 +1265,11 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
       notes?: string;
       queries?: string[];
       citations?: { url: string; site: string; title: string }[];
+      researchFailed?: boolean;
     }
     | undefined;
   const running = part.state !== "output-available" && part.state !== "output-error";
+  const verified = Boolean(output?.citations?.length) && !output?.researchFailed;
 
   return (
     <div className="rounded-[12px] border border-border bg-card p-4">
@@ -1279,7 +1281,7 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
           <Shimmer className="text-[13px] font-medium">{`Researching ${input?.focus ?? "your market"}…`}</Shimmer>
         ) : (
           <span className="text-[13px] font-medium text-foreground">
-            Research complete — {input?.focus ?? "market analysis"}
+            {verified ? `Research complete — ${input?.focus ?? "market analysis"}` : "Research could not verify live sources"}
           </span>
         )}
       </div>
@@ -1295,6 +1297,11 @@ function ResearchCard({ part }: { part: ToolUIPart }) {
             </span>
           ))}
         </div>
+      )}
+      {!running && !verified && (
+        <p className="mt-2 text-[11.5px] text-amber-700 dark:text-amber-400">
+          No sources were read successfully. Treat any follow-up strategy as an estimate, not verified market research.
+        </p>
       )}
       {output?.citations && output.citations.length > 0 && (
         <div className="mt-3 rounded-[10px] border border-border bg-background p-3">
@@ -1795,7 +1802,6 @@ function ExecutionPlanCard({
       });
     }, 1000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decided, proceeded, part.toolCallId]);
 
   if (!input?.steps?.length) return null;
@@ -1836,11 +1842,9 @@ function ExecutionPlanCard({
         </div>
         <ol className="divide-y divide-border">
           {groupPlanSteps(input.steps || []).map((group, gi) => {
-            const isDone = proceeded || decided;
+            const started = proceeded || decided;
             if (group.kind === "parallel") {
               const total = group.steps.length;
-              const doneCount = isDone ? total : 0;
-              const activeCount = isDone ? 0 : total;
               return (
                 <li key={`g-${gi}`} className="px-4 py-3 bg-muted/10">
                   <div className="flex items-center justify-between mb-2">
@@ -1848,20 +1852,19 @@ function ExecutionPlanCard({
                       <span className="grid h-5 w-5 place-items-center rounded-md bg-primary-tint text-primary">
                         <Sparkles className="h-3 w-3" />
                       </span>
-                      {total} agents working on this
+                      {total} planned parallel activities
                       <span className="text-muted-foreground font-normal">
-                        — {doneCount}/{total} done
+                        — results appear below
                       </span>
                     </div>
-                    {!isDone && (
+                    {!started && (
                       <span className="text-[10.5px] font-mono text-muted-foreground">
-                        running…
+                        planned
                       </span>
                     )}
                   </div>
                   <ul className="space-y-1.5">
                     {group.steps.map((s, si) => {
-                      const isActive = !isDone;
                       return (
                         <li
                           key={si}
@@ -1870,18 +1873,10 @@ function ExecutionPlanCard({
                           <div
                             className={cn(
                               "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                              isDone
-                                ? "border-emerald-500 bg-emerald-500 text-white"
-                                : isActive
-                                  ? "border-primary text-primary"
-                                  : "border-muted-foreground/40 text-muted-foreground/40",
+                              "border-muted-foreground/40 text-muted-foreground/40",
                             )}
                           >
-                            {isDone ? (
-                              <Check className="h-2.5 w-2.5" />
-                            ) : isActive ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            ) : null}
+                            <span className="text-[9px] font-mono">{si + 1}</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-[11.5px] font-medium text-foreground">
@@ -1906,26 +1901,15 @@ function ExecutionPlanCard({
             }
             // solo step
             const s = group.step;
-            const isActive = !isDone;
             return (
               <li key={`s-${gi}`} className="flex items-start gap-3 px-4 py-2.5">
                 <div
                   className={cn(
                     "mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0",
-                    isDone
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : isActive
-                        ? "border-primary text-primary"
-                        : "border-muted-foreground/40 text-muted-foreground/40",
+                    "border-muted-foreground/40 text-muted-foreground/40",
                   )}
                 >
-                  {isDone ? (
-                    <Check className="h-3 w-3" />
-                  ) : isActive ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <span className="text-[10px] font-mono">{gi + 1}</span>
-                  )}
+                  <span className="text-[10px] font-mono">{gi + 1}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12.5px] font-medium text-foreground">
@@ -1961,9 +1945,9 @@ function ExecutionPlanCard({
             </Button>
           </div>
         )}
-        {proceeded && (
-          <div className="border-t border-border px-4 py-2.5 text-[11.5px] text-emerald-600 font-medium flex items-center gap-1.5">
-            <Check className="h-3.5 w-3.5" /> Proceeding
+        {(proceeded || decided) && (
+          <div className="border-t border-border px-4 py-2.5 text-[11.5px] text-muted-foreground font-medium flex items-center gap-1.5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Plan approved — completed work appears in the live cards below.
           </div>
         )}
       </div>
@@ -2144,27 +2128,29 @@ function CampaignCard({
   onOpenArtifact?: (data: ArtifactData) => void;
 }) {
   const c = part.input as CampaignInput | undefined;
+  if (!c?.name) return null;
+  return <CampaignCardContent part={part} onOpenArtifact={onOpenArtifact} c={c} />;
+}
+
+function CampaignCardContent({
+  part,
+  onOpenArtifact,
+  c,
+}: {
+  part: ToolUIPart;
+  onOpenArtifact?: (data: ArtifactData) => void;
+  c: CampaignInput;
+}) {
   // If the server-side validator rejected this delivery, show a quality-issue
   // banner instead of a launch-ready card. The model is retrying in the same turn.
   const out = part.output as { delivered?: boolean; qualityIssues?: string[] } | undefined;
   const rejected = part.state === "output-available" && out?.delivered === false;
-  if (!c?.name) return null;
-
   // Derive base values directly from the tool input so streaming updates
   // flow in without a useEffect → setState round-trip. useEffect-based
   // syncing against `c.headlines` was causing a React #185 infinite loop
   // because the AI SDK hands us a new array reference on every stream tick.
-  const baseHeadlines: string[] = useMemo(() => {
-    if (Array.isArray(c.headlines) && c.headlines.length > 0) {
-      return c.headlines.map((h) => (typeof h === "string" ? h : (h as any)?.text ?? ""));
-    }
-    return [];
-  }, [c.headlines]);
-
-  const basePrimaryText: string = useMemo(
-    () => c.primaryText || "",
-    [c.primaryText],
-  );
+  const baseHeadlines = c.headlines ?? [];
+  const basePrimaryText = c.primaryText ?? "";
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -2273,10 +2259,11 @@ function CampaignCard({
       if (res.ok) {
         toast.success(`Campaign "${c.name}" saved to your dashboard!`);
       } else {
-        toast.success(`Campaign "${c.name}" saved as local draft.`);
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error?.message || "Could not save the campaign draft.");
       }
     } catch {
-      toast.success(`Campaign "${c.name}" saved as local draft.`);
+      toast.error("Network error. Could not save the campaign draft.");
     } finally {
       setIsSaving(false);
     }
